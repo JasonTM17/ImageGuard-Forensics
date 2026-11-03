@@ -113,6 +113,17 @@ theo cơ chế model-fill (không phụ thuộc seed).
   trong `evidence["seam_ring_blocks"]`), hoặc PRNU-fingerprint mismatch —
   natural flat có noise pattern nhất quán camera, model-fill thì không.
 
+### Kết quả âm tính đã đo (loại bỏ giả thuyết, không ship)
+
+- **Seam-ring filter — BÁC BỎ:** giả thuyết "vùng LaMa-fill có mép blend
+  σ bất thường" không đúng trên dữ liệu này. Ring quanh low-σ component
+  của ảnh gốc: z_hi-frac 0.0–0.18, mean-z 0.23–1.66; của ảnh edited:
+  0.0–0.18, mean-z 0.41–1.67 — **hai phân phối trùng nhau**. LaMa blend
+  đủ mượt để seam không để dấu σ ở mức block. Không dùng seam để lọc FP.
+- **Resize robustness — GIỮ ĐƯỢC:** erase_0000 ở scale 0.75→IoU 0.286,
+  0.5→IoU 0.564 (recall 65–66%) — cue không chết khi downscale vì
+  model-fill vẫn mịn tương đối hơn nền.
+
 ### Kết luận trả lời câu hỏi ban đầu
 
 1. **Clone giữ gốc (kể cả blend Poisson mềm)** → keypoint SIFT vẫn bắt
