@@ -75,6 +75,30 @@ Cue này **tồn tại thật và đo được** — vấn đề là detector ph
 vùng chỉnh sửa (không phải nhiễu ngẫu nhiên). Vẫn giữ verdict tối đa
 INCONCLUSIVE theo aux contract.
 
+### Kiểm chứng mức ngẫu nhiên (chance-level) và false-positive
+
+| sample | flag-rate | recall GT | IoU | chance IoU |
+|---|---|---|---|---|
+| erase_0000 | 11.8% | 78.9% | 0.299 | ~0.036 |
+| move_0001 | 17.2% | 51.4% | 0.191 | ~0.057 |
+| erase_0004 | 9.2% | 86.4% | 0.127 | ~0.012 |
+| move_0005 | 12.5% | 44.4% | 0.187 | ~0.046 |
+| erase_0008 | 15.5% | 61.5% | 0.082 | ~0.019 |
+| move_0009 | 14.1% | 61.3% | 0.267 | ~0.051 |
+
+IoU quan sát **cao hơn mức ngẫu nhiên 4–8×** → localization là tín hiệu
+thật, không phải may mắn do mask rộng. Tuy nhiên:
+
+- **False-positive control:** trên 12 ảnh GỐC chưa chỉnh, `noise_local`
+  vẫn flag 10–18% diện tích (vùng trời/phẳng/mịn tự nhiên có σ thấp).
+  → precision bị giới hạn cấu trúc; detector chỉ nói "vùng này mịn bất
+  thường" chứ không phân biệt được mịn-do-model vs mịn-tự-nhiên.
+- Đây là lý do verdict tối đa INCONCLUSIVE là **bắt buộc**: cue thật
+  nhưng không đặc hiệu.
+- Hướng cải thiện thực tế: kết hợp seam-ring evidence (đã giữ riêng
+  trong `evidence["seam_ring"]`), hoặc PRNU-fingerprint mismatch —
+  natural flat có noise pattern nhất quán camera, model-fill thì không.
+
 ### Kết luận trả lời câu hỏi ban đầu
 
 1. **Clone giữ gốc (kể cả blend Poisson mềm)** → keypoint SIFT vẫn bắt
