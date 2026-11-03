@@ -145,6 +145,26 @@ theo cơ chế model-fill (không phụ thuộc seed).
   0.5→IoU 0.564 (recall 65–66%) — cue không chết khi downscale vì
   model-fill vẫn mịn tương đối hơn nền.
 
+### Robustness đối kháng — cue chết ở đâu (v4, move_0009)
+
+| Xử lý sau khi edit | IoU | Trạng thái |
+|---|---|---|
+| clean | 0.329 | baseline |
+| JPEG q70 | 0.336 | sống — tương đương clean |
+| JPEG q40 | 0.257 | suy giảm nhẹ |
+| resize 0.5× | 0.564 | sống (flat nền cũng mịn theo) |
+| gaussian blur | 0.367 | sống — nền mịn đi cùng, ngưỡng tỉ lệ vẫn tách |
+| unsharp mask | 0.351 | sống |
+| thêm noise σ=4 | 0.369 | sống — noise đều cả hai vùng |
+| **thêm noise σ=8** | — | **CHẾT** — fill không còn "mịn tương đối" |
+| **medianBlur k=5** | — | **CHẾT** — residual structure bị phá toàn cục |
+
+Hai điều kiện giết cue, đúng vật lý: (1) thêm nhiễu đủ mạnh làm vùng
+fill mất tính "mịn tương đối"; (2) median blur phá cấu trúc residual
+toàn ảnh. Kẻ chỉnh sửa có ý thức **có thể** che cue này — phải nói rõ
+trong báo cáo: detector phát hiện LaMa-edit *nguyên trạng*, không chịu
+được anti-forensic đơn giản.
+
 ### Kết luận trả lời câu hỏi ban đầu
 
 1. **Clone giữ gốc (kể cả blend Poisson mềm)** → keypoint SIFT vẫn bắt
