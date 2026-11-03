@@ -11,6 +11,7 @@ METHOD_SPECS = {
     "block": "imageguard.forensics.block.pipeline:BlockCopyMove",
     "ela": "imageguard.forensics.auxiliary.ela:ELA",
     "noise": "imageguard.forensics.auxiliary.noise_map:NoiseMap",
+    "noise_local": "imageguard.forensics.auxiliary.noise_local:NoiseLocal",
     "freq": "imageguard.forensics.auxiliary.freq_view:FreqView",
     "splicing": "imageguard.forensics.auxiliary.splicing:SplicingCues",
 }

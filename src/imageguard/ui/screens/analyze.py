@@ -75,10 +75,11 @@ class AnalyzeScreen(QWidget):
         self.chk_ela = QCheckBox(strings.METHOD_LABEL["ela"])
         self.chk_ela.setChecked(True)
         self.chk_noise = QCheckBox(strings.METHOD_LABEL["noise_inconsistency"])
+        self.chk_nloc = QCheckBox(strings.METHOD_LABEL["noise_local"])
         self.chk_freq = QCheckBox(strings.METHOD_LABEL["frequency_analysis"])
         self.chk_spl = QCheckBox(strings.METHOD_LABEL["splicing_cues"])
         for c in (self.chk_kp, self.chk_bl, self.chk_ela,
-                  self.chk_noise, self.chk_freq, self.chk_spl):
+                  self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
             rl.addWidget(c)
 
         self.btn_run = QPushButton(strings.BTN_RUN)
@@ -168,6 +169,8 @@ class AnalyzeScreen(QWidget):
             m.append("ela")
         if self.chk_noise.isChecked():
             m.append("noise")
+        if self.chk_nloc.isChecked():
+            m.append("noise_local")
         if self.chk_freq.isChecked():
             m.append("freq")
         if self.chk_spl.isChecked():

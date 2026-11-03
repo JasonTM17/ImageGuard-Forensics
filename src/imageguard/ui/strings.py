@@ -34,6 +34,7 @@ METHOD_LABEL = {
     "ela": "ELA (JPEG error levels)",
     "exif_audit": "Kiểm tra metadata EXIF",
     "noise_inconsistency": "Noise inconsistency",
+    "noise_local": "Noise local-MAD (vùng lạ cục bộ)",
     "frequency_analysis": "Frequency-domain cues",
     "splicing_cues": "Splicing cues (noise×ELA)",
 }

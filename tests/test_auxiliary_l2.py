@@ -87,8 +87,36 @@ def test_splicing_nonjpeg_degrades(valid_png, ts):
 
 
 def test_registry_l2_specs():
-    for spec in ("noise", "freq", "splicing"):
+    for spec in ("noise", "freq", "splicing", "noise_local"):
         assert load_method(spec) is not None
+
+
+def test_noise_local_detects_smooth_patch(valid_png, ts):
+    """Vùng blur mịn (giả lập model-fill) → σ thấp → component lớn →
+    mask phải phủ được vùng patch — khác NoiseMap toàn ảnh."""
+    from imageguard.forensics.auxiliary.noise_local import NoiseLocal
+
+    doc = _doc(valid_png, ts)
+    img = doc.array.copy()
+    img[60:160, 60:160] = cv2.GaussianBlur(img[60:160, 60:160], (15, 15), 5)
+    doc.array = img
+    r = NoiseLocal().analyze(doc, ts)
+    assert r.verdict == Verdict.INCONCLUSIVE
+    assert r.mask is not None
+    # mask phải phủ một phần thật của patch mịn (60:160 vùng 100px)
+    gt = np.zeros_like(r.mask)
+    gt[60:160, 60:160] = 255
+    inter = ((r.mask > 0) & (gt > 0)).sum()
+    assert inter / max((r.mask > 0).sum(), 1) > 0.15, \
+        "mask noise_local không chạm vùng mịn"
+
+
+def test_noise_local_never_suspicious(valid_jpg, ts):
+    from imageguard.forensics.auxiliary.noise_local import NoiseLocal
+
+    doc = _doc(valid_jpg, ts)
+    r = NoiseLocal().analyze(doc, ts)
+    assert r.verdict != Verdict.SUSPICIOUS_INDICATION
 
 
 def test_cancel_cooperative(valid_png, ts):

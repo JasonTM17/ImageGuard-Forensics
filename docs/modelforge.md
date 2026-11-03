@@ -60,10 +60,20 @@ Detection matrix (det-rate = tỉ lệ SUSPICIOUS_INDICATION):
 
 **Diễn giải:** model inpainting sinh content ít nhiễu hơn ảnh thật →
 residual-σ trong vùng chỉnh sửa thấp hơn có ý nghĩa thống kê (p<0.001).
-Cue này **tồn tại thật và đo được** — nhưng detector `noise_inconsistency`
-hiện tại (MAD outlier toàn ảnh) chỉ đạt IoU≈0.02 vì nó so với median TOÀN
-ẢNH thay vì láng giềng cục bộ. Đây là hướng cải tiến cụ thể: local-MAD
-theo cửa sổ trượt hoặc PRNU residual (docs/ml-extension.md).
+Cue này **tồn tại thật và đo được** — vấn đề là detector phù hợp.
+
+### Vòng cải tiến detector (đo trên cùng set, ba phiên bản)
+
+| detector | ý tưởng | erase IoU | move IoU | kết luận |
+|---|---|---|---|---|
+| `noise_inconsistency` (MAD toàn ảnh) | outlier 2 phía vs median global | 0.000 | 0.006 | median≈nền, vùng nhỏ không lệch đủ |
+| local-MAD v1 | median láng giềng 5×5 block | 0.000 | 0.000 | láng giềng hỗn hợp → MAD phình → z chìm; chỉ bắt seam-ring mép (n_low≈0) |
+| Otsu v2 | tự tách 2 mode σ | 0.004–0.105 | 0.085–0.191 | vùng edit ~1% lưới → Otsu cắt giữa mode nền |
+| **`noise_local` v3** | σ < 0.6·median + component ≥6 block | **0.169** | **0.215** | ✓ tỉ lệ cứng một phía đúng vật lý model-fill |
+
+`noise_local` cũng đạt bF1@8: erase 0.332, move 0.449 — mask chạm đúng
+vùng chỉnh sửa (không phải nhiễu ngẫu nhiên). Vẫn giữ verdict tối đa
+INCONCLUSIVE theo aux contract.
 
 ### Kết luận trả lời câu hỏi ban đầu
 

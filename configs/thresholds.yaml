@@ -40,6 +40,11 @@ noise:
   outlier_mad: { value: 3.0, unit: MAD, source: "default — block σ lệch median ± m·MAD → outlier" }
   block: { value: 16, unit: px, source: "default — kích thước block đo σ noise" }
   min_outlier_frac: { value: 0.005, unit: frac, source: "default — outlier ≥ tỉ lệ này mới tính là 'có vùng bất thường'" }
+  local_k: { value: 5, unit: blocks, source: "default — kernel median láng giềng cho local-MAD (lẻ)" }
+  local_z: { value: 4.0, unit: z, source: "default — |z| = |σ−local_med|/1.4826·local_MAD ≥ ngưỡng → seam-ring evidence" }
+  local_min_frac: { value: 0.002, unit: frac, source: "default — flagged-block ≥ tỉ lệ này → INCONCLUSIVE" }
+  low_sigma_ratio: { value: 0.6, unit: ratio, source: "measured modelforge_lama12 — σ vùng LaMa-fill = 20-60% σ nền (p<0.001 MWU)" }
+  min_region_blocks: { value: 6, unit: blocks, source: "default — connected component ≥ N block mới giữ (loại nhiễu lẻ)" }
 
 freq:
   blockiness_t: { value: 0.08, unit: frac, source: "default — chênh gradient biên 8x8 trung bình ≥ ngưỡng → dấu vết nén block" }

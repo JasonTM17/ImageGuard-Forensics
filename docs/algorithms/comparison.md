@@ -33,7 +33,8 @@ detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
 | keypoint (SIFT) | twin blended/rotated/scaled; mask + pairs | vùng phẳng/texture kém → INCONCLUSIVE | ~0.1–0.5s |
 | block (DCT) | không cần feature point; baseline kinh điển | miss clone đã blend; chậm; flat-guard bắt buộc | ~5–10s |
 | ELA | JPEG history cue | chỉ JPEG; re-save phá; không standalone | ~0.1s |
-| noise σ-MAD | model-edit σ-separation p<0.001 (erase/move) | localize yếu (IoU≈0.02) — cần local-MAD | ~0.02s |
+| noise σ-MAD | model-edit σ-separation p<0.001 (erase/move) | localize yếu (IoU≈0.005) | ~0.02s |
+| noise_local v3 | localize model-fill: IoU 0.17–0.22, bF1 0.33–0.45 | false-positive vùng phẳng tự nhiên; vẫn aux | ~0.05s |
 | freq cues | spectrum/blockiness artifact | mô tả hơn phán đoán | ~0.02s |
 | splicing cues | cross-cue noise×ELA | suy giảm trên non-JPEG | ~0.05s |
 
