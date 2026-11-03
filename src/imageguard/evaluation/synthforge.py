@@ -36,40 +36,53 @@ class ForgeSpec:
 
 
 def _base_image(rng: np.random.Generator, size: tuple[int, int]) -> np.ndarray:
-    """Ảnh nền có texture đủ cho SIFT/DCT: gradient + shapes + AWGN."""
+    """Ảnh nền có texture đủ cho SIFT/DCT: gradient + shapes + chi tiết nhỏ + AWGN.
+
+    Lưu ý thực nghiệm: base quá mượt → SIFT chỉ tìm được ~100 keypoints trên
+    512×512, vùng copy ~100px không đủ match để verify. Texture phải đủ dày
+    để mọi vùng vài chục px đều có keypoint — mới test được detector.
+    """
     w, h = size
     x = np.linspace(0, 255, w, dtype=np.float32)
     y = np.linspace(0, 255, h, dtype=np.float32)
     img = np.tile(x, (h, 1)) * 0.5 + np.tile(y, (w, 1)).T * 0.5
     img = cv2.merge([img, np.roll(img, 32, axis=1), np.roll(img, 16, axis=0)])
-    # Vài hình ngẫu nhiên để tạo cạnh/góc — keypoint cần góc, không phải gradient.
-    for _ in range(rng.integers(6, 14)):
+    # Nhiều hình nhỏ — cạnh/góc dày đặc mới sinh đủ keypoint.
+    for _ in range(rng.integers(25, 45)):
         c = tuple(int(v) for v in rng.integers(30, 225, 3))
         if rng.random() < 0.5:
-            cv2.rectangle(
-                img,
-                tuple(rng.integers(0, w - 60, 2).tolist()),
-                tuple(rng.integers(60, w, 2).tolist()),
-                c,
-                -1,
-            )
+            x0, y0 = int(rng.integers(0, w - 20)), int(rng.integers(0, h - 20))
+            x1, y1 = min(w, x0 + int(rng.integers(8, 80))), min(h, y0 + int(rng.integers(8, 80)))
+            cv2.rectangle(img, (x0, y0), (x1, y1), c, -1)
         else:
             cv2.circle(
                 img,
-                (int(rng.integers(40, w - 40)), int(rng.integers(40, h - 40))),
-                int(rng.integers(15, 60)),
+                (int(rng.integers(20, w - 20)), int(rng.integers(20, h - 20))),
+                int(rng.integers(5, 50)),
                 c,
                 -1,
             )
-    img += rng.normal(0, 4, img.shape).astype(np.float32)  # AWGN nhẹ — thực tế
+    # AWGN nhẹ — nhiễu cảm biến thực tế.
+    img += rng.normal(0, 6, img.shape).astype(np.float32)
+    # Speckle blob 2-3px (KHÔNG phải dot 1px): high-frequency 1px bị JPEG
+    # re-encode xoá sạch → twin descriptor trôi; blob nhỏ sống qua q80.
+    for _ in range(int(w * h * 0.006)):
+        cx, cy = int(rng.integers(2, w - 2)), int(rng.integers(2, h - 2))
+        r = int(rng.integers(1, 3))
+        cv2.circle(img, (cx, cy), r, tuple(int(v) for v in rng.integers(0, 255, 3)), -1)
+    # Mid-frequency noise (blur Gaussian): texture JPEG-robust cho SIFT bám.
+    noise = rng.normal(0, 18, (h, w)).astype(np.float32)
+    noise = cv2.GaussianBlur(noise, (5, 5), 0)
+    img += noise[:, :, None]
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
 def _rand_spec(rng: np.random.Generator, tier: str, size: tuple[int, int]) -> ForgeSpec:
     w, h = size
     shape = str(rng.choice(["rect", "ellipse", "polygon"]))
-    # Vùng copy 8–20% cạnh — đủ lớn để detector thấy, đủ nhỏ để thực tế.
-    rw, rh = int(w * rng.uniform(0.12, 0.25)), int(h * rng.uniform(0.12, 0.25))
+    # Vùng copy 15–30% cạnh — đo thực tế: <15% cho quá ít keypoint trong vùng
+    # để RANSAC verify đủ inliers vượt ngưỡng t_susp.
+    rw, rh = int(w * rng.uniform(0.15, 0.30)), int(h * rng.uniform(0.15, 0.30))
     sx, sy = int(rng.integers(0, w - rw)), int(rng.integers(0, h - rh))
     dx = int(rng.integers(-w // 3, w // 3)) or 10
     dy = int(rng.integers(-h // 3, h // 3)) or 10
@@ -112,14 +125,23 @@ def forge(base: np.ndarray, spec: ForgeSpec) -> tuple[np.ndarray, np.ndarray]:
     mask_patch = cv2.warpAffine(mask_patch, M, (rw, rh), flags=cv2.INTER_NEAREST)
 
     dx, dy = spec.dst_offset
-    region = forged[y + dy : y + dy + rh, x + dx : x + dx + rw]
-    if region.shape[:2] != (rh, rw):
-        return forged, np.zeros((h, w), np.uint8)  # dst lòi khỏi ảnh — skip
-    a = (mask_patch > 127)[:, :, None]
-    forged[y + dy : y + dy + rh, x + dx : x + dx + rw] = np.where(a, patch, region)
-
+    # Clip paste vào biên ảnh (boundingRect inclusive → dst có thể tràn vài px;
+    # crop patch/mask theo phần giao thay vì skip — skip = mask rỗng vô nghĩa).
+    dy0, dy1 = y + dy, y + dy + rh
+    dx0, dx1 = x + dx, x + dx + rw
+    cy0, cy1 = max(0, dy0), min(h, dy1)
+    cx0, cx1 = max(0, dx0), min(w, dx1)
     mask = np.zeros((h, w), np.uint8)
-    mask[y + dy : y + dy + rh, x + dx : x + dx + rw] = mask_patch
+    if cy1 <= cy0 or cx1 <= cx0:
+        return forged, mask
+    py0, px0 = cy0 - dy0, cx0 - dx0
+    sh, sw = cy1 - cy0, cx1 - cx0
+    region = forged[cy0:cy1, cx0:cx1]
+    a = (mask_patch[py0 : py0 + sh, px0 : px0 + sw] > 127)[:, :, None]
+    forged[cy0:cy1, cx0:cx1] = np.where(
+        a, patch[py0 : py0 + sh, px0 : px0 + sw], region
+    )
+    mask[cy0:cy1, cx0:cx1] = mask_patch[py0 : py0 + sh, px0 : px0 + sw]
     return forged, mask
 
 
