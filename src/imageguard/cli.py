@@ -7,18 +7,7 @@ from pathlib import Path
 
 from imageguard import __version__
 
-_METHODS = {
-    "keypoint": "imageguard.forensics.keypoint.pipeline:KeypointCopyMove",
-    "block": "imageguard.forensics.block.pipeline:BlockCopyMove",
-    "ela": "imageguard.forensics.auxiliary.ela:ELA",
-}
-
-
-def _load_method(spec: str):
-    import importlib
-
-    mod, cls = _METHODS[spec].split(":")
-    return getattr(importlib.import_module(mod), cls)()
+from imageguard.forensics.registry import load_method as _load_method
 
 
 def main() -> None:
