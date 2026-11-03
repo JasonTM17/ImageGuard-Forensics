@@ -38,3 +38,12 @@ ela:
 noise:
   median_k: { value: 5, unit: px, source: "default — kernel median blur cho residual" }
   outlier_mad: { value: 3.0, unit: MAD, source: "default — block σ lệch median ± m·MAD → outlier" }
+  block: { value: 16, unit: px, source: "default — kích thước block đo σ noise" }
+  min_outlier_frac: { value: 0.005, unit: frac, source: "default — outlier ≥ tỉ lệ này mới tính là 'có vùng bất thường'" }
+
+freq:
+  blockiness_t: { value: 0.08, unit: frac, source: "default — chênh gradient biên 8x8 trung bình ≥ ngưỡng → dấu vết nén block" }
+  spec_size: { value: 256, unit: px, source: "default — kích thước crop FFT spectrum để artifact" }
+
+splicing:
+  overlap_frac: { value: 0.15, unit: frac, source: "default — (noise_outlier ∩ ELA_hot)/ELA_hot ≥ ngưỡng → corroboration" }

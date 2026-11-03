@@ -23,3 +23,4 @@ class MethodName(str, Enum):
     EXIF_AUDIT = "exif_audit"
     NOISE_INCONSISTENCY = "noise_inconsistency"
     FREQUENCY_ANALYSIS = "frequency_analysis"
+    SPLICING_CUES = "splicing_cues"

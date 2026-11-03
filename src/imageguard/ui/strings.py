@@ -34,6 +34,8 @@ METHOD_LABEL = {
     "ela": "ELA (JPEG error levels)",
     "exif_audit": "Kiểm tra metadata EXIF",
     "noise_inconsistency": "Noise inconsistency",
+    "frequency_analysis": "Frequency-domain cues",
+    "splicing_cues": "Splicing cues (noise×ELA)",
 }
 
 BTN_OPEN = "Mở ảnh…"

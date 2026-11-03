@@ -10,6 +10,9 @@ METHOD_SPECS = {
     "keypoint": "imageguard.forensics.keypoint.pipeline:KeypointCopyMove",
     "block": "imageguard.forensics.block.pipeline:BlockCopyMove",
     "ela": "imageguard.forensics.auxiliary.ela:ELA",
+    "noise": "imageguard.forensics.auxiliary.noise_map:NoiseMap",
+    "freq": "imageguard.forensics.auxiliary.freq_view:FreqView",
+    "splicing": "imageguard.forensics.auxiliary.splicing:SplicingCues",
 }
 
 

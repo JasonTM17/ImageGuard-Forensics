@@ -10,6 +10,7 @@ from imageguard.ui import strings
 from imageguard.ui.screens.analyze import AnalyzeScreen
 from imageguard.ui.screens.history import HistoryScreen
 from imageguard.ui.screens.settings import SettingsScreen
+from imageguard.ui.screens.stats import StatsScreen
 from imageguard.ui.widgets.verdict_panel import DisclaimerBar
 
 
@@ -25,11 +26,18 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.analyze = AnalyzeScreen(analysis)
         self.history = HistoryScreen(history)
+        self.stats = StatsScreen(history)
         self.settings = SettingsScreen(analysis.cfg)
         self.tabs.addTab(self.analyze, strings.TAB_ANALYZE)
         self.tabs.addTab(self.history, strings.TAB_HISTORY)
+        self.tabs.addTab(self.stats, "Thống kê")
         self.tabs.addTab(self.settings, strings.TAB_SETTINGS)
-        self.tabs.currentChanged.connect(
-            lambda _: self.history.refresh() if self.tabs.currentWidget() is self.history else None)
+        def _refresh(i):
+            cur = self.tabs.currentWidget()
+            if cur is self.history:
+                self.history.refresh()
+            elif cur is self.stats:
+                self.stats.refresh()
+        self.tabs.currentChanged.connect(_refresh)
         lay.addWidget(self.tabs, 1)
         lay.addWidget(DisclaimerBar())  # cố định dưới cùng — không bao giờ ẩn
