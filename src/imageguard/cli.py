@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from imageguard import __version__
@@ -21,7 +22,16 @@ def main() -> None:
     ev.add_argument("--methods", default="keypoint,block")
     ev.add_argument("--seed", type=int, default=42)
     ev.add_argument("--out", type=Path, default=Path("reports"))
+    sub.add_parser("gui", help="mở desktop app (PySide6)")
     args = ap.parse_args()
+
+    if args.cmd in (None, "gui"):
+        try:
+            from imageguard.ui.app import main as gui_main
+        except ImportError as e:
+            print(f"GUI khong kha dung ({e}); dung: python -m imageguard eval --help")
+            return
+        sys.exit(gui_main())
 
     if args.cmd == "eval":
         from imageguard.core.config import load_thresholds
