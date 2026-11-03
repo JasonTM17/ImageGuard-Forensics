@@ -181,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--tier", choices=TIERS, default="medium")
     args = ap.parse_args(argv)
     m = generate_set(args.n, args.seed, args.out, tier=args.tier)
-    print(f"Wrote {args.n} samples → {args.out} (manifest: {m})")
+    print(f"Wrote {args.n} samples to {args.out} (manifest: {m})")
 
 
 if __name__ == "__main__":
