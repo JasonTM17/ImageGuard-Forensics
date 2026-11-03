@@ -8,13 +8,14 @@ vùng sinh-mới MỊN hơn, không phải "lệch 2 phía so với median".
 
 Thuật toán v3:
   σ_b   = std(residual) per block B×B (integral image)
-  t     = Otsu(σ) — nếu phân phối σ lưỡng đỉnh, Otsu tự tách 2 mode
+  t     = q · median(σ) — ngưỡng tỉ lệ cứng MỘT PHÍA (q≈0.6)
   flag  = σ < t   (vùng đuôi thấp = ứng viên fill mịn)
   giữ lại connected components ≥ min_comp block (vùng thật, không nhiễu lẻ)
   evidence thêm seam-ring: local-MAD z_cao (mép blend nhiễu bất thường).
 
-Otsu chọn được vì nó thích nghi với độ tách hai mode thay vì ngưỡng cứng;
-khi ảnh đơn đỉnh, đuôi thấp chỉ là vài % lẻ → component filter loại bỏ.
+Ngưỡng tỉ lệ thay Otsu vì vùng chỉnh ~1% lưới block → phân phối σ
+không lưỡng đỉnh đủ rõ; q=0.6 nằm giữa hai cụm đo thật (σ_in 2-7 vs
+σ_out 9.5-11.5). Held-out check: docs/modelforge.md.
 
 Giới hạn: vùng phẳng tự nhiên (bầu trời, tường) có σ thấp THẬT → false
 positive theo đúng bản chất; Otsu yếu khi vùng chỉnh < vài % diện tích;
@@ -35,8 +36,8 @@ from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.forensics.auxiliary.noise_map import NoiseMap
 from imageguard.forensics.base import cancelled
 
-SCORE_DEF = ("tỉ lệ block có |z| local-MAD ≥ ngưỡng (z=(σ−med_l)/1.4826·mad_l, "
-             "baseline = láng giềng block)")
+SCORE_DEF = ("tỉ lệ block có σ < q·median toàn ảnh sau lọc component "
+             "(vùng residual mịn bất thường — ứng viên model-fill)")
 
 
 class NoiseLocal:
@@ -134,9 +135,9 @@ class NoiseLocal:
     def _done(self, verdict, score, t0, limitations, evidence=None,
               mask=None, heatmap=None, params_hash=""):
         return AlgorithmResult(
-            method=MethodName.NOISE_INCONSISTENCY, verdict=verdict,
+            method=MethodName.NOISE_LOCAL, verdict=verdict,
             score=score, score_definition=SCORE_DEF, mask=mask,
             heatmap=heatmap,
-            evidence={"variant": "otsu_low_sigma", **(evidence or {})},
+            evidence={"variant": "rel_low_sigma", **(evidence or {})},
             limitations=limitations, params_hash=params_hash,
             duration_ms=int((time.perf_counter() - t0) * 1000))

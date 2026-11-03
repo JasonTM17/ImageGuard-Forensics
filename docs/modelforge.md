@@ -95,8 +95,22 @@ thật, không phải may mắn do mask rộng. Tuy nhiên:
   thường" chứ không phân biệt được mịn-do-model vs mịn-tự-nhiên.
 - Đây là lý do verdict tối đa INCONCLUSIVE là **bắt buộc**: cue thật
   nhưng không đặc hiệu.
+
+### Held-out validation (seed 7777, `modelforge_holdout/`)
+
+Ngưỡng q=0.6 được chọn từ bộ seed 2026 — kiểm chứng trên bộ seed khác
+hoàn toàn (`reports/modelbench_holdout.md`, n=6):
+
+| kind | train IoU | holdout IoU | holdout bF1@8 |
+|---|---|---|---|
+| erase | 0.169 | **0.162** | 0.311 |
+| move | 0.215 | **0.172** | 0.378 |
+
+σ-separation tái lập trên holdout: σ_in 2.9–7.5 vs σ_out ~10.5–11,
+p<0.001 cả 4 mẫu erase/move → **q=0.6 không overfit**, cue ổn định
+theo cơ chế model-fill (không phụ thuộc seed).
 - Hướng cải thiện thực tế: kết hợp seam-ring evidence (đã giữ riêng
-  trong `evidence["seam_ring"]`), hoặc PRNU-fingerprint mismatch —
+  trong `evidence["seam_ring_blocks"]`), hoặc PRNU-fingerprint mismatch —
   natural flat có noise pattern nhất quán camera, model-fill thì không.
 
 ### Kết luận trả lời câu hỏi ban đầu
