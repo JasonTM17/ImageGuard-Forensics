@@ -29,16 +29,26 @@ def match_pairs(
     spos = pos[order]
     # sim_thresh định nghĩa trên khoảng cách chuẩn hoá theo chiều feature.
     dim = np.sqrt(sfeats.shape[1])
-    pairs: list[tuple[int, int]] = []
-    for i in range(len(sfeats)):
-        for j in range(i + 1, min(len(sfeats), i + 1 + n_neighbors)):
-            d = np.linalg.norm(sfeats[i] - sfeats[j])
-            if d > sim_thresh * dim:
-                continue  # hàng xóm sort vẫn có thể xa — bỏ qua, không break
-            dy, dx = spos[i] - spos[j]
-            if np.hypot(dx, dy) >= min_block_dist:
-                pairs.append((int(order[i]), int(order[j])))
-    return np.array(pairs, dtype=np.int32)
+    n = len(sfeats)
+    max_d = sim_thresh * dim
+    found: list[np.ndarray] = []
+    for k in range(1, n_neighbors + 1):
+        ii = np.arange(n - k)
+        jj = ii + k
+        d = np.linalg.norm(sfeats[ii] - sfeats[jj], axis=1)
+        near = d <= max_d
+        if not near.any():
+            continue  # hàng xóm sort vẫn có thể xa — bỏ qua, không break
+        ii, jj = ii[near], jj[near]
+        delta = spos[ii] - spos[jj]
+        far = np.hypot(delta[:, 0], delta[:, 1]) >= min_block_dist
+        if far.any():
+            found.append(np.stack([ii[far], jj[far]], axis=1))
+    if not found:
+        return np.empty((0, 2), dtype=np.int32)
+    ij = np.concatenate(found)
+    ij = ij[np.lexsort((ij[:, 1], ij[:, 0]))]
+    return order[ij].astype(np.int32)
 
 
 def vote_mask(

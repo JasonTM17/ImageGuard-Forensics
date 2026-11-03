@@ -1,12 +1,17 @@
 """Ghi phiên bản môi trường thật vào docs/environment.md — đo, không ghi tay."""
 
 import platform
+import sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "environment.md"
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     import cv2
     import numpy
     import PIL

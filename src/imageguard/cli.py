@@ -12,6 +12,10 @@ from imageguard.forensics.registry import load_method as _load_method
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     ap = argparse.ArgumentParser(prog="imageguard")
     ap.add_argument("--version", action="store_true")
     sub = ap.add_subparsers(dest="cmd")
@@ -24,6 +28,10 @@ def main() -> None:
     ev.add_argument("--out", type=Path, default=Path("reports"))
     sub.add_parser("gui", help="mở desktop app (PySide6)")
     args = ap.parse_args()
+
+    if args.version:
+        print(f"ImageGuard Forensics v{__version__}")
+        return
 
     if args.cmd in (None, "gui"):
         try:
