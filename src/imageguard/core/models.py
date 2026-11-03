@@ -40,6 +40,13 @@ class AlgorithmResult:
     verdict: Verdict
     score: float | None = None
     score_definition: str = ""  # ví dụ: "số cặp keypoint match qua RANSAC affine"
+
+    def __post_init__(self) -> None:
+        # Fail-fast: score mà thiếu definition = con số mơ hồ trong report.
+        if self.score is not None and not self.score_definition:
+            raise ValueError(
+                f"{self.method}: score={self.score} thiếu score_definition"
+            )
     mask: np.ndarray | None = None  # uint8 H×W, vùng nghi vấn = 255
     heatmap: np.ndarray | None = None  # float32 H×W [0,1], mật độ nghi vấn
     evidence: dict[str, Any] = field(default_factory=dict)  # số liệu thô, giải thích được
@@ -66,5 +73,5 @@ class ForensicReport:
     limitations: list[str] = field(default_factory=list)
     disclaimer: str = (
         "Công cụ chỉ phát hiện dấu hiệu nghi vấn từ phân tích tự động — "
-        "không kết luận ảnh đã bị giả mạo hay xác thực nguyên bản."
+        "không khẳng định ảnh bị can thiệp, cũng không xác thực nguyên bản."
     )

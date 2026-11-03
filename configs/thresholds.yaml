@@ -33,6 +33,7 @@ block:
 ela:
   qualities: { value: [75, 85, 90, 95], source: "default — sweep chất lượng re-encode JPEG" }
   amplify: { value: 15, source: "default — hệ số khuếch đại difference map" }
+  indication_p99: { value: 0.2, unit: frac, source: "default — p99 heat ≥ ngưỡng → INCONCLUSIVE (ELA không bao giờ trả SUSPICIOUS)" }
 
 noise:
   median_k: { value: 5, unit: px, source: "default — kernel median blur cho residual" }
