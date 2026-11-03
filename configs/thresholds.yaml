@@ -1,0 +1,35 @@
+# Mọi ngưỡng thuật toán tập trung tại đây — cấm hardcode trong module forensics.
+# Schema mỗi key: {value, unit?, source, range?}
+#   source: "literature — <citation>" | "default — chưa hiệu chuẩn" | "calibrated:<experiment_id>"
+version: 1
+
+limits:
+  max_file_bytes: { value: 104857600, unit: bytes, source: "default — chống decompression bomb (100MB)" }
+  max_pixels: { value: 80000000, unit: px, source: "default — 80MP, kiểm tra header trước decode" }
+  min_side: { value: 64, unit: px, source: "default — dưới ngưỡng này không đủ tín hiệu → INCONCLUSIVE" }
+  work_max_side: { value: 2048, unit: px, source: "default — working copy cho detector, ghi resolution_reduced" }
+
+keypoint:
+  backend: { value: sift, source: "default — SIFT mainline từ OpenCV 4.4; orb là fallback" }
+  nfeatures: { value: 0, source: "default — 0 = không giới hạn, để OpenCV quyết định" }
+  ratio_rho: { value: 0.8, unit: ratio, source: "literature — Lowe 2004, ratio test d1/d2", range: [0.6, 0.9] }
+  min_match_dist: { value: 20, unit: px, source: "default — loại cặp keypoint quá sát nhau" }
+  min_cluster: { value: 3, source: "default — cluster tối thiểu để đưa vào geometric verify" }
+  k_min: { value: 50, source: "default — tổng keypoints < ngưỡng → INCONCLUSIVE (ít texture)" }
+  ransac_residual: { value: 3.0, unit: px, source: "default — inlier threshold cho affine RANSAC" }
+  t_susp: { value: 10, source: "default — verified matches ≥ ngưỡng → SUSPICIOUS" }
+  t_clean: { value: 4, source: "default — verified matches < ngưỡng → NO_INDICATION; giữa → INCONCLUSIVE" }
+
+block:
+  block_size: { value: 16, unit: px, source: "literature — Fridrich/Popescu baseline" }
+  sim_thresh: { value: 0.95, source: "default — ngưỡng tương tự feature hàng kề" }
+  min_shift_votes: { value: 8, source: "default — shift vector tối thiểu để giữ" }
+  min_block_dist: { value: 32, unit: px, source: "default — loại cặp block dính nhau" }
+
+ela:
+  qualities: { value: [75, 85, 90, 95], source: "default — sweep chất lượng re-encode JPEG" }
+  amplify: { value: 15, source: "default — hệ số khuếch đại difference map" }
+
+noise:
+  median_k: { value: 5, unit: px, source: "default — kernel median blur cho residual" }
+  outlier_mad: { value: 3.0, unit: MAD, source: "default — block σ lệch median ± m·MAD → outlier" }

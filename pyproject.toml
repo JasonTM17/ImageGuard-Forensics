@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imageguard-forensics"
+version = "0.1.0"
+description = "Desktop app phát hiện và định vị dấu hiệu giả mạo ảnh số (Copy-Move, ELA) — đồ án Xử lý ảnh"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "opencv-python>=4.10",
+    "numpy>=2.0",
+    "Pillow>=11.0",
+    "SQLAlchemy>=2.0",
+    "PyYAML>=6.0",
+    "PySide6>=6.10.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-qt>=4.4",
+    "ruff>=0.8",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
