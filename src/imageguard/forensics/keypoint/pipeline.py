@@ -26,6 +26,7 @@ from imageguard.forensics.keypoint.detectors import create_backend
 from imageguard.forensics.keypoint.geo_verify import geometric_verify
 from imageguard.forensics.keypoint.mask_builder import build_mask, upscale_mask
 from imageguard.forensics.keypoint.matchers import self_match
+from imageguard.forensics.keypoint.viz import draw_pairs
 
 SCORE_DEF = "số cặp keypoint match qua geometric verify (RANSAC affine inliers)"
 
@@ -84,9 +85,11 @@ class KeypointCopyMove:
                 "có tín hiệu nhưng chưa đủ mạnh để kết luận nghi vấn"
             )
 
-        mask = heat = None
+        mask = heat = pairs_img = None
         if n_ver:
             mask, heat = build_mask(kps, matches.pairs, ver.inlier_pairs, gray.shape)
+            pairs_img = draw_pairs(doc.array, kps, matches.pairs,
+                                   ver.inlier_pairs, doc.scale_factor)
             mask = upscale_mask(mask, doc.scale_factor, (doc.height, doc.width))
             if doc.scale_factor < 1.0:
                 heat_full = np.zeros((doc.height, doc.width), np.float32)
@@ -120,6 +123,7 @@ class KeypointCopyMove:
                 "n_verified": n_ver,
                 "n_clusters": ver.n_clusters,
                 "backend": str(cfg.value("keypoint", "backend")),
+                "pairs_image": pairs_img,
             },
             params_hash=cfg.snapshot_hash(),
         )

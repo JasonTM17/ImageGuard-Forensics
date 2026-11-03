@@ -11,12 +11,17 @@ def draw_pairs(
     kps: list,
     pairs: np.ndarray,
     inlier_idx: np.ndarray,
+    scale: float = 1.0,
 ) -> np.ndarray:
     out = bgr.copy()
     for k in range(len(inlier_idx)):
         i, j = pairs[inlier_idx[k]]
-        p1 = tuple(int(v) for v in kps[int(i)].pt)
-        p2 = tuple(int(v) for v in kps[int(j)].pt)
+        pt1, pt2 = kps[int(i)].pt, kps[int(j)].pt
+        if scale != 1.0:
+            pt1 = (pt1[0] / scale, pt1[1] / scale)
+            pt2 = (pt2[0] / scale, pt2[1] / scale)
+        p1 = tuple(int(v) for v in pt1)
+        p2 = tuple(int(v) for v in pt2)
         color = (0, int(40 + 200 * (k / max(1, len(inlier_idx)))), 255)
         cv2.line(out, p1, p2, color, 1, cv2.LINE_AA)
         cv2.circle(out, p1, 3, (255, 160, 0), -1, cv2.LINE_AA)

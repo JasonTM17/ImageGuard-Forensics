@@ -94,3 +94,14 @@ def test_fusion_aux_corroboration():
         r(MethodName.SPLICING_CUES, Verdict.INCONCLUSIVE),
     ])
     assert v2 == Verdict.INCONCLUSIVE
+
+
+def test_keypoint_pairs_artifact(services, forged):
+    analysis, history = services
+    rep = analysis.analyze(AnalysisRequest(path=forged[0], methods=["keypoint"]))
+    kp_res = next((m for m in rep.methods if m.method.value == "copy_move_keypoint"), None)
+    assert kp_res is not None
+    if kp_res.score and kp_res.score > 0:
+        assert "pairs_image" in kp_res.evidence
+        arts = history.get(rep.report_id)["artifacts"]
+        assert any(a["kind"] == "pairs" for a in arts)

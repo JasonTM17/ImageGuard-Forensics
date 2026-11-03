@@ -106,6 +106,10 @@ class AnalyzeScreen(QWidget):
         self.overlay_box.currentIndexChanged.connect(self._apply_overlay)
         self.overlay_box.hide()
         rl.addWidget(self.overlay_box)
+        self.btn_export = QPushButton("Xuất báo cáo (Markdown)")
+        self.btn_export.clicked.connect(self._export_report)
+        self.btn_export.hide()
+        rl.addWidget(self.btn_export)
 
         self.cards_area = QScrollArea()
         self.cards_area.setWidgetResizable(True)
@@ -231,10 +235,32 @@ class AnalyzeScreen(QWidget):
             if m.heatmap is not None:
                 self.overlay_box.addItem(f"Heatmap — {m.method.value}",
                                        ("heat", m))
+            if m.evidence.get("pairs_image") is not None:
+                self.overlay_box.addItem(f"Cặp điểm nối (Twin pairs) — {m.method.value}",
+                                       ("pairs", m))
         self.cards_layout.addStretch(1)
         self.overlay_box.blockSignals(False)
         self.overlay_box.show()
+        self.btn_export.show()
         self._apply_overlay()
+
+    def _export_report(self) -> None:
+        if self._report is None:
+            return
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from imageguard.services.report_service import ReportService
+
+        default_name = f"report_{self._path.stem if self._path else 'image'}_{self._report.report_id[:8]}.md"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
+        )
+        if save_path:
+            rep_svc = ReportService(self._svc.store)
+            res = rep_svc.export_markdown(self._report.report_id, Path(save_path))
+            if res:
+                QMessageBox.information(
+                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+                )
 
     def _apply_overlay(self) -> None:
         data = self.overlay_box.currentData()
@@ -250,3 +276,5 @@ class AnalyzeScreen(QWidget):
         elif kind == "heat" and m.heatmap is not None:
             self.canvas.set_overlay(
                 heat_to_qpixmap(m.heatmap, self._doc.array.shape[:2]), alpha=0.55)
+        elif kind == "pairs" and m.evidence.get("pairs_image") is not None:
+            self.canvas.set_overlay(ndarray_to_qpixmap(m.evidence["pairs_image"]), alpha=1.0)

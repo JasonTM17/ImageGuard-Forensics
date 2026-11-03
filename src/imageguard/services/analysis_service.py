@@ -109,6 +109,12 @@ class AnalysisService:
                                            f"{r.method.value}_heat.png", hm)
                 self.analyses.add_artifact(report.report_id, "heatmap",
                                            r.method.value, rel)
+            if r.evidence.get("pairs_image") is not None:
+                rel = self.store.put_image(report.report_id,
+                                           f"{r.method.value}_pairs.png",
+                                           r.evidence["pairs_image"])
+                self.analyses.add_artifact(report.report_id, "pairs",
+                                           r.method.value, rel)
         rel = self.store.put_bytes(
             report.report_id, "report.json",
             json.dumps(rd, ensure_ascii=False, default=str, indent=1).encode())
@@ -175,7 +181,9 @@ def _report_dict(report: ForensicReport) -> dict:
         "methods": [{
             "method": m.method.value, "verdict": m.verdict.value,
             "score": m.score, "score_definition": m.score_definition,
-            "evidence": m.evidence, "limitations": m.limitations,
+            "evidence": {k: v for k, v in m.evidence.items()
+                         if not isinstance(v, np.ndarray)},
+            "limitations": m.limitations,
             "params_hash": m.params_hash, "duration_ms": m.duration_ms,
             "has_mask": m.mask is not None,
         } for m in report.methods],

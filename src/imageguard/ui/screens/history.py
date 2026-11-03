@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -37,9 +40,12 @@ class HistoryScreen(QWidget):
         btns = QHBoxLayout()
         self.btn_reopen = QPushButton(strings.BTN_REOPEN)
         self.btn_reopen.clicked.connect(self._reopen)
+        self.btn_export = QPushButton("Xuất báo cáo")
+        self.btn_export.clicked.connect(self._export)
         self.btn_delete = QPushButton(strings.BTN_DELETE)
         self.btn_delete.clicked.connect(self._delete)
         btns.addWidget(self.btn_reopen)
+        btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_delete)
         btns.addStretch(1)
         lay.addLayout(btns)
@@ -85,6 +91,23 @@ class HistoryScreen(QWidget):
         dlg = AnalysisDetailDialog(d, self._svc, self)
         dlg.exec()
 
+    def _export(self) -> None:
+        aid = self._selected_id()
+        if not aid:
+            return
+        from imageguard.services.report_service import ReportService
+        default_name = f"report_{aid[:8]}.md"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
+        )
+        if save_path:
+            rep_svc = ReportService(self._svc.store)
+            res = rep_svc.export_markdown(aid, Path(save_path))
+            if res:
+                QMessageBox.information(
+                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+                )
+
 
 class AnalysisDetailDialog(QDialog):
     """Xem lại phân tích đã lưu: tóm tắt methods + artifact images."""
@@ -92,15 +115,21 @@ class AnalysisDetailDialog(QDialog):
     def __init__(self, detail: dict, svc: HistoryService, parent=None) -> None:
         super().__init__(parent)
         self._svc = svc
+        self._aid = detail["id"]
         self._arts = detail["artifacts"]
         self.setWindowTitle(f"{detail['image_name']} — {detail['created_at'][:19]}")
         self.resize(900, 620)
         lay = QVBoxLayout(self)
         v = detail["verdict"]
-        lay.addWidget(QLabel(
+        top_h = QHBoxLayout()
+        top_h.addWidget(QLabel(
             f"<b>{strings.VERDICT_LABEL.get(v, v)}</b> · "
             f"{len(detail['methods'])} methods · {detail['duration_ms']} ms · "
-            f"config `{detail['config_hash']}`"))
+            f"config `{detail['config_hash']}`"), 1)
+        btn_exp = QPushButton("Xuất báo cáo")
+        btn_exp.clicked.connect(self._export)
+        top_h.addWidget(btn_exp)
+        lay.addLayout(top_h)
         for m in detail["methods"]:
             score = (f" — score {m['score']:.4g} ({m['score_definition']})"
                      if m["score"] is not None else "")
@@ -134,3 +163,17 @@ class AnalysisDetailDialog(QDialog):
                 self.canvas.set_image(img)
         except Exception:
             pass
+
+    def _export(self) -> None:
+        from imageguard.services.report_service import ReportService
+        default_name = f"report_{self._aid[:8]}.md"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
+        )
+        if save_path:
+            rep_svc = ReportService(self._svc.store)
+            res = rep_svc.export_markdown(self._aid, Path(save_path))
+            if res:
+                QMessageBox.information(
+                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+                )
