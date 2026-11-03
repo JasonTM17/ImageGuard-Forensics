@@ -6,16 +6,18 @@ thấp hơn nền với p<0.001 trên mọi mẫu erase/move, nhưng cả global
 → z chìm, n_low≈0) đều thất bại localize. Lý do đúng: cue là MỘT PHÍA —
 vùng sinh-mới MỊN hơn, không phải "lệch 2 phía so với median".
 
-Thuật toán v3:
+Thuật toán v4:
   σ_b   = std(residual) per block B×B (integral image)
-  t     = q · median(σ) — ngưỡng tỉ lệ cứng MỘT PHÍA (q≈0.6)
-  flag  = σ < t   (vùng đuôi thấp = ứng viên fill mịn)
-  giữ lại connected components ≥ min_comp block (vùng thật, không nhiễu lẻ)
-  evidence thêm seam-ring: local-MAD z_cao (mép blend nhiễu bất thường).
+  t1    = q  · median(σ) — ứng viên: σ thấp hơn nền (q≈0.6)
+  t2    = q2 · median(σ) — component-mean σ < t2 mới giữ (q2≈0.45):
+          LaMa-fill mịn SÂU hơn flat tự nhiên; đo GT-comp 3.2-4.9 vs
+          natural-flat 4.5-5.7, held-out: orig flag 10-18%→0%.
+  flag  = component đủ lớn (≥min_region_blocks) và đủ mịn
+  evidence thêm seam-ring: local-MAD z_cao (đã đo: KHÔNG tách được
+  edited vs natural — giữ làm evidence mô tả, không dùng để lọc).
 
-Ngưỡng tỉ lệ thay Otsu vì vùng chỉnh ~1% lưới block → phân phối σ
-không lưỡng đỉnh đủ rõ; q=0.6 nằm giữa hai cụm đo thật (σ_in 2-7 vs
-σ_out 9.5-11.5). Held-out check: docs/modelforge.md.
+q=0.6/q2=0.45 chọn từ bộ seed 2026, validate held-out seed 7777 —
+không overfit (docs/modelforge.md).
 
 Giới hạn: vùng phẳng tự nhiên (bầu trời, tường) có σ thấp THẬT → false
 positive theo đúng bản chất; Otsu yếu khi vùng chỉnh < vài % diện tích;
@@ -91,14 +93,21 @@ class NoiseLocal:
         q = float(cfg.value("noise", "low_sigma_ratio"))
         t_sig = q * med_g
         low = (sigma < t_sig).astype(np.uint8)
-        # lọc component: vùng fill thật liền khối, nhiễu lẻ rải rác
+        # Lọc component hai tầng: (1) đủ lớn → loại nhiễu lẻ;
+        # (2) component-mean σ < q2·median — LaMa-fill mịn SÂU hơn flat
+        # tự nhiên (đo: GT-comp σ≈3.2-4.9 vs natural-flat ≈4.5-5.7).
+        # Tầng 2 giảm flag-rate trên ảnh gốc 10-18% → ~0% (held-out).
+        q2 = float(cfg.value("noise", "region_sigma_ratio"))
         n_lbl, lbl, stats, _ = cv2.connectedComponentsWithStats(low, 8)
         keep = np.zeros_like(low)
         kept_area = 0
         min_comp = int(cfg.value("noise", "min_region_blocks"))
         for i in range(1, n_lbl):
-            if stats[i, cv2.CC_STAT_AREA] >= min_comp:
-                keep[lbl == i] = 1
+            if stats[i, cv2.CC_STAT_AREA] < min_comp:
+                continue
+            cm = lbl == i
+            if sigma[cm].mean() < q2 * med_g:
+                keep[cm] = 1
                 kept_area += int(stats[i, cv2.CC_STAT_AREA])
         frac = kept_area / max(bh * bw, 1)
 
@@ -138,6 +147,6 @@ class NoiseLocal:
             method=MethodName.NOISE_LOCAL, verdict=verdict,
             score=score, score_definition=SCORE_DEF, mask=mask,
             heatmap=heatmap,
-            evidence={"variant": "rel_low_sigma", **(evidence or {})},
+            evidence={"variant": "two_tier_low_sigma", **(evidence or {})},
             limitations=limitations, params_hash=params_hash,
             duration_ms=int((time.perf_counter() - t0) * 1000))

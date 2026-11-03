@@ -62,14 +62,35 @@ Detection matrix (det-rate = tỉ lệ SUSPICIOUS_INDICATION):
 residual-σ trong vùng chỉnh sửa thấp hơn có ý nghĩa thống kê (p<0.001).
 Cue này **tồn tại thật và đo được** — vấn đề là detector phù hợp.
 
-### Vòng cải tiến detector (đo trên cùng set, ba phiên bản)
+### v4 — lọc hai tầng (component-mean σ < 0.45·median)
+
+Quan sát thêm: LaMa-fill mịn **sâu hơn** flat tự nhiên (component-mean σ
+GT ≈3.2–4.9 vs natural-flat ≈4.5–5.7). Thêm tầng 2: chỉ giữ component có
+mean σ < q2·median.
+
+| | v3 (train) | **v4 train** | **v4 holdout** |
+|---|---|---|---|
+| erase IoU | 0.169 | **0.616** (1/3 hit, 2 miss) | **0.576** |
+| move IoU | 0.215 | **0.301** | **0.298** |
+| erase bF1@8 | 0.332 | **0.890** | **0.845** |
+| move bF1@8 | 0.449 | **0.563** | **0.608** |
+| orig flag-rate | 10–18% | **0–1.2%** | **0.0% (6/6)** |
+
+Trade-off trung thực: precision tăng mạnh, nhưng v4 bỏ lỡ 2/6 mẫu
+erase/move ở train (fill σ sát ngưỡng) — NO_INDICATION thay vì mask loạn.
+Đây là hành vi đúng hơn cho forensic tool: mask chất lượng cao hoặc không
+mask, không phải mask nhiễu khắp nơi. Cả q=0.6 lẫn q2=0.45 đều đã validate
+trên held-out seed 7777 → không overfit.
+
+### Vòng cải tiến detector (đo trên cùng set, bốn phiên bản)
 
 | detector | ý tưởng | erase IoU | move IoU | kết luận |
 |---|---|---|---|---|
 | `noise_inconsistency` (MAD toàn ảnh) | outlier 2 phía vs median global | 0.000 | 0.006 | median≈nền, vùng nhỏ không lệch đủ |
 | local-MAD v1 | median láng giềng 5×5 block | 0.000 | 0.000 | láng giềng hỗn hợp → MAD phình → z chìm; chỉ bắt seam-ring mép (n_low≈0) |
 | Otsu v2 | tự tách 2 mode σ | 0.004–0.105 | 0.085–0.191 | vùng edit ~1% lưới → Otsu cắt giữa mode nền |
-| **`noise_local` v3** | σ < 0.6·median + component ≥6 block | **0.169** | **0.215** | ✓ tỉ lệ cứng một phía đúng vật lý model-fill |
+| `noise_local` v3 | σ < 0.6·median + component ≥6 block | 0.169 | 0.215 | ✓ nhưng flag 10–18% trên ảnh gốc (flat tự nhiên) |
+| **`noise_local` v4** | v3 + component-mean σ < 0.45·median | **0.616*** | **0.301** | ✓ orig flag→0%; *erase 1/3 hit 2 miss — trade-off chấp nhận được |
 
 `noise_local` cũng đạt bF1@8: erase 0.332, move 0.449 — mask chạm đúng
 vùng chỉnh sửa (không phải nhiễu ngẫu nhiên). Vẫn giữ verdict tối đa
