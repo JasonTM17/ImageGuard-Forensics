@@ -15,7 +15,9 @@ from typing import Any
 
 import yaml
 
-DEFAULT_CONFIG = Path(__file__).resolve().parents[3] / "configs" / "thresholds.yaml"
+from imageguard.core.paths import config_path
+
+DEFAULT_CONFIG = config_path()
 
 
 @dataclass(frozen=True, slots=True)

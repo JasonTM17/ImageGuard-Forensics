@@ -13,7 +13,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-DEFAULT_ROOT = Path("data/artifacts")
+from imageguard.core.paths import data_root
+
+DEFAULT_ROOT = data_root() / "artifacts"
 
 _SAFE = re.compile(r"^[a-z0-9_\-]+$", re.I)
 

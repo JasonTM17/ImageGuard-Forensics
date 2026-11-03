@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from imageguard.storage.models import SCHEMA_VERSION, Base, MetaKV
 
-DEFAULT_DB = Path("data/imageguard.db")
+from imageguard.core.paths import data_root
+
+DEFAULT_DB = data_root() / "imageguard.db"
 
 
 def make_session_factory(db_path: Path | str = DEFAULT_DB) -> sessionmaker[Session]:
