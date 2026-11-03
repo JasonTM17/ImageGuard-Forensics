@@ -25,6 +25,10 @@ block:
   sim_thresh: { value: 0.95, source: "default — ngưỡng tương tự feature hàng kề" }
   min_shift_votes: { value: 8, source: "default — shift vector tối thiểu để giữ" }
   min_block_dist: { value: 32, unit: px, source: "default — loại cặp block dính nhau" }
+  max_side: { value: 768, unit: px, source: "default — block pipeline cap riêng; N_b ~ (side-B)^2 → 2048 quá nặng" }
+  n_coeffs: { value: 24, source: "default — số hệ số DCT zigzag đầu giữ lại làm feature" }
+  min_area_frac: { value: 0.01, unit: frac, source: "default — mask/img ≥ ngưỡng → SUSPICIOUS; >0 → INCONCLUSIVE" }
+  flat_std_eps: { value: 5.0, unit: gray, source: "literature — Fridrich: loại flat blocks khỏi matching (nguồn false-match chính)" }
 
 ela:
   qualities: { value: [75, 85, 90, 95], source: "default — sweep chất lượng re-encode JPEG" }
