@@ -80,23 +80,31 @@ class AnalysisService:
 
         _progress(req.progress_cb, 0.85, "fusion")
         overall, signals, warnings = combine(results)
+        wall_ms = int((time.perf_counter() - t0) * 1000)
         report = _build_report(report_id, doc, results, overall, signals,
-                               warnings, self.cfg, int((time.perf_counter() - t0) * 1000))
+                               warnings, self.cfg, wall_ms)
 
         _progress(req.progress_cb, 0.9, "persist")
         if self.images is not None and self.analyses is not None:
-            self._persist(report, doc, results)
+            try:
+                self._persist(report, doc, results, wall_ms)
+            except Exception as e:
+                # Phân tích đã tính xong — persistence lỗi KHÔNG được huỷ kết quả.
+                # Báo trong limitations để report tự nói rõ mất persist.
+                report.limitations.append(
+                    f"lưu lịch sử/artifact thất bại — kết quả phân tích vẫn hợp lệ ({type(e).__name__}: {e})")
 
         _progress(req.progress_cb, 1.0, "done")
         return report
 
     def _persist(self, report: ForensicReport, doc: ImageDocument,
-                 results: list[AlgorithmResult]) -> None:
+                 results: list[AlgorithmResult], wall_ms: int) -> None:
         asset = self.images.get_or_create(
             doc.sha256, doc.file_name, doc.width, doc.height, doc.image_format)
         rd = _report_dict(report)
+        # duration wall-clock (toàn pipeline) — không phải tổng method duration.
         self.analyses.save_report(report.report_id, asset.id, rd,
-                                  self.cfg.snapshot_hash(), report_dur_ms(report))
+                                  self.cfg.snapshot_hash(), wall_ms)
         for r in results:
             if r.mask is not None:
                 rel = self.store.put_image(report.report_id,
@@ -132,19 +140,39 @@ def _env() -> dict[str, str]:
             "numpy": numpy.__version__}
 
 
+# Registry spec → MethodName (registry dùng alias ngắn, MethodName dùng value đầy đủ).
+# Trước đây các spec không phải MethodName value (keypoint, block, noise, freq,
+# splicing) đều rơi về COPY_MOVE_KEYPOINT khi method crash/cancel — sai nhãn.
+_SPEC_TO_METHOD: dict[str, MethodName] = {
+    "keypoint": MethodName.COPY_MOVE_KEYPOINT,
+    "block": MethodName.COPY_MOVE_BLOCK,
+    "ela": MethodName.ELA,
+    "noise": MethodName.NOISE_INCONSISTENCY,
+    "noise_local": MethodName.NOISE_LOCAL,
+    "freq": MethodName.FREQUENCY_ANALYSIS,
+    "splicing": MethodName.SPLICING_CUES,
+    "exif": MethodName.EXIF_AUDIT,
+}
+
+
+def _try_method_value(spec: str) -> MethodName:
+    try:
+        return MethodName(spec)
+    except ValueError:
+        return MethodName.COPY_MOVE_KEYPOINT
+
+
 def _error_result(spec: str, e: Exception) -> AlgorithmResult:
     return AlgorithmResult(
-        method=MethodName(spec) if spec in MethodName._value2member_map_
-        else MethodName.COPY_MOVE_KEYPOINT,
-        verdict=Verdict.ERROR, evidence={"error": str(e)},
+        method=_SPEC_TO_METHOD.get(spec, _try_method_value(spec)),
+        verdict=Verdict.ERROR, evidence={"spec": spec, "error": str(e)},
         limitations=["method crashed — xem evidence.error"])
 
 
 def _cancelled_result(spec: str) -> AlgorithmResult:
     return AlgorithmResult(
-        method=MethodName(spec) if spec in MethodName._value2member_map_
-        else MethodName.COPY_MOVE_KEYPOINT,
-        verdict=Verdict.ERROR, evidence={"error": "cancelled"},
+        method=_SPEC_TO_METHOD.get(spec, _try_method_value(spec)),
+        verdict=Verdict.ERROR, evidence={"spec": spec, "error": "cancelled"},
         limitations=["analysis bị huỷ trước khi method chạy"])
 
 
