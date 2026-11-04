@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from imageguard.storage.models import SCHEMA_VERSION, Base, MetaKV
@@ -18,9 +18,17 @@ def make_session_factory(db_path: Path | str = DEFAULT_DB) -> sessionmaker[Sessi
     p = Path(db_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     eng = create_engine(f"sqlite:///{p}", connect_args={"timeout": 10})
+
+    # PRAGMA foreign_keys chỉ có hiệu lực PER CONNECTION — gắn listener để
+    # MỌI connection từ pool đều bật FK, không chỉ connection khởi tạo.
+    @event.listens_for(eng, "connect")
+    def _fk_on(dbapi_conn, _record):  # noqa: ANN001, ANN202
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
     with eng.connect() as c:
         c.exec_driver_sql("PRAGMA journal_mode=WAL")
-        c.exec_driver_sql("PRAGMA foreign_keys=ON")
     Base.metadata.create_all(eng)
     factory = sessionmaker(eng, expire_on_commit=False)
     with factory() as s:
