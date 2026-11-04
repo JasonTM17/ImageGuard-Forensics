@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
+import cv2
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -125,6 +125,8 @@ class AnalyzeScreen(QWidget):
 
     # --- file ---
     def _pick_file(self) -> None:
+        if self._worker is not None:
+            return  # không mở file mới khi analysis đang chạy
         f, _ = QFileDialog.getOpenFileName(
             self, strings.BTN_OPEN, "",
             "Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)")
@@ -136,23 +138,54 @@ class AnalyzeScreen(QWidget):
             e.acceptProposedAction()
 
     def dropEvent(self, e) -> None:
+        if self._worker is not None:
+            return  # không mở file mới khi analysis đang chạy
         urls = e.mimeData().urls()
         if urls:
             self.load_path(Path(urls[0].toLocalFile()))
 
+    def _clear_results(self) -> None:
+        """Xoá toàn bộ UI kết quả cũ — banner/cards/overlay/export/report."""
+        self._report = None
+        self.banner.hide()
+        self.overlay_box.blockSignals(True)
+        self.overlay_box.clear()
+        self.overlay_box.addItem("Không overlay", None)
+        self.overlay_box.blockSignals(False)
+        self.overlay_box.hide()
+        self.btn_export.hide()
+        for i in reversed(range(self.cards_layout.count())):
+            item = self.cards_layout.itemAt(i)
+            w = item.widget() if item else None
+            self.cards_layout.removeItem(item)  # gỡ item (kể cả stretch)
+            if w is not None:
+                w.deleteLater()
+        self.canvas.set_overlay(None)
+
+    def _set_running(self, running: bool) -> None:
+        self.btn_open.setEnabled(not running)
+        self.btn_run.setEnabled(not running and self._path is not None)
+        self.btn_cancel.setEnabled(running)
+        for c in (self.chk_kp, self.chk_bl, self.chk_ela,
+                  self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
+            c.setEnabled(not running)
+
     def load_path(self, path: Path) -> None:
-        self._path = path
+        self._clear_results()
         self.lbl_err.setText("")
         self.lbl_file.setText(path.name)
+        self.lbl_meta.setText("")
         # Preview nhanh qua safe_open (header probe + decode đã chặn bomb).
         from imageguard.core.config import load_thresholds
         from imageguard.core.io import safe_open
 
         out = safe_open(path, load_thresholds())
         if isinstance(out, ErrorResult):
+            self._path = None
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             self.btn_run.setEnabled(False)
             return
+        self._path = path
         self._doc = out
         self.canvas.set_image(out.array)
         ex = out.exif.get("present", {})
@@ -184,14 +217,15 @@ class AnalyzeScreen(QWidget):
     def _run(self) -> None:
         if not self._path or self._worker is not None:
             return
+        self._clear_results()  # ẩn banner/export/cards cũ trước khi run mới
         self.lbl_err.setText("")
+        self.progress.setValue(0)
         req = AnalysisRequest(path=self._path, methods=self._methods())
         self._worker = AnalysisWorker(self._svc, req)
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.result.connect(self._on_result)
         self._worker.signals.failed.connect(self._on_failed)
-        self.btn_run.setEnabled(False)
-        self.btn_cancel.setEnabled(True)
+        self._set_running(True)
         self._pool.start(self._worker)
 
     def _cancel(self) -> None:
@@ -204,26 +238,23 @@ class AnalyzeScreen(QWidget):
 
     def _on_failed(self, msg: str) -> None:
         self._worker = None
-        self.btn_run.setEnabled(True)
-        self.btn_cancel.setEnabled(False)
+        self._set_running(False)
+        self._clear_results()
         self.lbl_err.setText(msg)
 
     def _on_result(self, out) -> None:
         self._worker = None
-        self.btn_run.setEnabled(True)
-        self.btn_cancel.setEnabled(False)
+        self._set_running(False)
         if isinstance(out, ErrorResult):
+            self._clear_results()
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             return
+        self._clear_results()
         self._report = out
         self.banner.set_verdict(out.overall_verdict,
                                 [m.method.value for m in out.methods
                                  if m.verdict.value == "suspicious_indication"])
         self.banner.show()
-        for i in reversed(range(self.cards_layout.count())):
-            w = self.cards_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
         self.overlay_box.blockSignals(True)
         self.overlay_box.clear()
         self.overlay_box.addItem("Không overlay", None)
@@ -254,13 +285,23 @@ class AnalyzeScreen(QWidget):
         save_path, _ = QFileDialog.getSaveFileName(
             self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
         )
-        if save_path:
-            rep_svc = ReportService(self._svc.store)
+        if not save_path:
+            return
+        rep_svc = ReportService(self._svc.store)
+        try:
             res = rep_svc.export_markdown(self._report.report_id, Path(save_path))
-            if res:
-                QMessageBox.information(
-                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
-                )
+        except Exception as e:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
+            return
+        if not res:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                "Không đọc được report.json hoặc không ghi được file đích. "
+                                "Xem logs/artifacts của phiên phân tích.")
+            return
+        QMessageBox.information(
+            self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+        )
 
     def _apply_overlay(self) -> None:
         data = self.overlay_box.currentData()
@@ -268,13 +309,27 @@ class AnalyzeScreen(QWidget):
             self.canvas.set_overlay(None)
             return
         kind, m = data
+        shape = self._doc.array.shape[:2]
         if kind == "mask" and m.mask is not None:
+            if m.mask.shape != shape:
+                self.lbl_err.setText(
+                    f"Overlay bỏ qua: dims mask {m.mask.shape} ≠ ảnh {shape}")
+                return
             bgr = self._doc.array.copy()
             bgr[m.mask > 0] = (0, 0, 255)
-            blend = (self._doc.array * 0.6 + bgr * 0.4).astype(np.uint8)
+            blend = cv2.addWeighted(self._doc.array, 0.6, bgr, 0.4, 0)
             self.canvas.set_overlay(ndarray_to_qpixmap(blend), alpha=1.0)
         elif kind == "heat" and m.heatmap is not None:
+            if m.heatmap.shape[:2] != shape:
+                self.lbl_err.setText(
+                    f"Overlay bỏ qua: dims heatmap {m.heatmap.shape} ≠ ảnh {shape}")
+                return
             self.canvas.set_overlay(
-                heat_to_qpixmap(m.heatmap, self._doc.array.shape[:2]), alpha=0.55)
+                heat_to_qpixmap(m.heatmap, shape), alpha=0.55)
         elif kind == "pairs" and m.evidence.get("pairs_image") is not None:
-            self.canvas.set_overlay(ndarray_to_qpixmap(m.evidence["pairs_image"]), alpha=1.0)
+            pi = m.evidence["pairs_image"]
+            if pi.shape[:2] == shape:
+                self.canvas.set_overlay(ndarray_to_qpixmap(pi), alpha=1.0)
+            else:
+                self.lbl_err.setText(
+                    f"Overlay bỏ qua: dims pairs {pi.shape} ≠ ảnh {shape}")
