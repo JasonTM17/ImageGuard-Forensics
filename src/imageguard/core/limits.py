@@ -3,6 +3,9 @@ override được qua configs/thresholds.yaml (mục `limits`)."""
 
 MAX_FILE_BYTES = 100 * 1024 * 1024  # 100MB — chặn file bất thường trước decode
 MAX_PIXELS = 80_000_000  # 80MP — chống decompression bomb (px khai trong header)
+# Ghi chú bộ nhớ: aux methods (noise_map/noise_local/freq_view/ELA) đọc doc.array
+# ở FULL RESOLUTION — 80MP có thể cần ~2GB+ RAM cho integral/FFT. WORK_MAX_SIDE
+# (2048) chỉ áp dụng cho preprocess_keypoint. Nếu OOM với ảnh lớn, giảm max_pixels.
 MIN_SIDE = 64  # px — dưới ngưỡng này không đủ tín hiệu forensic → INCONCLUSIVE
 WORK_MAX_SIDE = 2048  # px — working copy tối đa đưa vào detector, ghi scale_factor
 MAX_DECODE_SIDE = 16384  # px — hard ceiling cạnh đơn, phòng lỗi header khai sai
