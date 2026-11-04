@@ -64,9 +64,10 @@ def safe_open(
         )
 
     try:
-        head = p.read_bytes()[: limits.SNIFF_BYTES]
+        raw = p.read_bytes()
     except OSError as e:
-        return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được header: {e}")
+        return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
+    head = raw[: limits.SNIFF_BYTES]
     fmt = _sniff_format(head)
     if fmt is None:
         return _err(
@@ -106,7 +107,10 @@ def safe_open(
         return _err(ErrorCode.DECODE_FAILED, f"Decode thất bại: {e}")
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    sha = hashlib.sha256(p.read_bytes()).hexdigest()
+    # exif_transpose hoán đổi w×h với orientation 5–8 — dùng dims SAU transpose
+    # để doc.width/height khớp doc.array (mask/heatmap upscale theo doc dims).
+    h, w = rgb.shape[:2]
+    sha = hashlib.sha256(raw).hexdigest()
     exif = extract_exif(p)
     return ImageDocument(
         array=bgr,
