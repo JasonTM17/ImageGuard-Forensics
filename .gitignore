@@ -15,4 +15,5 @@ dist/
 .mypy_cache/
 htmlcov/
 *.spec
+!ImageGuard.spec
 nul

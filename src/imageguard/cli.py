@@ -16,22 +16,21 @@ def main() -> None:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
-    ap = argparse.ArgumentParser(prog="imageguard")
-    ap.add_argument("--version", action="store_true")
+    _ver = argparse.ArgumentParser(add_help=False)
+    _ver.add_argument("--version", action="version",
+                      version=f"ImageGuard Forensics v{__version__}")
+    ap = argparse.ArgumentParser(prog="imageguard", parents=[_ver])
     sub = ap.add_subparsers(dest="cmd")
-    ev = sub.add_parser("eval", help="chạy evaluation trên dataset")
+    ev = sub.add_parser("eval", help="chạy evaluation trên dataset",
+                        parents=[_ver])
     ev.add_argument("--dataset", choices=["synth", "comofod"], required=True)
     ev.add_argument("--root", type=Path, required=True)
     ev.add_argument("--split", choices=["dev", "test"], default="dev")
     ev.add_argument("--methods", default="keypoint,block")
     ev.add_argument("--seed", type=int, default=42)
     ev.add_argument("--out", type=Path, default=Path("reports"))
-    sub.add_parser("gui", help="mở desktop app (PySide6)")
+    sub.add_parser("gui", help="mở desktop app (PySide6)", parents=[_ver])
     args = ap.parse_args()
-
-    if args.version:
-        print(f"ImageGuard Forensics v{__version__}")
-        return
 
     if args.cmd in (None, "gui"):
         try:
@@ -57,7 +56,8 @@ def main() -> None:
         print(f"saved: {jp} | {cp}")
         for name, d in report.per_method.items():
             print(f"  {name}: f1={d['f1']} iou_macro={d['pixel_macro']['iou']} "
-                  f"n={d['n']} excl={d['n_excluded']} inconc={d['n_inconclusive']}")
+                  f"n={d['n']} excl={d['n_excluded']} inconc={d['n_inconclusive']} "
+                  f"na={d['n_not_applicable']} err={d['n_error']}")
         return
     print(f"ImageGuard Forensics v{__version__} — python -m imageguard eval --help")
 

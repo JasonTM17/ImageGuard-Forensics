@@ -17,7 +17,10 @@ powershell -ExecutionPolicy Bypass -File scripts/build_app.ps1
 
 - Launcher: `imageguard_gui.py` (root) — PyInstaller cần script file, không
   nhận `-m`.
-- `configs/` bundle kèm qua `--add-data` — thresholds đọc được trong exe.
+- Spec file `ImageGuard.spec` là nguồn cấu hình DUY NHẤT (`--collect-submodules
+  imageguard` + `datas=[('configs','configs')]` tương đương CLI cũ); script
+  chỉ gọi `pyinstaller --noconfirm --clean ImageGuard.spec`.
+- `configs/` bundle kèm qua spec — thresholds đọc được trong exe.
 - Onedir (không phải onefile): Qt apps start nhanh hơn, dễ debug.
 - DB + artifacts tạo runtime tại `data/` cạnh exe — user có thể xóa sạch.
 
