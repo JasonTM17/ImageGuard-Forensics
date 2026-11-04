@@ -53,8 +53,15 @@ class CoMoFoDAdapter:
                 forged[m["id"]] = f
             elif kind == "O":
                 originals[m["id"]] = f
-            elif kind in ("B", "M"):
-                masks[m["id"]] = f  # ưu tiên binary mask
+            elif kind == "B":
+                masks[m["id"]] = f  # binary mask — ưu tiên tuyệt đối
+            elif kind in ("C", "M"):
+                # Fallback khi không có _B: giữ C/M nhưng KHÔNG ghi đè _B.
+                # docs/dataset-strategy: _B là GT binary chính thức.
+                if m["id"] not in masks:
+                    masks[m["id"]] = f
+                    log.info("comofod %s: thiếu _B — dùng _%s làm GT fallback",
+                             m["id"], kind)
         out: list[Sample] = []
         for sid, fpath in forged.items():
             mp = masks.get(sid)

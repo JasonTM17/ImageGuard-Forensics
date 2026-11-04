@@ -59,14 +59,18 @@ class SynthAdapter:
     def samples(self, split: str = "dev") -> Iterable[Sample]:
         for e in self.entries:
             stem = e["id"]
-            spec = e["spec"]
-            cat = f"{spec['shape']}/{spec['postproc']}/rot{spec['rotate_deg']}"
-            base_id = f"{stem}-seed{e['seed']}"
+            spec = e.get("spec") or {}
+            # Hai schema manifest: synthforge {postproc, rotate_deg, ...} và
+            # modelforge {kind, shape, rect, src/dst/foreign} — không KeyError.
+            shape = spec.get("shape", spec.get("kind", "unknown"))
+            cat = f"{shape}/{spec.get('postproc', 'none')}/rot{spec.get('rotate_deg', 0)}"
+            base_id = f"{stem}-seed{e.get('seed', stem)}"
             if split_of(base_id) != split:
                 continue
-            f = self.root / f"{stem}_F.png"
+            ext = ".jpg" if e.get("format") == "jpeg" else ".png"
+            f = self.root / f"{stem}_F{ext}"
             m = self.root / f"{stem}_M.png"
-            o = self.root / f"{stem}_O.png"
+            o = self.root / f"{stem}_O{ext}"
             if f.exists() and m.exists():
                 yield Sample(f, m, "forged", cat, base_id)
             if o.exists():
