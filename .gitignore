@@ -9,6 +9,27 @@ dist/
 # Virtual env
 .venv/
 
+# Sensitive / runtime — KHÔNG BAO GIỜ commit (xem docs/security-error-handling.md)
+plans/
+reports/
+data/
+artifacts/
+datasets/
+models/
+modelforge_*/
+*.db
+*.sqlite3
+*.log
+.env
+.env.*
+**/AGENTS.md
+**/CLAUDE.md
+.agentkit/
+.agents/
+.claude/
+.codex/
+.devin/
+
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
