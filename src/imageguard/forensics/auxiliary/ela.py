@@ -63,7 +63,8 @@ class ELA:
             buf = BytesIO()
             pil.save(buf, "JPEG", quality=int(q))
             buf.seek(0)
-            re = np.asarray(Image.open(buf).convert("RGB"), dtype=np.float32)
+            with Image.open(buf) as im:
+                re = np.asarray(im.convert("RGB"), dtype=np.float32)
             diff = np.abs(rgb.astype(np.float32) - re).mean(axis=2)
             # Amplify rồi clip về [0,1] — scale tuyệt đối để p99 so sánh được.
             maps[int(q)] = np.clip(diff * amplify / 255.0, 0, 1)

@@ -92,10 +92,8 @@ class KeypointCopyMove:
                                    ver.inlier_pairs, doc.scale_factor)
             mask = upscale_mask(mask, doc.scale_factor, (doc.height, doc.width))
             if doc.scale_factor < 1.0:
-                heat_full = np.zeros((doc.height, doc.width), np.float32)
                 import cv2
                 heat = cv2.resize(heat, (doc.width, doc.height))
-                heat = heat_full + heat
             coverage = float(np.count_nonzero(mask)) / mask.size
             if coverage > 0.5:
                 limitations.append(

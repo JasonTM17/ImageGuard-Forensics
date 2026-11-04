@@ -54,4 +54,8 @@ def create_backend(cfg: ThresholdSet) -> Backend:
     if cls is None:
         raise ValueError(f"keypoint.backend='{name}' không hỗ trợ (sift|orb)")
     nfeat = int(cfg.value("keypoint", "nfeatures"))
-    return cls(nfeatures=nfeat) if name == "sift" else cls()
+    # nfeatures > 0 áp dụng cho cả sift lẫn orb; 0 = 0 → để default của backend
+    # (SIFT: 0 = không giới hạn; OrbBackend: floor 2000 cho forensic).
+    if nfeat > 0:
+        return cls(nfeatures=nfeat)
+    return cls()

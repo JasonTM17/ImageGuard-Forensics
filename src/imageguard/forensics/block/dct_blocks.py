@@ -49,8 +49,10 @@ def block_std_map(gray: np.ndarray, B: int) -> np.ndarray:
 def extract_features(
     gray: np.ndarray, B: int, n_coeffs: int = 24, flat_std_eps: float = 5.0
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Trả (features int16 (N,K), positions int32 (N,2) — top-left mỗi block).
+    """Trả (features int32 (N,K), positions int32 (N,2) — top-left mỗi block).
     Blocks có std < flat_std_eps bị loại (không texture nhận diện).
+
+    int32: F(0,0) có thể tới B·255 — vượt int16 khi block_size ≥ 128.
 
     Chạy theo hàng để tránh materialize (H-B+1)(W-B+1)×B×B float trong RAM.
     """
@@ -64,13 +66,13 @@ def extract_features(
     win = np.lib.stride_tricks.sliding_window_view(gray.astype(np.float32), (B, B))
     n_rows, n_cols = win.shape[0], win.shape[1]
     stds = block_std_map(gray, B)  # (H-B+1, W-B+1) align với top-left
-    feats = np.empty((n_rows * n_cols, n_coeffs), np.int16)
+    feats = np.empty((n_rows * n_cols, n_coeffs), np.int32)
     for r in range(n_rows):
         blocks = win[r]  # (n_cols, B, B) view — không copy
         F = np.einsum("ux,cxy,vy->cuv", D, blocks, D, optimize=True)
         feats[r * n_cols : (r + 1) * n_cols] = np.rint(
             F.reshape(n_cols, B * B)[:, zz] / q
-        ).astype(np.int16)
+        ).astype(np.int32)
     pos = np.array(
         [(r, c) for r in range(n_rows) for c in range(n_cols)], dtype=np.int32
     )
