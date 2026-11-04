@@ -3,7 +3,9 @@
 Mọi report ghi provenance: {seed, config_hash, git_sha, dataset_version,
 n, n_excluded, n_anomaly}. Verdict→label: SUSPICIOUS → forged;
 NO_INDICATION/INCONCLUSIVE → authentic (INCONCLUSIVE đếm riêng — độ thận trọng).
-GT mask rỗng trên file forged → data anomaly → exclude + đếm (plan §10).
+NOT_APPLICABLE và ERROR loại khỏi xét hoàn toàn (đếm n_not_applicable/n_error) —
+docs/evaluation-methodology.md. GT mask sai kích thước → exclude + đếm;
+GT mask rỗng trên forged → data anomaly → exclude + đếm (plan §10).
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ import csv
 import json
 import subprocess
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -86,6 +89,7 @@ def run_eval(
     per_method_acc: dict[str, dict] = {
         m.name: {"pred": [], "gt": [], "pixel": [], "n": 0,
                  "n_excluded": 0, "n_inconclusive": 0,
+                 "n_not_applicable": 0, "n_error": 0,
                  "n_clean_correct": 0, "fp_area_ratios": [],
                  "durations_ms": []}
         for m in methods
@@ -99,7 +103,14 @@ def run_eval(
                 per_method_acc[m.name]["n_excluded"] += 1
             continue
         gt_forged = sample.label == "forged"
-        gt_mask = _load_mask(sample.gt_mask_path, doc)
+        try:
+            gt_mask = _load_mask(sample.gt_mask_path, doc)
+        except ValueError:
+            # mask sai kích thước — docs/dataset-strategy: reject + log,
+            # KHÔNG silent resize, KHÔNG để một sample hỏng giết cả eval.
+            for m in methods:
+                per_method_acc[m.name]["n_excluded"] += 1
+            continue
         if gt_forged and gt_mask is not None and not (gt_mask > 0).any():
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
@@ -112,8 +123,16 @@ def run_eval(
             except Exception as e:  # method crash không giết cả eval
                 acc["n_excluded"] += 1
                 continue
-            acc["n"] += 1
             acc["durations_ms"].append(r.duration_ms)
+            # Methodology (docs/evaluation-methodology.md): NOT_APPLICABLE và
+            # ERROR loại khỏi quyết định — KHÔNG đếm thành 'authentic'.
+            if r.verdict == Verdict.NOT_APPLICABLE:
+                acc["n_not_applicable"] += 1
+                continue
+            if r.verdict == Verdict.ERROR:
+                acc["n_error"] += 1
+                continue
+            acc["n"] += 1
             pred_forged = r.verdict == Verdict.SUSPICIOUS_INDICATION
             if r.verdict == Verdict.INCONCLUSIVE:
                 acc["n_inconclusive"] += 1
@@ -139,7 +158,7 @@ def run_eval(
             cacc[m.name]["n"] += 1
 
     report = EvalReport(
-        experiment_id=f"{adapter.name}-{split}-{int(time.time())}",
+        experiment_id=f"{adapter.name}-{split}-{int(time.time())}-{uuid.uuid4().hex[:8]}",
         dataset=adapter.name, split=split,
         provenance={
             "seed": seed,
@@ -156,6 +175,8 @@ def run_eval(
             **im,
             "n_scored": acc["n"], "n_excluded": acc["n_excluded"],
             "n_inconclusive": acc["n_inconclusive"],
+            "n_not_applicable": acc["n_not_applicable"],
+            "n_error": acc["n_error"],
             "n_clean_correct": acc["n_clean_correct"],
             "fp_area_ratio_mean": (float(np.mean(acc["fp_area_ratios"]))
                                    if acc["fp_area_ratios"] else None),
