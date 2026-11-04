@@ -45,6 +45,13 @@ class ImageCanvas(QGraphicsView):
         self._overlay = None
         self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        # fitInView lúc set_image có thể chạy TRƯỚC khi viewport có kích thước
+        # cuối → ảnh zoom sai. Re-fit khi widget thay đổi kích thước.
+        if self._base is not None:
+            self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
+
     def set_overlay(self, pixmap: QPixmap | None, alpha: float = 0.45) -> None:
         if self._overlay is not None:
             self._scene.removeItem(self._overlay)

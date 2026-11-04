@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -36,7 +37,13 @@ class StatsScreen(QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        s = self._svc.stats()
+        try:
+            s = self._svc.stats()
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Lỗi cơ sở dữ liệu",
+                f"Không đọc được thống kê phiên: {type(e).__name__}: {e}")
+            return
         self.lbl_head.setText(
             f"{s['n_analyses']} phân tích · "
             f"avg duration: {s['avg_duration_ms'] or 0:.0f} ms")

@@ -54,7 +54,13 @@ class HistoryScreen(QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        rows = self._svc.list()
+        try:
+            rows = self._svc.list()
+        except Exception as e:
+            rows = []
+            QMessageBox.warning(
+                self, "Lỗi cơ sở dữ liệu",
+                f"Không đọc được lịch sử phân tích: {type(e).__name__}: {e}")
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
             self.table.setItem(i, 0, QTableWidgetItem(r["created_at"][:19]))
@@ -78,14 +84,30 @@ class HistoryScreen(QWidget):
             return
         if QMessageBox.question(self, strings.BTN_DELETE,
                                 strings.CONFIRM_DELETE) == QMessageBox.StandardButton.Yes:
-            self._svc.delete(aid)
+            try:
+                removed = self._svc.delete(aid)
+            except Exception as e:
+                QMessageBox.warning(
+                    self, "Lỗi xoá",
+                    f"Không xoá được bản ghi: {type(e).__name__}: {e}")
+                return
+            if removed is False:
+                QMessageBox.information(
+                    self, "Không tìm thấy bản ghi",
+                    "Bản ghi đã bị xoá hoặc không tồn tại trong lịch sử.")
             self.refresh()
 
     def _reopen(self) -> None:
         aid = self._selected_id()
         if not aid:
             return
-        d = self._svc.get(aid)
+        try:
+            d = self._svc.get(aid)
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Lỗi cơ sở dữ liệu",
+                f"Không đọc được chi tiết phân tích: {type(e).__name__}: {e}")
+            return
         if d is None:
             return
         dlg = AnalysisDetailDialog(d, self._svc, self)
@@ -100,13 +122,22 @@ class HistoryScreen(QWidget):
         save_path, _ = QFileDialog.getSaveFileName(
             self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
         )
-        if save_path:
-            rep_svc = ReportService(self._svc.store)
+        if not save_path:
+            return
+        rep_svc = ReportService(self._svc.store)
+        try:
             res = rep_svc.export_markdown(aid, Path(save_path))
-            if res:
-                QMessageBox.information(
-                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
-                )
+        except Exception as e:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
+            return
+        if not res:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                "Không đọc được report.json hoặc không ghi được file đích.")
+            return
+        QMessageBox.information(
+            self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+        )
 
 
 class AnalysisDetailDialog(QDialog):
@@ -144,25 +175,35 @@ class AnalysisDetailDialog(QDialog):
         for a in self._arts:
             self.combo.addItem(f"{a['kind']} — {a['method']}", a["rel_path"])
         self.combo.currentIndexChanged.connect(self._show_art)
+        self.lbl_art_err = QLabel("")
+        self.lbl_art_err.setStyleSheet("color:#b91c1c;")
+        self.lbl_art_err.setWordWrap(True)
         lay.addWidget(self.combo)
+        lay.addWidget(self.lbl_art_err)
         lay.addWidget(self.canvas, 1)
 
     def _show_art(self) -> None:
         rel = self.combo.currentData()
         if not rel or not rel.lower().endswith((".png", ".jpg", ".bmp")):
+            self.lbl_art_err.setText("")
             self.canvas.set_overlay(None)
             return
         try:
             data = self._svc.store.read(rel)
             img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
-            if img is not None:
-                if img.ndim == 2:
-                    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-                elif img.shape[2] == 4:
-                    img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-                self.canvas.set_image(img)
-        except Exception:
-            pass
+        except Exception as e:
+            self.lbl_art_err.setText(
+                f"Không hiển thị artifact '{rel}': {type(e).__name__}: {e}")
+            return
+        if img is None:
+            self.lbl_art_err.setText(f"Artifact '{rel}' hỏng hoặc không đọc được.")
+            return
+        self.lbl_art_err.setText("")
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        self.canvas.set_image(img)
 
     def _export(self) -> None:
         from imageguard.services.report_service import ReportService
@@ -170,10 +211,19 @@ class AnalysisDetailDialog(QDialog):
         save_path, _ = QFileDialog.getSaveFileName(
             self, "Xuất báo cáo phân tích", default_name, "Markdown (*.md)"
         )
-        if save_path:
-            rep_svc = ReportService(self._svc.store)
+        if not save_path:
+            return
+        rep_svc = ReportService(self._svc.store)
+        try:
             res = rep_svc.export_markdown(self._aid, Path(save_path))
-            if res:
-                QMessageBox.information(
-                    self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
-                )
+        except Exception as e:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
+            return
+        if not res:
+            QMessageBox.warning(self, "Xuất thất bại",
+                                "Không đọc được report.json hoặc không ghi được file đích.")
+            return
+        QMessageBox.information(
+            self, "Thành công", f"Đã xuất báo cáo phân tích thành công:\n{save_path}"
+        )
