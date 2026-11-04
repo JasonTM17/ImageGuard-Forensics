@@ -35,6 +35,13 @@ import numpy as np
 from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
+from imageguard.core.preprocess import (
+    aux_limitation,
+    aux_working_copy,
+    scaled_block,
+    scaled_kernel,
+    upscale_to_doc,
+)
 from imageguard.forensics.auxiliary.noise_map import NoiseMap
 from imageguard.forensics.base import cancelled
 
@@ -69,26 +76,38 @@ class NoiseLocal:
         tz = float(cfg.value("noise", "local_z"))
         min_frac = float(cfg.value("noise", "local_min_frac"))
 
-        gray = cv2.cvtColor(doc.array, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        # Ảnh lớn → phân tích trên bản downscale, kernel/block giữ kích thước vật lý.
+        work, scale = aux_working_copy(doc, cfg)
+        aux_lim = aux_limitation(scale)
+        if aux_lim:
+            lim.append(aux_lim)
+        k_eff = scaled_kernel(k, scale)
+        bs_eff = scaled_block(bs, scale)
+        kl_eff = scaled_kernel(kl, scale)
+        # Diện tích component tối thiểu (đơn vị block) giữ nguyên kích thước vật lý.
+        min_comp = int(cfg.value("noise", "min_region_blocks"))
+        min_comp_eff = max(1, round(min_comp * scale * scale))
+
+        gray = cv2.cvtColor(work.array, cv2.COLOR_BGR2GRAY).astype(np.float32)
         if cancelled(cancel):
             return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
-        r = gray - cv2.medianBlur(gray, k).astype(np.float32)
+        r = gray - cv2.medianBlur(gray, k_eff).astype(np.float32)
 
         h, w = r.shape
-        bh, bw = h // bs, w // bs
-        if bh < kl + 2 or bw < kl + 2:
+        bh, bw = h // bs_eff, w // bs_eff
+        if bh < kl_eff + 2 or bw < kl_eff + 2:
             return self._done(
                 Verdict.NOT_APPLICABLE, None, t0,
-                [f"ảnh quá nhỏ cho block {bs}px + láng giềng {kl}"] + lim)
+                [f"ảnh quá nhỏ cho block {bs_eff}px + láng giềng {kl_eff}"] + lim)
 
         # cv2.integral trả integ(y,x) = Σ r[:y, :x] (h+1×w+1) — KHÔNG slice [1:,1:].
         integ2 = cv2.integral(r * r)
         integ1 = cv2.integral(r)
-        ys, xs = np.mgrid[0:bh, 0:bw] * bs
-        e2 = (integ2[ys + bs, xs + bs] - integ2[ys, xs + bs]
-              - integ2[ys + bs, xs] + integ2[ys, xs]) / (bs * bs)
-        e1 = (integ1[ys + bs, xs + bs] - integ1[ys, xs + bs]
-              - integ1[ys + bs, xs] + integ1[ys, xs]) / (bs * bs)
+        ys, xs = np.mgrid[0:bh, 0:bw] * bs_eff
+        e2 = (integ2[ys + bs_eff, xs + bs_eff] - integ2[ys, xs + bs_eff]
+              - integ2[ys + bs_eff, xs] + integ2[ys, xs]) / (bs_eff * bs_eff)
+        e1 = (integ1[ys + bs_eff, xs + bs_eff] - integ1[ys, xs + bs_eff]
+              - integ1[ys + bs_eff, xs] + integ1[ys, xs]) / (bs_eff * bs_eff)
         sigma = np.sqrt(np.clip(e2 - e1 * e1, 0, None)).astype(np.float32)
 
         # Cue chính: vùng σ THẤP hơn q×median toàn ảnh — model-fill mịn
@@ -107,9 +126,8 @@ class NoiseLocal:
         n_lbl, lbl, stats, _ = cv2.connectedComponentsWithStats(low, 8)
         keep = np.zeros_like(low)
         kept_area = 0
-        min_comp = int(cfg.value("noise", "min_region_blocks"))
         for i in range(1, n_lbl):
-            if stats[i, cv2.CC_STAT_AREA] < min_comp:
+            if stats[i, cv2.CC_STAT_AREA] < min_comp_eff:
                 continue
             cm = lbl == i
             if sigma[cm].mean() < q2 * med_g:
@@ -118,16 +136,16 @@ class NoiseLocal:
         frac = kept_area / max(bh * bw, 1)
 
         # Cue phụ (evidence/heatmap): seam-ring local-MAD high-z.
-        med_l = cv2.medianBlur(sigma, kl)
-        mad_l = cv2.medianBlur(np.abs(sigma - med_l), kl) + 1e-6
+        med_l = cv2.medianBlur(sigma, kl_eff)
+        mad_l = cv2.medianBlur(np.abs(sigma - med_l), kl_eff) + 1e-6
         z_hi = (sigma - med_l) / (1.4826 * mad_l)
         n_hi = int((z_hi >= tz).sum())
 
         # heatmap: độ "mịn hơn baseline" — 0.5 tại ngưỡng q·median
         heat = np.clip((med_g - sigma) / (2 * med_g * q + 1e-6) + 0.5, 0, 1)
-        heat_img = cv2.resize(heat, (w, h), interpolation=cv2.INTER_NEAREST)
-        mask = cv2.resize((keep * 255).astype(np.uint8), (w, h),
-                          interpolation=cv2.INTER_NEAREST)
+        heat_img = upscale_to_doc(heat, doc, cv2.INTER_LINEAR)
+        mask = upscale_to_doc((keep * 255).astype(np.uint8), doc,
+                              cv2.INTER_NEAREST)
         if cancelled(cancel):
             return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
 
@@ -144,7 +162,7 @@ class NoiseLocal:
             evidence={"low_sigma_t": round(t_sig, 3), "ratio": q,
                       "sigma_median": round(med_g, 3),
                       "kept_blocks": kept_area, "seam_ring_blocks": n_hi,
-                      "block": bs},
+                      "block": bs_eff, "scale": round(scale, 4)},
             params_hash=cfg.snapshot_hash())
 
     def _done(self, verdict, score, t0, limitations, evidence=None,

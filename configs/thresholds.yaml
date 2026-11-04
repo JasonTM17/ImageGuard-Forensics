@@ -8,6 +8,7 @@ limits:
   max_pixels: { value: 80000000, unit: px, source: "default — 80MP, kiểm tra header trước decode" }
   min_side: { value: 64, unit: px, source: "default — dưới ngưỡng này không đủ tín hiệu → INCONCLUSIVE" }
   work_max_side: { value: 2048, unit: px, source: "default — working copy cho detector, ghi resolution_reduced" }
+  aux_max_side: { value: 4096, unit: px, source: "default — working copy cho noise/freq aux (integral float64/FFT complex128 ~10-25 byte/px; 80MP sẽ >2GB)" }
 
 keypoint:
   backend: { value: sift, source: "default — SIFT mainline từ OpenCV 4.4; orb là fallback" }

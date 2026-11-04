@@ -9,6 +9,7 @@
 | Magic bytes giả (đuổi .png nhưng nội dung khác) | Sniff magic + Pillow header probe — format thật quyết định, không tin extension |
 | Truncated/corrupt | Decode trong try → `ErrorResult` có mã, không crash |
 | Path traversal artifact | ArtifactStore: filename sanitize `[a-z0-9_-]`, `abs_path` resolve rồi kiểm tra còn trong root |
+| OOM trên ảnh lớn (aux methods) | `AUX_MAX_SIDE=4096` downscale working copy cho noise/freq (kernel đổi tỉ lệ thuận, mask/heat upscale về kích thước gốc, ghi `resolution_reduced` + limitation) — integral float64/FFT complex128 ~10-25 byte/px |
 | SQL injection | SQLAlchemy ORM parameterized — không raw SQL string concat |
 | Unicode path Windows | imencode+write_bytes (không cv2.imwrite trực tiếp) |
 | Qt worker crash | Worker không chạm QWidget; exception → `failed` signal, không chết thread pool |

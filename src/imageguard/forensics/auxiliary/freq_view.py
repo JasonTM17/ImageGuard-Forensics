@@ -22,6 +22,7 @@ import numpy as np
 from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
+from imageguard.core.preprocess import aux_limitation, aux_working_copy, upscale_to_doc
 from imageguard.forensics.base import cancelled
 
 SCORE_DEF = "blockiness = chênh |∇| tại biên 8×8 trừ |∇| nền, chuẩn hoá [0,1]"
@@ -44,7 +45,15 @@ class FreqView:
         ]
         t = float(cfg.value("freq", "blockiness_t"))
 
-        gray = cv2.cvtColor(doc.array, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        # Ảnh lớn → phân tích trên bản downscale (FFT complex128 rất nặng);
+        # cửa sổ blockiness đổi tỉ lệ thuận để giữ đúng kích thước vật lý.
+        work, scale = aux_working_copy(doc, cfg)
+        aux_lim = aux_limitation(scale)
+        if aux_lim:
+            lim.append(aux_lim)
+        win = max(2, round(8 * scale))  # cửa sổ blockiness (px đã downscale)
+
+        gray = cv2.cvtColor(work.array, cv2.COLOR_BGR2GRAY).astype(np.float32)
         if cancelled(cancel):
             return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
 
@@ -52,12 +61,12 @@ class FreqView:
         f = np.fft.fftshift(np.fft.fft2(gray))
         spec = np.log1p(np.abs(f))
         spec = (spec - spec.min()) / (np.ptp(spec) + 1e-9)
-        spec = cv2.resize(spec.astype(np.float32), (gray.shape[1], gray.shape[0]))
+        spec = upscale_to_doc(spec.astype(np.float32), doc, cv2.INTER_LINEAR)
 
         # --- cue 2: JPEG blockiness ---
-        # |∇x| TB theo cột; biên 8×8 = cột % 8 == 0 (trừ cột 0).
+        # |∇x| TB theo cột; biên block = cột % win == win-1 (trừ cột 0).
         gx = np.abs(np.diff(gray, axis=1)).mean(axis=0)
-        edge_cols = np.arange(7, gray.shape[1] - 1, 8)  # biên sau block 8px
+        edge_cols = np.arange(win - 1, gray.shape[1] - 1, win)  # biên sau block
         inner = np.setdiff1d(np.arange(len(gx)), edge_cols)
         gx_b = float(gx[edge_cols].mean()) if len(edge_cols) else 0.0
         gx_i = float(gx[inner].mean()) + 1e-9
@@ -67,7 +76,8 @@ class FreqView:
         if cancelled(cancel):
             return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
         ev = {"blockiness": round(blockiness, 4), "boundary_grad": round(gx_b, 3),
-              "inner_grad": round(gx_i, 3), "format": doc.image_format}
+              "inner_grad": round(gx_i, 3), "format": doc.image_format,
+              "window": win, "scale": round(scale, 4)}
         if is_jpeg:
             verdict = Verdict.NO_INDICATION
             lim.append(
