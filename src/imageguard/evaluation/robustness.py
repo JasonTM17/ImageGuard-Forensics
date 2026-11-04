@@ -49,7 +49,7 @@ def run_battery(
     distortions: dict | None = None,
 ) -> dict:
     """Trả dict {method: {distortion: {n, n_suspicious, n_inconclusive, rate}}}."""
-    distortions = distortions or _DISTORTIONS
+    distortions = _DISTORTIONS if distortions is None else distortions
     out: dict[str, dict] = {m.name: {} for m in methods}
     for m in methods:
         for dname, fn in distortions.items():

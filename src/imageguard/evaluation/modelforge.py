@@ -131,8 +131,13 @@ def _rand_region(rng: np.random.Generator, size: tuple[int, int],
     h, w = size
     rh = int(h * rng.uniform(lo, hi))
     rw = int(w * rng.uniform(lo, hi))
-    y = int(rng.integers(4, h - rh - 4))
-    x = int(rng.integers(4, w - rw - 4))
+    hi_y, hi_x = h - rh - 4, w - rw - 4
+    if hi_y <= 4 or hi_x <= 4:
+        raise ValueError(
+            f"modelforge: ảnh {w}×{h} quá nhỏ cho region {rw}×{rh} "
+            f"(cần h,w ≥ ~24px) — giảm --size hoặc lo/hi")
+    y = int(rng.integers(4, hi_y))
+    x = int(rng.integers(4, hi_x))
     return x, y, rw, rh
 
 

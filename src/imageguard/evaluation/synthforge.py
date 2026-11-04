@@ -145,11 +145,18 @@ def forge(base: np.ndarray, spec: ForgeSpec) -> tuple[np.ndarray, np.ndarray]:
     return forged, mask
 
 
+def _jpeg_roundtrip(img: np.ndarray, quality: int) -> np.ndarray:
+    ok, enc = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not ok:
+        return img  # imdecode(None) raise — degrade an toàn về ảnh gốc
+    return cv2.imdecode(enc, cv2.IMREAD_COLOR)
+
+
 def _postproc(img: np.ndarray, kind: str, rng: np.random.Generator) -> np.ndarray:
     if kind == "jpeg80":
-        return cv2.imdecode(cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])[1], 1)
+        return _jpeg_roundtrip(img, 80)
     if kind == "jpeg60":
-        return cv2.imdecode(cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 60])[1], 1)
+        return _jpeg_roundtrip(img, 60)
     if kind == "blur":
         return cv2.GaussianBlur(img, (5, 5), 0)
     if kind == "noise":

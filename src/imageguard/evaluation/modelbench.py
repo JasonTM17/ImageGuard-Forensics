@@ -128,18 +128,26 @@ def run_bench(
     set_dir = Path(set_dir)
     meta = json.loads((set_dir / "meta.json").read_text(encoding="utf-8"))
     samples = []
+    n_missing = 0
     for e in meta:
         ext = ".jpg" if e.get("format") == "jpeg" else ".png"
         fp = set_dir / f"{e['id']}_F{ext}"
         doc = safe_open(fp, cfg)
         if hasattr(doc, "code"):
             continue
-        gt = cv2.imread(str(set_dir / f"{e['id']}_M.png"), 0) > 0
+        gt_path = set_dir / f"{e['id']}_M.png"
+        gt_img = cv2.imread(str(gt_path), 0)
+        if gt_img is None:
+            # GT mask thiếu/hỏng — bỏ qua sample, ghi nhận để báo cáo trung thực.
+            n_missing += 1
+            continue
+        gt = gt_img > 0
         row = analyze_sample(doc, gt, methods, cfg)
         row.update(id=e["id"], kind=e["kind"], format=e.get("format", "png"),
                    gt_frac=float(gt.mean()))
         samples.append(row)
-    return {"set": str(set_dir), "n": len(samples), "samples": samples,
+    return {"set": str(set_dir), "n": len(samples),
+            "n_skipped_missing_gt": n_missing, "samples": samples,
             "aggregate": aggregate(samples)}
 
 
@@ -169,10 +177,12 @@ def aggregate(samples: list[dict]) -> dict:
 
 
 def render_markdown(res: dict) -> str:
+    skipped = res.get("n_skipped_missing_gt")
+    skip_s = f", skipped {skipped} missing-GT" if skipped else ""
     lines = [
         "# ModelForge Detection Bench",
         "",
-        f"Set: `{res['set']}` — n={res['n']} (mỗi dòng: edit-kind × method)",
+        f"Set: `{res['set']}` — n={res['n']} (mỗi dòng: edit-kind × method{skip_s})",
         "",
         "| kind | method | n | SUSPICIOUS | INCONCLUSIVE | det-rate | IoU | bF1@8 |",
         "|---|---|---|---|---|---|---|---|",
@@ -190,8 +200,10 @@ def render_markdown(res: dict) -> str:
         ns = s["noise_sigma"]
         p = ns["mwu_p"]
         p_s = f"{p:.4f}" if p == p else "—"
+        in_s = f"{ns['in_median']:.2f}" if ns['in_median'] is not None else "—"
+        out_s = f"{ns['out_median']:.2f}" if ns['out_median'] is not None else "—"
         lines.append(f"| {s['id']} | {s['kind']} | "
-                     f"{ns['in_median']:.2f} | {ns['out_median']:.2f} | {p_s} |")
+                     f"{in_s} | {out_s} | {p_s} |")
     return "\n".join(lines) + "\n"
 
 
