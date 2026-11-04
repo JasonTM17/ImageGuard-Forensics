@@ -61,6 +61,11 @@ class NoiseLocal:
         k = int(cfg.value("noise", "median_k"))
         bs = int(cfg.value("noise", "block"))
         kl = int(cfg.value("noise", "local_k"))
+        # cv2.medianBlur với CV_32F chỉ hỗ trợ ksize 3 và 5 — giá trị khác
+        # raise AssertionError. Clamp [3,5] và ép số lẻ.
+        kl = min(5, max(3, kl))
+        if kl % 2 == 0:
+            kl = 5 if kl == 4 else 3
         tz = float(cfg.value("noise", "local_z"))
         min_frac = float(cfg.value("noise", "local_min_frac"))
 
@@ -76,13 +81,14 @@ class NoiseLocal:
                 Verdict.NOT_APPLICABLE, None, t0,
                 [f"ảnh quá nhỏ cho block {bs}px + láng giềng {kl}"] + lim)
 
-        integ2 = cv2.integral(r * r)[1:, 1:]
-        integ1 = cv2.integral(r)[1:, 1:]
+        # cv2.integral trả integ(y,x) = Σ r[:y, :x] (h+1×w+1) — KHÔNG slice [1:,1:].
+        integ2 = cv2.integral(r * r)
+        integ1 = cv2.integral(r)
         ys, xs = np.mgrid[0:bh, 0:bw] * bs
-        e2 = (integ2[ys + bs - 1, xs + bs - 1] - integ2[ys, xs + bs - 1]
-              - integ2[ys + bs - 1, xs] + integ2[ys, xs]) / (bs * bs)
-        e1 = (integ1[ys + bs - 1, xs + bs - 1] - integ1[ys, xs + bs - 1]
-              - integ1[ys + bs - 1, xs] + integ1[ys, xs]) / (bs * bs)
+        e2 = (integ2[ys + bs, xs + bs] - integ2[ys, xs + bs]
+              - integ2[ys + bs, xs] + integ2[ys, xs]) / (bs * bs)
+        e1 = (integ1[ys + bs, xs + bs] - integ1[ys, xs + bs]
+              - integ1[ys + bs, xs] + integ1[ys, xs]) / (bs * bs)
         sigma = np.sqrt(np.clip(e2 - e1 * e1, 0, None)).astype(np.float32)
 
         # Cue chính: vùng σ THẤP hơn q×median toàn ảnh — model-fill mịn

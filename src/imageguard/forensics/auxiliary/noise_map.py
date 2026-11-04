@@ -64,13 +64,15 @@ class NoiseMap:
                 [f"ảnh {w}×{h} quá nhỏ cho block {bs}px"] + lim)
 
         # σ per block qua tích phân nhanh: E[x²]−E[x]² trên integral image.
-        integ = cv2.integral(r * r)[1:, 1:]
-        integ1 = cv2.integral(r)[1:, 1:]
+        # cv2.integral trả integ(y,x) = Σ r[:y, :x] (shape h+1×w+1) — KHÔNG được
+        # slice [1:,1:] (sẽ lệch 1px và thu nhỏ cửa sổ còn (bs-1)²).
+        integ = cv2.integral(r * r)
+        integ1 = cv2.integral(r)
         ys, xs = np.mgrid[0:bh, 0:bw] * bs
-        e2 = (integ[ys + bs - 1, xs + bs - 1] - integ[ys, xs + bs - 1]
-              - integ[ys + bs - 1, xs] + integ[ys, xs]) / (bs * bs)
-        e1 = (integ1[ys + bs - 1, xs + bs - 1] - integ1[ys, xs + bs - 1]
-              - integ1[ys + bs - 1, xs] + integ1[ys, xs]) / (bs * bs)
+        e2 = (integ[ys + bs, xs + bs] - integ[ys, xs + bs]
+              - integ[ys + bs, xs] + integ[ys, xs]) / (bs * bs)
+        e1 = (integ1[ys + bs, xs + bs] - integ1[ys, xs + bs]
+              - integ1[ys + bs, xs] + integ1[ys, xs]) / (bs * bs)
         sigma = np.sqrt(np.clip(e2 - e1 * e1, 0, None))
 
         med = float(np.median(sigma))
