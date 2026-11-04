@@ -9,7 +9,7 @@ Bảng luật (docs/evaluation-methodology.md là bản chính thức):
      INCONCLUSIVE → ghi nhãn "corroboration" trong signals để reviewer chú ý.
 
 Nguyên tắc: chỉ detector conclusive (keypoint/block) mới đẩy được lên
-SUSPICIOUS; AUX signals (ELA/noise/freq/splicing/EXIF) theo contract không
+SUSPICIOUS; AUX signals (ELA/EXIF/noise/noise_local/freq/splicing) theo contract không
 bao giờ trả SUSPICIOUS nên không thể tự kết tội ảnh — thiết kế có chủ đích.
 Fusion KHÔNG sinh xác suất — verdict là enum + danh sách signal đóng góp.
 """
@@ -22,7 +22,7 @@ from imageguard.core.models import AlgorithmResult
 # Aux signals: khám phá, theo contract không bao giờ trả SUSPICIOUS.
 AUX_METHODS = {
     MethodName.ELA, MethodName.EXIF_AUDIT, MethodName.NOISE_INCONSISTENCY,
-    MethodName.FREQUENCY_ANALYSIS, MethodName.SPLICING_CUES,
+    MethodName.NOISE_LOCAL, MethodName.FREQUENCY_ANALYSIS, MethodName.SPLICING_CUES,
 }
 
 
