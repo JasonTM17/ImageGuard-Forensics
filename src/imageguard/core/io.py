@@ -81,6 +81,10 @@ def safe_open(
         with Image.open(p) as probe:
             w, h = probe.size
             declared_fmt = (probe.format or "").lower()
+    except Image.DecompressionBombError as e:
+        # Pillow bắt bomb ngay khi đọc header (KHÔNG tắt check) — map về mã của
+        # engine, vì header khai quá nhiều px là đúng nhánh TOO_MANY_PIXELS.
+        return _err(ErrorCode.TOO_MANY_PIXELS, f"Header khai quá nhiều px: {e}")
     except (UnidentifiedImageError, OSError) as e:
         return _err(ErrorCode.DECODE_FAILED, f"Header không đọc được: {e}")
     if w * h > max_px or max(w, h) > limits.MAX_DECODE_SIDE:
@@ -103,7 +107,7 @@ def safe_open(
         with Image.open(p) as im:
             im = ImageOps.exif_transpose(im)
             rgb = np.asarray(im.convert("RGB"), dtype=np.uint8)
-    except Exception as e:  # truncated/corrupt — Pillow raise nhiều loại
+    except Exception as e:  # noqa: BLE001 - ranh giới decode: Pillow raise nhiều loại, ảnh hỏng không được crash engine
         return _err(ErrorCode.DECODE_FAILED, f"Decode thất bại: {e}")
 
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
