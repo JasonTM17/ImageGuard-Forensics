@@ -58,6 +58,7 @@ class ReportService:
             "| Trường | Giá trị |",
             "|---|---|",
             f"| Verdict tổng | **{VERDICT_LABEL.get(v, v)}** |",
+            f"| Report ID | `{rep.get('report_id', '')}` |",
             (f"| Ảnh | {rep.get('image_name')} ({rep.get('image_width')}×"
              f"{rep.get('image_height')}) |"),
             f"| SHA-256 | `{rep.get('image_sha256', '')[:16]}…` |",
