@@ -12,7 +12,7 @@ Khung báo cáo đồ án; mỗi mục map với code/docs thật. Điền số 
 - SIFT (scale space, ratio test) — `docs/algorithms/02-keypoint.md`.
 - DCT block matching — `docs/algorithms/03-block.md`.
 - ELA, noise residual, JPEG blockiness — `docs/algorithms.md`.
-- Fusion rules minh bạch — `forensics/fusion.py` docstring.
+- Fusion rules minh bạch — `src/imageguard/forensics/fusion.py` docstring.
 
 ## 3. Kiến trúc hệ thống
 - Diagram: `docs/architecture.md`; ERD: `docs/database.md`.
@@ -26,7 +26,7 @@ Khung báo cáo đồ án; mỗi mục map với code/docs thật. Điền số 
 ## 5. Đánh giá
 - Dataset: synthforge (deterministic) + CoMoFoD.
 - Bảng số: F1/IoU macro per method, từ `reports/*.json` THẬT.
-- Robustness battery: `evaluation/robustness.py` — detection rate theo
+- Robustness battery: `src/imageguard/evaluation/robustness.py` — detection rate theo
   JPEG q/rotate/scale.
 - Failure analysis: ít nhất 3 ảnh INCONCLUSIVE, giải thích nguyên nhân.
 

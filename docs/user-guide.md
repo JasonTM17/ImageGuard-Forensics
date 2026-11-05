@@ -45,7 +45,7 @@ Hoặc bản đóng gói: `dist/ImageGuard/ImageGuard.exe` (xem `docs/packaging.
 ## Evaluation qua CLI
 
 ```bash
-python -m imageguard eval --dataset synth --root datasynth \
+python -m imageguard eval --dataset synth --root data/synth_eval \
     --split dev --methods keypoint,block
 ```
 

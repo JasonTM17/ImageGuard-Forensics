@@ -8,8 +8,10 @@ Index tài liệu thuật toán + công thức nền. Chi tiết từng method x
 | Copy-move block (DCT) | [03-block.md](algorithms/03-block.md) | P03 ✓ |
 | ELA | file này, mục dưới | P04 ✓ |
 | EXIF audit | file này, mục dưới | P04 ✓ |
-| Noise inconsistency | thiết kế, mục dưới | L2 — P08 |
-| Frequency analysis | thiết kế, mục dưới | L2 — P08 |
+| Noise inconsistency | file này, mục dưới | P08 ✓ |
+| Local noise / model-fill | file này, mục dưới | P08 ✓ |
+| Frequency analysis | file này, mục dưới | P08 ✓ |
+| Splicing cues | file này, mục dưới | P08 ✓ |
 
 ## ELA — Error Level Analysis
 
@@ -29,17 +31,25 @@ Checklist: Software (editor hints), DateTime vs DateTimeOriginal, thiếu
 Make/Model, tag_count=0 → `findings[]`. Metadata là dữ kiện khai báo —
 không verdict, không score.
 
-## Thiết kế L2 (P08)
+## Phương pháp bổ trợ L2 (P08)
 
 ### Noise inconsistency
 - Residual `r = I − median_k(I)` (k=5) — giữ high-frequency nhiễu.
 - Ước lượng σ nhiễu theo block (MAD estimator): `σ̂ = 1.4826·median|r|`.
 - Vùng chèn từ ảnh khác → σ nội bộ lệch median±m·MAD toàn ảnh → outlier map.
-- Điểm yếu đã biết: denoising/sharpening hợp pháp cũng tạo σ bất thường.
+- Điểm yếu đã biết: denoising/sharpening hợp pháp cũng tạo σ bất thường; aux signal tối đa INCONCLUSIVE.
+
+### Local noise / model-fill (`noise_local`)
+- Phát hiện vùng residual có σ thấp bất thường (model-fill mịn hơn nền).
+- Bộ lọc 2 tầng: (1) `σ < q·median` (q=0.6) và (2) component-mean `σ < q2·median` (q2=0.45) với `min_region_blocks=6`.
+- Không bao giờ trả SUSPICIOUS — chỉ là aux cue (tối đa INCONCLUSIVE).
 
 ### Frequency analysis
 - FFT2 magnitude spectrum (log-scale): JPEG grid artifacts → peaks định kỳ
   ở tần số B; resampling → periodic peaks; clone → không dấu vết trực tiếp
   nhưng vùng dán đôi khi đổi spectrum cục bộ.
-- DCT 8×8 histogram: double-JPEG → periodicity trong histogram hệ số
-  (dấu hiệu ảnh nén hai lần — nền cho JPEG-forensics sâu hơn).
+- Blockiness metric: chênh lệch gradient biên 8×8 trung bình so với nội block.
+
+### Splicing cues
+- Corroboration giữa noise outlier và ELA difference: vùng có cả hai dấu hiệu
+  vượt ngưỡng `overlap_frac` (0.15) được đánh dấu là cue kết hợp.

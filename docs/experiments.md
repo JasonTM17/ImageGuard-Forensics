@@ -2,9 +2,9 @@
 
 ## Factorial design
 
-method {keypoint-SIFT, keypoint-ORB, block-DCT}
-× transform {translate, rotate, scale, distortion}
-× postproc {none, JPEG q60/80/90, blur, noise}
+method {keypoint (SIFT/ORB chọn qua config thresholds), block (DCT)}
+× transform {translate, rotate, scale} (synthforge affine 2D; distortion riêng qua battery `robustness.py`)
+× postproc {none, jpeg80, jpeg60, blur, noise} (synthforge; jpeg90 dùng trong modelforge và robustness)
 × tier {easy, medium, hard}
 
 Output: per-condition tables (method × transform × postproc) + N +
@@ -19,14 +19,16 @@ n_excluded. CẤM một con số headline gộp.
 
 ## Protocol
 
-1. `generate_set(n, seed=42)` → `data/synth_eval/` (regenerate được, manifest
-   ghi seed).
-2. `python -m imageguard eval --dataset synth --root data/synth_eval
-   --split dev --methods keypoint,block --seed 42`.
+1. `python -m imageguard.evaluation.synthforge --n 6 --seed 42 --out data/synth_eval --tier medium`
+   (hoặc gọi `generate_set(n, seed=42)`) → `data/synth_eval/` (regenerate được, manifest ghi seed).
+2. `python -m imageguard eval --dataset synth --root data/synth_eval --split dev --methods keypoint,block --seed 42`.
 3. Ghi `experiment_id` vào report/notes; calibration chỉ trên dev.
 4. Test split chỉ chạy MỘT lần sau khi chốt thresholds.
 
-## Số đo hiện có (đo thật, không phải claim)
+## Số đo hiện có
 
-- `synthforge-dev-*`: keypoint trên 6-sample dev, tier easy — xem
-  `reports/eval-*.json` (gitignored, regenerate được).
+- Copy-move dev: `data/synth_eval`, seed 42, 6 scored rows (3 ground-truth manipulated / 3 authentic controls):
+  keypoint F1 0.50, recall 1/3, macro pixel IoU 0.258; block recall 0/3.
+  Đây là bộ medium nhỏ, không phải benchmark công bố.
+- LaMa edits and clean controls: xem [modelforge.md](modelforge.md) để đọc kết quả, split sizes và giới hạn.
+- Không chạy locked test split; không có CoMoFoD dataset trong workspace.

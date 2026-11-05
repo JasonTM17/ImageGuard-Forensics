@@ -18,7 +18,7 @@
   `NNN_C.png` color mask (một số bản `_M`).
 - **Verify gate bắt buộc** trước batch eval đầu:
   1. `python -m imageguard eval --dataset comofod --root data/comofod` chỉ
-     chạy sau khi `tools/comofod_index.py` (hoặc `CoMoFoDAdapter.verify_masks()`)
+     chạy sau khi `CoMoFoDAdapter.verify_masks()` (trong `src/imageguard/evaluation/comofod.py`)
      xác nhận: dims mask==image, giá trị mask đúng convention
      (`binary_white_is_forged`), manifest đếm đúng file thực.
   2. Mask convention KHÔNG được đoán — đọc readme dataset / mở bằng mắt.

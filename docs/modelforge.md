@@ -1,194 +1,123 @@
-# ModelForge + ModelBench — ảnh chỉnh sửa bằng model local & benchmark
+# ModelForge + ModelBench
 
-## Câu hỏi nghiên cứu
+## Vai trò
 
-> Khi ảnh bị chỉnh sửa bằng **model sinh nội dung mới** (inpainting deep
-> learning — LaMa) thay vì copy-paste pixel thô, ImageGuard còn phát hiện
-> và localize được không?
+LaMa ONNX là model inpainting dùng để **tạo ảnh thử nghiệm**. Desktop app
+không dùng LaMa để phát hiện hay kết luận giả mạo. App phân tích bằng SIFT/ORB, block DCT và
+các heuristic forensic; U-Net vẫn chỉ là thiết kế trong `ml-extension.md`.
 
-Đây là câu hỏi quan trọng với capstone vì copy-move detector truyền thống
-được thiết kế để tìm "anh em sinh đôi" (twin) — vùng bị model XOÁ và SINH
-MỚI không còn twin. Kết quả định lượng phía dưới là đo thật, không suy diễn.
+ModelBench đo detector trên ảnh synthetic có ground truth, gồm IoU và
+boundary-F1@8. ModelBench cũng chạy từng ảnh gốc chưa chỉnh sửa như negative
+control để ghi verdict, tỷ lệ mask không rỗng và diện tích mask. Các control
+này vẫn là ảnh synthetic, không đại diện ảnh chụp thật.
 
-## Thành phần
+## Các kiểu chỉnh sửa
 
-| File | Vai trò |
-|---|---|
-| `evaluation/modelforge.py` | Sinh dataset edit bằng model: 4 kind × 4 shape × PNG/JPEG |
-| `evaluation/modelbench.py` | Benchmark detector trên set đó: IoU, boundary-F1@8, σ-separation MWU |
-| `models/lama_fp32.onnx` | LaMa (208MB, **không commit**) — tải: `huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx`, SHA-256 `1faef530…b68d6` |
-| `reports/modelbench_*.md` | Report xuất tự động (gitignore) |
-
-## Backend editor
-
-- **`lama`** — LaMa ONNX qua onnxruntime CPU (~30s/inpaint ở 512²). Fourier
-  convolutions nhìn toàn cảnh → vùng fill hợp ngữ cảnh, seam mềm.
-- **`classic`** — `cv2.inpaint` Telea + `seamlessClone`: baseline nhanh,
-  seam dễ thấy hơn — dùng cho test nhanh và so sánh.
-
-## Các kiểu edit (`kind`)
-
-| kind | Mô tả | Twin tồn tại? | Detector lý thuyết |
-|---|---|---|---|
-| `erase` | Inpaint xoá object | Không | keypoint/block: thiết kế không bắt |
-| `move` | seamlessClone đến đích + inpaint xoá gốc | Không (gốc đã xoá) | keypoint thất bại đúng luật |
-| `splice_keep` | seamlessClone, giữ nguyên bản gốc | Có (đã blend mép) | keypoint nên bắt được |
-| `splice_foreign` | seamlessClone vùng ảnh khác vào | Không | splicing cues mới đúng miền |
-
-Mỗi mẫu có shape ngẫu nhiên `rect|ellipse|polygon|blob` và một nửa lưu
-JPEG q90 (re-save thực tế + cho ELA có tín hiệu).
-
-## Kết quả đo thật — `modelforge_lama12` (n=12, seed 2026, 384²)
-
-Detection matrix (det-rate = tỉ lệ SUSPICIOUS_INDICATION):
-
-| kind | keypoint | block | noise | freq | splicing | ELA |
-|---|---|---|---|---|---|---|
-| erase | 0.0 (IoU≈0) | 0.0 | 3× INCONC | 1× INCONC | 0.0 | 1× INCONC |
-| move | **0.333** | 0.0 | 3× INCONC | 2× INCONC | 0.0 | — |
-| splice_keep | **1.0** (IoU 0.265, bF1 0.515) | 0.0 | 3× INCONC | 0.0 | 0.0 | 3× INCONC |
-| splice_foreign | 0.0 | 0.0 | 3× INCONC | 1× INCONC | 0.0 | 1× INCONC |
-
-### Phát hiện quan trọng nhất — Noise-σ separation
-
-| kind | σ_in (median) | σ_out | MWU p-value | Ý nghĩa |
-|---|---|---|---|---|
-| erase (3 mẫu) | 2.3–4.3 | ~10 | **< 0.0002 cả 3** | Vùng LaMa-fill MỊN hơn nền rõ có ý nghĩa |
-| move (3 mẫu) | 5.0–7.2 | ~11 | **< 0.0001 cả 3** | Vùng xoá-gốc cũng để lại dấu vết |
-| splice_keep | 8.7–9.5 | ~11 | 0.02–0.13 | Clone giữ noise riêng → khó tách hơn |
-| splice_foreign | 9–18 | ~11 | 0.03–0.79 | Tuỳ noise của nguồn ngoài |
-
-**Diễn giải:** model inpainting sinh content ít nhiễu hơn ảnh thật →
-residual-σ trong vùng chỉnh sửa thấp hơn có ý nghĩa thống kê (p<0.001).
-Cue này **tồn tại thật và đo được** — vấn đề là detector phù hợp.
-
-### v4 — lọc hai tầng (component-mean σ < 0.45·median)
-
-Quan sát thêm: LaMa-fill mịn **sâu hơn** flat tự nhiên (component-mean σ
-GT ≈3.2–4.9 vs natural-flat ≈4.5–5.7). Thêm tầng 2: chỉ giữ component có
-mean σ < q2·median.
-
-| | v3 (train) | **v4 train** | **v4 holdout** |
-|---|---|---|---|
-| erase IoU | 0.169 | **0.616** (1/3 hit, 2 miss) | **0.576** |
-| move IoU | 0.215 | **0.301** | **0.298** |
-| erase bF1@8 | 0.332 | **0.890** | **0.845** |
-| move bF1@8 | 0.449 | **0.563** | **0.608** |
-| orig flag-rate | 10–18% | **0–1.2%** | **0.0% (6/6)** |
-
-Trade-off trung thực: precision tăng mạnh, nhưng v4 bỏ lỡ 2/6 mẫu
-erase/move ở train (fill σ sát ngưỡng) — NO_INDICATION thay vì mask loạn.
-Đây là hành vi đúng hơn cho forensic tool: mask chất lượng cao hoặc không
-mask, không phải mask nhiễu khắp nơi. Cả q=0.6 lẫn q2=0.45 đều đã validate
-trên held-out seed 7777 → không overfit.
-
-### Vòng cải tiến detector (đo trên cùng set, bốn phiên bản)
-
-| detector | ý tưởng | erase IoU | move IoU | kết luận |
-|---|---|---|---|---|
-| `noise_inconsistency` (MAD toàn ảnh) | outlier 2 phía vs median global | 0.000 | 0.006 | median≈nền, vùng nhỏ không lệch đủ |
-| local-MAD v1 | median láng giềng 5×5 block | 0.000 | 0.000 | láng giềng hỗn hợp → MAD phình → z chìm; chỉ bắt seam-ring mép (n_low≈0) |
-| Otsu v2 | tự tách 2 mode σ | 0.004–0.105 | 0.085–0.191 | vùng edit ~1% lưới → Otsu cắt giữa mode nền |
-| `noise_local` v3 | σ < 0.6·median + component ≥6 block | 0.169 | 0.215 | ✓ nhưng flag 10–18% trên ảnh gốc (flat tự nhiên) |
-| **`noise_local` v4** | v3 + component-mean σ < 0.45·median | **0.616*** | **0.301** | ✓ orig flag→0%; *erase 1/3 hit 2 miss — trade-off chấp nhận được |
-
-`noise_local` cũng đạt bF1@8: erase 0.332, move 0.449 — mask chạm đúng
-vùng chỉnh sửa (không phải nhiễu ngẫu nhiên). Vẫn giữ verdict tối đa
-INCONCLUSIVE theo aux contract.
-
-### Kiểm chứng mức ngẫu nhiên (chance-level) và false-positive
-
-| sample | flag-rate | recall GT | IoU | chance IoU |
-|---|---|---|---|---|
-| erase_0000 | 11.8% | 78.9% | 0.299 | ~0.036 |
-| move_0001 | 17.2% | 51.4% | 0.191 | ~0.057 |
-| erase_0004 | 9.2% | 86.4% | 0.127 | ~0.012 |
-| move_0005 | 12.5% | 44.4% | 0.187 | ~0.046 |
-| erase_0008 | 15.5% | 61.5% | 0.082 | ~0.019 |
-| move_0009 | 14.1% | 61.3% | 0.267 | ~0.051 |
-
-IoU quan sát **cao hơn mức ngẫu nhiên 4–8×** → localization là tín hiệu
-thật, không phải may mắn do mask rộng. Tuy nhiên:
-
-- **False-positive control:** trên 12 ảnh GỐC chưa chỉnh, `noise_local`
-  vẫn flag 10–18% diện tích (vùng trời/phẳng/mịn tự nhiên có σ thấp).
-  → precision bị giới hạn cấu trúc; detector chỉ nói "vùng này mịn bất
-  thường" chứ không phân biệt được mịn-do-model vs mịn-tự-nhiên.
-- Đây là lý do verdict tối đa INCONCLUSIVE là **bắt buộc**: cue thật
-  nhưng không đặc hiệu.
-
-### Held-out validation (seed 7777, `modelforge_holdout/`)
-
-Ngưỡng q=0.6 được chọn từ bộ seed 2026 — kiểm chứng trên bộ seed khác
-hoàn toàn (`reports/modelbench_holdout.md`, n=6):
-
-| kind | train IoU | holdout IoU | holdout bF1@8 |
-|---|---|---|---|
-| erase | 0.169 | **0.162** | 0.311 |
-| move | 0.215 | **0.172** | 0.378 |
-
-σ-separation tái lập trên holdout: σ_in 2.9–7.5 vs σ_out ~10.5–11,
-p<0.001 cả 4 mẫu erase/move → **q=0.6 không overfit**, cue ổn định
-theo cơ chế model-fill (không phụ thuộc seed).
-- Hướng cải thiện thực tế: kết hợp seam-ring evidence (đã giữ riêng
-  trong `evidence["seam_ring_blocks"]`), hoặc PRNU-fingerprint mismatch —
-  natural flat có noise pattern nhất quán camera, model-fill thì không.
-
-### Kết quả âm tính đã đo (loại bỏ giả thuyết, không ship)
-
-- **Seam-ring filter — BÁC BỎ:** giả thuyết "vùng LaMa-fill có mép blend
-  σ bất thường" không đúng trên dữ liệu này. Ring quanh low-σ component
-  của ảnh gốc: z_hi-frac 0.0–0.18, mean-z 0.23–1.66; của ảnh edited:
-  0.0–0.18, mean-z 0.41–1.67 — **hai phân phối trùng nhau**. LaMa blend
-  đủ mượt để seam không để dấu σ ở mức block. Không dùng seam để lọc FP.
-- **Resize robustness — GIỮ ĐƯỢC:** erase_0000 ở scale 0.75→IoU 0.286,
-  0.5→IoU 0.564 (recall 65–66%) — cue không chết khi downscale vì
-  model-fill vẫn mịn tương đối hơn nền.
-
-### Robustness đối kháng — cue chết ở đâu (v4, move_0009)
-
-| Xử lý sau khi edit | IoU | Trạng thái |
+| kind | Thay đổi | Kỳ vọng giới hạn |
 |---|---|---|
-| clean | 0.329 | baseline |
-| JPEG q70 | 0.336 | sống — tương đương clean |
-| JPEG q40 | 0.257 | suy giảm nhẹ |
-| resize 0.5× | 0.564 | sống (flat nền cũng mịn theo) |
-| gaussian blur | 0.367 | sống — nền mịn đi cùng, ngưỡng tỉ lệ vẫn tách |
-| unsharp mask | 0.351 | sống |
-| thêm noise σ=4 | 0.369 | sống — noise đều cả hai vùng |
-| **thêm noise σ=8** | — | **CHẾT** — fill không còn "mịn tương đối" |
-| **medianBlur k=5** | — | **CHẾT** — residual structure bị phá toàn cục |
+| `erase` | LaMa lấp vùng bị xóa | Không còn bản sao pixel để keypoint/block đối chiếu |
+| `move` | Clone patch sang vị trí khác rồi lấp vùng nguồn | Có thể còn dấu vết; source và destination không chồng nhau |
+| `splice_keep` | Clone vùng nhưng giữ nguồn | Bản sao còn lại, keypoint có thể bắt được |
+| `splice_foreign` | Clone vùng từ ảnh khác | Không phải copy-move; cue noise/splicing chỉ mang tính khám phá |
 
-Hai điều kiện giết cue, đúng vật lý: (1) thêm nhiễu đủ mạnh làm vùng
-fill mất tính "mịn tương đối"; (2) median blur phá cấu trúc residual
-toàn ảnh. Kẻ chỉnh sửa có ý thức **có thể** che cue này — phải nói rõ
-trong báo cáo: detector phát hiện LaMa-edit *nguyên trạng*, không chịu
-được anti-forensic đơn giản.
+Mỗi bộ có mask GT, manifest, seed và backend. Các bộ mới ghi thêm SHA-256 của
+model LaMa. `move` destination dùng cùng kích thước với patch thật, đặt GT bằng
+đúng clone mask tại vị trí clone; source và destination không chồng nhau.
 
-### Kết luận trả lời câu hỏi ban đầu
+## Kết quả sau khi sửa ground truth
 
-1. **Clone giữ gốc (kể cả blend Poisson mềm)** → keypoint SIFT vẫn bắt
-   twin (3/3) và localize tốt (bF1 0.515).
-2. **Edit bằng model sinh mới (erase/move/foreign)** → conclusive detectors
-   không kết luận được (đúng thiết kế), NHƯNG hệ thống không "mù": noise
-   σ-separation có ý nghĩa thống kê mạnh → verdict INCONCLUSIVE +
-   corroboration là câu trả lời đúng của hệ thống, và đường nâng cấp rõ ràng.
-3. `move` 0.333: một mẫu twin sót lại sau inpaint — minh hoạ LaMa không
-   phải lúc nào cũng xoá sạch.
+Các số dưới đây đo trên bộ mới, dùng ngưỡng hiện có mà không hiệu chỉnh lại. Ảnh benchmark được sinh trong thư mục `<temp-dir>` vì các bộ dataset trong repo không được phép ghi đè:
+
+| Bộ | N | Seed | Kích thước | Model | config_hash | dataset_sha256 | git_sha |
+|---|---:|---:|---:|---|---|---|---|
+| Train | 12 | 2026 | 384×384 | LaMa ONNX SHA-256 `1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6` | `df80dcb9a6d32070` | `dcca513d7a4c63e52095a52f40a6d59ced91f52c3b441598ae26c9707616f70b` | `cf603c2` |
+| Holdout | 6 | 7777 | 512×512 | cùng SHA-256 | `df80dcb9a6d32070` | `ce69eb900bb5dfa65b2502bdcfa0dab018e6492d3cd464e56b629a85a888fe36` | `cf603c2` |
+
+Lệnh sinh và bench (chạy với Python trong `.venv\Scripts\python.exe`):
+
+```powershell
+# Train
+$py = .\.venv\Scripts\python.exe
+$train = Join-Path <temp-dir> 'ig-phaseb-train'
+$py -m imageguard.evaluation.modelforge --n 12 --seed 2026 --out $train --backend lama --size 384
+$py -m imageguard.evaluation.modelbench --set $train --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path <temp-dir> 'ig-phaseb-bench-train')
+
+# Holdout
+$hold = Join-Path <temp-dir> 'ig-phaseb-holdout'
+$py -m imageguard.evaluation.modelforge --n 6 --seed 7777 --out $hold --backend lama --size 512
+$py -m imageguard.evaluation.modelbench --set $hold --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path <temp-dir> 'ig-phaseb-bench-holdout')
+```
+
+IoU/bF1 là trung bình trên **tất cả mẫu** của mỗi loại; không có mask dự đoán
+được tính bằng 0. `INCONCLUSIVE` vẫn là kết quả thận trọng, không phải xác nhận
+ảnh có chỉnh sửa.
+
+| Bộ / loại | Keypoint verdict; IoU; bF1 | `noise_local` verdict; IoU; bF1 |
+|---|---|---|
+| Train erase (n=3) | 3 inconclusive; 0.000; 0.016 | 2 inconclusive; 0.335; 0.559 |
+| Train move (n=3) | 3 inconclusive; 0.000; 0.005 | 3 inconclusive; 0.368; 0.671 |
+| Train splice_keep (n=3) | 3 suspicious; 0.006; 0.139 | 3 no indication; 0.000; 0.000 |
+| Train splice_foreign (n=3) | 3 inconclusive; 0.005; 0.037 | 3 no indication; 0.000; 0.000 |
+| Holdout erase (n=2) | 2 inconclusive; 0.000; 0.005 | 2 inconclusive; 0.665; 0.888 |
+| Holdout move (n=2) | 2 suspicious; 0.042; 0.293 | 2 inconclusive; 0.376; 0.655 |
+| Holdout splice_keep (n=1) | 1 suspicious; 0.001; 0.066 | 1 inconclusive; 0.000; 0.000 |
+| Holdout splice_foreign (n=1) | 1 no indication; 0.000; 0.000 | 1 no indication; 0.000; 0.000 |
+
+The keypoint `move` holdout rows show why verdict and localization must be read
+together: both were `SUSPICIOUS`, but mean IoU was only 0.042. The
+`noise_local` method never returns `SUSPICIOUS`; it supplies a smooth-region cue
+and can return `INCONCLUSIVE`.
+
+On untouched synthetic originals, `noise_local` emitted a non-empty mask on
+1/12 train images (mean area 0.101%, maximum 1.215%) and 1/6 holdout images
+(mean area 0.098%, maximum 0.586%). Both controls had one `INCONCLUSIVE` and no
+`SUSPICIOUS` verdict. Keypoint emitted candidate masks on all 18 originals but
+returned no `SUSPICIOUS` verdict. This is not a real-photo false-positive rate.
+
+Block DCT had mean IoU 0 across all four edit types in these LaMa sets. It is
+not a suitable detector for edits that replace pixels instead of preserving a
+copy-move twin. SIFT detected all `splice_keep` samples here, but the sample
+counts are too small to establish general performance.
+
+## Legacy evidence and limits
+
+An independent audit found that old `move` manifests sampled source and
+destination rectangles independently. The cloned patch used source dimensions,
+but its destination GT used unrelated destination dimensions. Old `move` IoU,
+boundary-F1, and noise separation are therefore invalid. Older ModelBench
+versions also averaged localization only over returned masks; those conditional
+means are not comparable to the all-sample metrics above. The old
+`modelbench_v4_*` artifacts lack dataset/source/config provenance and must not
+be used as reproducible results.
+
+The corrected sets are small and synthetic. CoMoFoD and test sets outside
+this benchmark (such as root `modelforge_test`) were not present or used for this
+audit. The values `0.6` and `0.45` remain provisional heuristics; they were not
+retuned on the corrected sets and are not calibrated for real photographs. Metric
+definitions and empty-mask rules are in [`evaluation-methodology.md`](evaluation-methodology.md).
 
 ## Reproduce
 
-```bash
-pip install -e ".[lama]"          # onnxruntime
-# tải models/lama_fp32.onnx theo link + sha256 ở bảng trên
-python -m imageguard.evaluation.modelforge --n 12 --seed 2026 \
-    --out modelforge_lama12 --backend lama --size 384
-python -m imageguard.evaluation.modelbench --set modelforge_lama12 \
-    --out reports/modelbench_lama12
+Audit reports generated from these runs are committed at `reports/audit-261104-fixed-train.md`
+and `reports/audit-261104-fixed-holdout.md`. To reproduce or re-run:
+
+```powershell
+python -m imageguard.evaluation.modelforge --n 12 --seed 2026 `
+  --out data/modelforge_audit_train_fixed --backend lama --size 384
+python -m imageguard.evaluation.modelbench --set data/modelforge_audit_train_fixed `
+  --methods keypoint,block,noise,noise_local,freq,splicing,ela `
+  --out reports/modelbench_audit_train
+python -m imageguard.evaluation.modelforge --n 6 --seed 7777 `
+  --out data/modelforge_audit_holdout_fixed --backend lama --size 512
+python -m imageguard.evaluation.modelbench --set data/modelforge_audit_holdout_fixed `
+  --methods keypoint,block,noise,noise_local,freq,splicing,ela `
+  --out reports/modelbench_audit_holdout
 ```
+
+LaMa weights are local and are not committed. The current weight file's SHA-256
+is `1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6`.
 
 ## Attribution
 
-LaMa: Suvorov et al., WACV 2022, arXiv:2109.07161, Apache-2.0 —
-github.com/advimman/lama. ONNX export: Carve/LaMa-ONNX (Apache-2.0),
-train trên Places2 (CC-BY 4.0).
+LaMa: Suvorov et al., WACV 2022, arXiv:2109.07161, Apache-2.0.
+ONNX export: Carve/LaMa-ONNX (Apache-2.0), trained on Places2 (CC-BY 4.0).
