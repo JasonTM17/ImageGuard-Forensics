@@ -15,6 +15,9 @@ def main() -> None:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1] not in ("eval", "gui"):
+        sys.argv.insert(1, "gui")
+
     _ver = argparse.ArgumentParser(add_help=False)
     _ver.add_argument("--version", action="version",
                       version=f"ImageGuard Forensics v{__version__}")
@@ -28,7 +31,8 @@ def main() -> None:
     ev.add_argument("--methods", default="keypoint,block")
     ev.add_argument("--seed", type=int, default=42)
     ev.add_argument("--out", type=Path, default=Path("reports"))
-    sub.add_parser("gui", help="mở desktop app (PySide6)", parents=[_ver])
+    gui_p = sub.add_parser("gui", help="mở desktop app (PySide6)", parents=[_ver])
+    gui_p.add_argument("image", nargs="?", type=Path, help="ảnh mở sẵn")
     args = ap.parse_args()
 
     if args.cmd in (None, "gui"):
@@ -37,7 +41,7 @@ def main() -> None:
         except ImportError as e:
             print(f"GUI khong kha dung ({e}); dung: python -m imageguard eval --help")
             return
-        sys.exit(gui_main())
+        sys.exit(gui_main(getattr(args, "image", None)))
 
     if args.cmd == "eval":
         from imageguard.core.config import load_thresholds
