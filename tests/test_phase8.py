@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import cv2
-import numpy as np
 import pytest
 
 from imageguard.core.enums import Verdict
@@ -72,7 +70,7 @@ def test_robustness_battery_shape(services, forged, ts):
 
 
 def test_fusion_aux_corroboration():
-    from imageguard.core.enums import MethodName, Verdict
+    from imageguard.core.enums import MethodName
     from imageguard.core.models import AlgorithmResult
     from imageguard.forensics.fusion import combine
 

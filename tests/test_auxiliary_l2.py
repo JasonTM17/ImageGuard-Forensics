@@ -6,7 +6,6 @@ import threading
 
 import cv2
 import numpy as np
-import pytest
 
 from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open

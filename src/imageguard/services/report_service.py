@@ -8,7 +8,7 @@ per-method cards, limitations, disclaimer, provenance — KHÔNG xác suất.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from imageguard.storage.artifacts import ArtifactStore
@@ -28,7 +28,7 @@ class ReportService:
     def read_report_json(self, analysis_id: str) -> dict | None:
         try:
             return json.loads(self.store.read(f"{analysis_id}/report.json"))
-        except Exception:
+        except (ValueError, OSError):
             return None
 
     def export_markdown(self, analysis_id: str,
@@ -58,13 +58,13 @@ class ReportService:
             "| Trường | Giá trị |",
             "|---|---|",
             f"| Verdict tổng | **{VERDICT_LABEL.get(v, v)}** |",
-            f"| Ảnh | {rep.get('image_name')} ({rep.get('image_width')}×"
-            f"{rep.get('image_height')}) |",
+            (f"| Ảnh | {rep.get('image_name')} ({rep.get('image_width')}×"
+             f"{rep.get('image_height')}) |"),
             f"| SHA-256 | `{rep.get('image_sha256', '')[:16]}…` |",
             f"| Thời gian | {rep.get('created_at', '')[:19]}Z |",
             f"| Tool | ImageGuard {rep.get('tool_version', '?')} |",
-            f"| Env | python {env.get('python', '?')} · opencv "
-            f"{env.get('opencv', '?')} · numpy {env.get('numpy', '?')} |",
+            (f"| Env | python {env.get('python', '?')} · opencv "
+             f"{env.get('opencv', '?')} · numpy {env.get('numpy', '?')} |"),
             f"| Thresholds hash | `{rep.get('thresholds_hash', '')}` |",
             "",
             "## Kết quả theo phương pháp",
@@ -93,7 +93,7 @@ class ReportService:
             lines.append("")
         lines += [
             "---",
-            f"Xuất lúc {datetime.now(timezone.utc).isoformat(timespec='seconds')}"
-            " — report tái lập được từ artifact, không chứa xác suất.",
+            (f"Xuất lúc {datetime.now(UTC).isoformat(timespec='seconds')}"
+             " — report tái lập được từ artifact, không chứa xác suất."),
         ]
         return "\n".join(lines) + "\n"

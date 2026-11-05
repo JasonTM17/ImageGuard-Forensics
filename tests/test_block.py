@@ -5,9 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import cv2
 import numpy as np
-import pytest
 
 from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open
@@ -64,7 +62,6 @@ def test_runtime_guard(ts, caplog) -> None:
 
 def test_synthforge_easy_majority(tmp_path: Path, ts) -> None:
     """Trên synth easy: ghi nhận tỉ lệ SUSPICIOUS — đo thật, không phải claim."""
-    from imageguard.evaluation.synthforge import generate_set
 
     d = tmp_path / "e"
     generate_set(4, seed=21, out_dir=d, tier="easy")

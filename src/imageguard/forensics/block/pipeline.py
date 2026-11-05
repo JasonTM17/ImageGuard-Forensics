@@ -103,7 +103,7 @@ class BlockCopyMove:
             verdict, frac, t0, limitations, mask=mask, heatmap=heat,
             evidence={
                 "n_blocks": len(feats),
-                "n_candidate_pairs": int(len(pairs)),
+                "n_candidate_pairs": len(pairs),
                 "n_shifts_kept": stats["n_shifts_kept"],
                 "top_shift_votes": stats.get("top_shift_votes", 0),
                 "work_size": [gw, gh],

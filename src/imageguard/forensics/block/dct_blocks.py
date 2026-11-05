@@ -56,7 +56,6 @@ def extract_features(
 
     Chạy theo hàng để tránh materialize (H-B+1)(W-B+1)×B×B float trong RAM.
     """
-    H, W = gray.shape
     D = dct_basis(B).astype(np.float32)
     zz = zigzag_indices(B, n_coeffs)
     # Bảng lượng tử đơn giản: Q tăng tuyến tính theo u+v (tần số cao → bước lớn).

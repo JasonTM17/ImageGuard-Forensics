@@ -47,10 +47,10 @@ class NoiseMap:
     ) -> AlgorithmResult:
         t0 = time.perf_counter()
         lim = [
-            "σ residual cao có thể do texture/sắc cạnh tự nhiên — không đồng "
-            "nghĩa vùng bị chỉnh sửa",
-            "JPEG compression làm méo residual; ảnh đã denoise/sharpen mất "
-            "dấu vết nhiễu gốc",
+            ("σ residual cao có thể do texture/sắc cạnh tự nhiên — không đồng "
+             "nghĩa vùng bị chỉnh sửa"),
+            ("JPEG compression làm méo residual; ảnh đã denoise/sharpen mất "
+             "dấu vết nhiễu gốc"),
             "signal khám phá — cần corroborate bằng detector conclusive",
         ]
         k = int(cfg.value("noise", "median_k"))

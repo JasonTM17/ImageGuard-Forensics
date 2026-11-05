@@ -29,7 +29,7 @@ def build_mask(
         for side in (0, 1):
             for kp_idx in ver[:, side]:
                 kp = kps[int(kp_idx)]
-                x, y = int(round(kp.pt[0])), int(round(kp.pt[1]))
+                x, y = round(kp.pt[0]), round(kp.pt[1])
                 sigma = max(float(kp.size) / 2.0, 8.0)
                 r = int(sigma * 2)
                 x0, x1 = max(0, x - r), min(w, x + r + 1)

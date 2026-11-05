@@ -12,10 +12,10 @@ import platform
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 import cv2
 import numpy as np
@@ -72,7 +72,7 @@ class AnalysisService:
             _progress(req.progress_cb, 0.1 + 0.7 * i / len(specs), spec)
             try:
                 r = load_method(spec).analyze(doc, self.cfg, req.cancel)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - method isolation: method crash/cancel không được huỷ pipeline
                 r = _error_result(spec, e)
             results.append(r)
         if req.include_exif:
@@ -88,7 +88,7 @@ class AnalysisService:
         if self.images is not None and self.analyses is not None:
             try:
                 self._persist(report, doc, results, wall_ms)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - ranh giới persistence: lỗi DB/artifact không được huỷ kết quả phân tích
                 # Phân tích đã tính xong — persistence lỗi KHÔNG được huỷ kết quả.
                 # Báo trong limitations để report tự nói rõ mất persist.
                 report.limitations.append(
@@ -186,7 +186,7 @@ def _build_report(rid: str, doc: ImageDocument,
     return ForensicReport(
         report_id=rid, image_sha256=doc.sha256, image_name=doc.file_name,
         image_width=doc.width, image_height=doc.height,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
         tool_version=__version__, env=_env(),
         thresholds_hash=cfg.snapshot_hash(), methods=results,
         overall_verdict=overall, limitations=limitations)

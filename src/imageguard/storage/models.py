@@ -7,7 +7,7 @@ DB chỉ lưu RELATIVE paths — absolute path cấm (di chuyển máy không v�
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -34,8 +34,8 @@ class ImageAsset(Base):
     height: Mapped[int] = mapped_column(Integer)
     format: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc))
-    analyses: Mapped[list["Analysis"]] = relationship(back_populates="image")
+        default=lambda: datetime.now(UTC))
+    analyses: Mapped[list[Analysis]] = relationship(back_populates="image")
 
 
 class Analysis(Base):
@@ -43,7 +43,7 @@ class Analysis(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
     image_id: Mapped[int] = mapped_column(ForeignKey("image_assets.id"))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc))
+        default=lambda: datetime.now(UTC))
     tool_version: Mapped[str] = mapped_column(String(16))
     overall_verdict: Mapped[str] = mapped_column(String(32))
     config_hash: Mapped[str] = mapped_column(String(16))
@@ -51,9 +51,9 @@ class Analysis(Base):
     limitations_json: Mapped[str] = mapped_column(Text, default="[]")
 
     image: Mapped[ImageAsset] = relationship(back_populates="analyses")
-    method_results: Mapped[list["MethodResult"]] = relationship(
+    method_results: Mapped[list[MethodResult]] = relationship(
         back_populates="analysis", cascade="all, delete-orphan")
-    artifacts: Mapped[list["Artifact"]] = relationship(
+    artifacts: Mapped[list[Artifact]] = relationship(
         back_populates="analysis", cascade="all, delete-orphan")
 
 
@@ -88,9 +88,9 @@ class Experiment(Base):
     dataset: Mapped[str] = mapped_column(String(32))
     split: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc))
+        default=lambda: datetime.now(UTC))
     provenance_json: Mapped[str] = mapped_column(Text, default="{}")
-    results: Mapped[list["ExperimentResult"]] = relationship(
+    results: Mapped[list[ExperimentResult]] = relationship(
         cascade="all, delete-orphan")
 
 

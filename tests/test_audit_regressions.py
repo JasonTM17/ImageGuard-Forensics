@@ -20,7 +20,6 @@ from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.storage.artifacts import ArtifactStore
 
-
 # ---------- F-A1: EXIF orientation swap ----------
 
 def _exif_jpeg(path: Path, orientation: int, w: int = 128, h: int = 64) -> Path:
@@ -236,7 +235,7 @@ def test_comofod_prefers_binary_mask(tmp_path: Path) -> None:
             cv2.imencode(".png", np.zeros((8, 8, 3), np.uint8))[1].tobytes())
     ad = CoMoFoDAdapter(tmp_path)
     samples = ad._discover()
-    forged = [s for s in samples if s.label == "forged"][0]
+    forged = next(s for s in samples if s.label == "forged")
     assert forged.gt_mask_path.name == "001_B.png"
 
 
@@ -282,9 +281,9 @@ def test_dct_features_int32_no_overflow() -> None:
 
 def test_persist_stores_wall_clock_duration(tmp_path: Path) -> None:
     from imageguard.services.analysis_service import AnalysisService
+    from imageguard.storage.artifacts import ArtifactStore
     from imageguard.storage.db import make_session_factory
     from imageguard.storage.repository import AnalysisRepository, ImageRepository
-    from imageguard.storage.artifacts import ArtifactStore
 
     sf = make_session_factory(tmp_path / "t.db")
     svc = AnalysisService(
@@ -313,7 +312,8 @@ def test_persist_stores_wall_clock_duration(tmp_path: Path) -> None:
 def test_cli_version_on_subcommand() -> None:
     out = subprocess.run(
         [sys.executable, "-m", "imageguard", "eval", "--version"],
-        capture_output=True, text=True, cwd=str(Path(__file__).resolve().parents[1]))
+        check=False, capture_output=True, text=True,
+        cwd=str(Path(__file__).resolve().parents[1]))
     assert out.returncode == 0
     assert "ImageGuard Forensics v" in out.stdout
 
@@ -363,8 +363,8 @@ def test_analyze_screen_clears_results_on_new_load(qtbot, tmp_path, ts):
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from imageguard.ui.screens.analyze import AnalyzeScreen
     from imageguard.services.analysis_service import AnalysisService
+    from imageguard.ui.screens.analyze import AnalyzeScreen
 
     svc = AnalysisService(cfg=ts)
     screen = AnalyzeScreen(svc)
@@ -398,9 +398,9 @@ def test_overlay_shape_mismatch_does_not_crash(qtbot, tmp_path, ts):
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from imageguard.ui.screens.analyze import AnalyzeScreen
-    from imageguard.services.analysis_service import AnalysisService
     from imageguard.core.models import ForensicReport
+    from imageguard.services.analysis_service import AnalysisService
+    from imageguard.ui.screens.analyze import AnalyzeScreen
 
     svc = AnalysisService(cfg=ts)
     screen = AnalyzeScreen(svc)

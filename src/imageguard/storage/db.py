@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
-from imageguard.storage.models import SCHEMA_VERSION, Base, MetaKV
-
 from imageguard.core.paths import data_root
+from imageguard.storage.models import SCHEMA_VERSION, Base, MetaKV
 
 DEFAULT_DB = data_root() / "imageguard.db"
 
@@ -22,7 +21,7 @@ def make_session_factory(db_path: Path | str = DEFAULT_DB) -> sessionmaker[Sessi
     # PRAGMA foreign_keys chỉ có hiệu lực PER CONNECTION — gắn listener để
     # MỌI connection từ pool đều bật FK, không chỉ connection khởi tạo.
     @event.listens_for(eng, "connect")
-    def _fk_on(dbapi_conn, _record):  # noqa: ANN001, ANN202
+    def _fk_on(dbapi_conn, _record):
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
