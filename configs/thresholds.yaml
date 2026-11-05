@@ -44,8 +44,8 @@ noise:
   local_k: { value: 5, unit: blocks, source: "default — kernel median láng giềng cho local-MAD (chỉ 3 hoặc 5 với float32)", range: [3, 5] }
   local_z: { value: 4.0, unit: z, source: "default — |z| = |σ−local_med|/1.4826·local_MAD ≥ ngưỡng → seam-ring evidence" }
   local_min_frac: { value: 0.002, unit: frac, source: "default — flagged-block ≥ tỉ lệ này → INCONCLUSIVE" }
-  low_sigma_ratio: { value: 0.6, unit: ratio, source: "measured modelforge_lama12 — σ vùng LaMa-fill = 20-60% σ nền (p<0.001 MWU)" }
-  region_sigma_ratio: { value: 0.45, unit: ratio, source: "measured — component-mean σ LaMa ≈3.2-4.9 vs natural flat ≈4.5-5.7; validated held-out seed 7777 (orig flag→0%)" }
+  low_sigma_ratio: { value: 0.6, unit: ratio, source: "provisional empirical threshold from synthetic LaMa experiments; re-evaluated after ModelForge move-mask repair; not calibrated on real photographs" }
+  region_sigma_ratio: { value: 0.45, unit: ratio, source: "provisional empirical filter from synthetic LaMa experiments; corrected clean controls still emitted a non-empty cue mask on 1/12 train and 1/6 holdout images; not a zero-false-positive claim" }
   min_region_blocks: { value: 6, unit: blocks, source: "default — connected component ≥ N block mới giữ (loại nhiễu lẻ)" }
 
 freq:
