@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 
 from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
-from imageguard.ui.widgets.image_canvas import ImageCanvas, ndarray_to_qpixmap
+from imageguard.ui.widgets.image_canvas import ImageCanvas
 
 
 class HistoryScreen(QWidget):
@@ -56,7 +56,7 @@ class HistoryScreen(QWidget):
     def refresh(self) -> None:
         try:
             rows = self._svc.list()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             rows = []
             QMessageBox.warning(
                 self, "Lỗi cơ sở dữ liệu",
@@ -86,7 +86,7 @@ class HistoryScreen(QWidget):
                                 strings.CONFIRM_DELETE) == QMessageBox.StandardButton.Yes:
             try:
                 removed = self._svc.delete(aid)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
                 QMessageBox.warning(
                     self, "Lỗi xoá",
                     f"Không xoá được bản ghi: {type(e).__name__}: {e}")
@@ -103,7 +103,7 @@ class HistoryScreen(QWidget):
             return
         try:
             d = self._svc.get(aid)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             QMessageBox.warning(
                 self, "Lỗi cơ sở dữ liệu",
                 f"Không đọc được chi tiết phân tích: {type(e).__name__}: {e}")
@@ -127,7 +127,7 @@ class HistoryScreen(QWidget):
         rep_svc = ReportService(self._svc.store)
         try:
             res = rep_svc.export_markdown(aid, Path(save_path))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             QMessageBox.warning(self, "Xuất thất bại",
                                 f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
             return
@@ -191,7 +191,7 @@ class AnalysisDetailDialog(QDialog):
         try:
             data = self._svc.store.read(rel)
             img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_UNCHANGED)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             self.lbl_art_err.setText(
                 f"Không hiển thị artifact '{rel}': {type(e).__name__}: {e}")
             return
@@ -216,7 +216,7 @@ class AnalysisDetailDialog(QDialog):
         rep_svc = ReportService(self._svc.store)
         try:
             res = rep_svc.export_markdown(self._aid, Path(save_path))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             QMessageBox.warning(self, "Xuất thất bại",
                                 f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
             return

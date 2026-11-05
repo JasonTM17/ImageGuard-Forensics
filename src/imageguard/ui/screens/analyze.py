@@ -9,13 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import cv2
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
     QLabel,
-    QListWidget,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -54,6 +52,7 @@ class AnalyzeScreen(QWidget):
         lay.addWidget(split)
 
         self.canvas = ImageCanvas()
+        self.canvas.image_dropped.connect(self.load_path)
         split.addWidget(self.canvas)
 
         right = QWidget()
@@ -166,11 +165,15 @@ class AnalyzeScreen(QWidget):
         self.btn_open.setEnabled(not running)
         self.btn_run.setEnabled(not running and self._path is not None)
         self.btn_cancel.setEnabled(running)
+        if not running:
+            self.progress.setFormat("%p%")
         for c in (self.chk_kp, self.chk_bl, self.chk_ela,
                   self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
             c.setEnabled(not running)
 
     def load_path(self, path: Path) -> None:
+        if self._worker is not None:  # đang phân tích: bỏ qua, tránh lệch ảnh/kết quả
+            return
         self._clear_results()
         self.lbl_err.setText("")
         self.lbl_file.setText(path.name)
@@ -182,6 +185,7 @@ class AnalyzeScreen(QWidget):
         out = safe_open(path, load_thresholds())
         if isinstance(out, ErrorResult):
             self._path = None
+            self.canvas.clear_image()
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             self.btn_run.setEnabled(False)
             return
@@ -217,10 +221,14 @@ class AnalyzeScreen(QWidget):
     def _run(self) -> None:
         if not self._path or self._worker is not None:
             return
+        methods = self._methods()
+        if not methods:
+            self.lbl_err.setText("Vui lòng chọn ít nhất một phương pháp phân tích.")
+            return
         self._clear_results()  # ẩn banner/export/cards cũ trước khi run mới
         self.lbl_err.setText("")
         self.progress.setValue(0)
-        req = AnalysisRequest(path=self._path, methods=self._methods())
+        req = AnalysisRequest(path=self._path, methods=methods)
         self._worker = AnalysisWorker(self._svc, req)
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.result.connect(self._on_result)
@@ -235,6 +243,8 @@ class AnalyzeScreen(QWidget):
 
     def _on_progress(self, frac: float, stage: str) -> None:
         self.progress.setValue(int(frac * 100))
+        label_stage = strings.METHOD_LABEL.get(stage, stage)
+        self.progress.setFormat(f"%p% — {label_stage}")
 
     def _on_failed(self, msg: str) -> None:
         self._worker = None
@@ -251,9 +261,11 @@ class AnalyzeScreen(QWidget):
             return
         self._clear_results()
         self._report = out
-        self.banner.set_verdict(out.overall_verdict,
-                                [m.method.value for m in out.methods
-                                 if m.verdict.value == "suspicious_indication"])
+        friendly_signals = [
+            strings.METHOD_LABEL.get(m.method.value, m.method.value)
+            for m in out.methods if m.verdict.value == "suspicious_indication"
+        ]
+        self.banner.set_verdict(out.overall_verdict, friendly_signals)
         self.banner.show()
         self.overlay_box.blockSignals(True)
         self.overlay_box.clear()
@@ -279,6 +291,7 @@ class AnalyzeScreen(QWidget):
         if self._report is None:
             return
         from PySide6.QtWidgets import QFileDialog, QMessageBox
+
         from imageguard.services.report_service import ReportService
 
         default_name = f"report_{self._path.stem if self._path else 'image'}_{self._report.report_id[:8]}.md"
@@ -290,7 +303,7 @@ class AnalyzeScreen(QWidget):
         rep_svc = ReportService(self._svc.store)
         try:
             res = rep_svc.export_markdown(self._report.report_id, Path(save_path))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             QMessageBox.warning(self, "Xuất thất bại",
                                 f"Không xuất được báo cáo:\n{type(e).__name__}: {e}")
             return

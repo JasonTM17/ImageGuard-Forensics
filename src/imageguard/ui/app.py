@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
@@ -28,9 +29,24 @@ def build_services(db_path=None, artifacts_root=None):
     return analysis, history
 
 
-def main() -> int:
-    app = QApplication(sys.argv)
+def main(initial_image: Path | str | None = None) -> int:
+    app = QApplication.instance() or QApplication(sys.argv)
     analysis, history = build_services()
     w = MainWindow(analysis, history)
+
+    img_to_load = initial_image
+    if img_to_load is None:
+        for arg in sys.argv[1:]:
+            if not arg.startswith("-"):
+                cand = Path(arg)
+                if cand.is_file():
+                    img_to_load = cand
+                    break
+
+    if img_to_load is not None:
+        p = Path(img_to_load)
+        if p.is_file():
+            w.analyze.load_path(p)
+
     w.show()
     return app.exec()

@@ -6,11 +6,24 @@ bị GC = dangling pointer crash. Đây là bug kinh điển của bridge này.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QPixmap, QWheelEvent
-from PySide6.QtWidgets import QGraphicsPixmapItem, QGraphicsScene, QGraphicsView
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import (
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QImage,
+    QPixmap,
+    QWheelEvent,
+)
+from PySide6.QtWidgets import (
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
 
 
 def ndarray_to_qpixmap(bgr: np.ndarray) -> QPixmap:
@@ -30,6 +43,8 @@ def heat_to_qpixmap(heat: np.ndarray, base_shape: tuple[int, int]) -> QPixmap:
 
 
 class ImageCanvas(QGraphicsView):
+    image_dropped = Signal(Path)
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -38,6 +53,28 @@ class ImageCanvas(QGraphicsView):
         self._overlay: QGraphicsPixmapItem | None = None
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setAcceptDrops(True)
+        self._show_placeholder()
+
+    def _show_placeholder(self) -> None:
+        self._scene.clear()
+        self._base = None
+        self._overlay = None
+        text_item = self._scene.addText(
+            "Kéo thả ảnh vào đây hoặc bấm 'Mở ảnh…' để bắt đầu",
+        )
+        text_item.setDefaultTextColor(Qt.GlobalColor.darkGray)
+        font = text_item.font()
+        font.setPointSize(11)
+        text_item.setFont(font)
+        text_item.setPos(
+            -text_item.boundingRect().width() / 2,
+            -text_item.boundingRect().height() / 2,
+        )
+        self.setSceneRect(-250, -150, 500, 300)
+
+    def clear_image(self) -> None:
+        self._show_placeholder()
 
     def set_image(self, bgr: np.ndarray) -> None:
         self._scene.clear()
@@ -61,5 +98,31 @@ class ImageCanvas(QGraphicsView):
             self._overlay.setOpacity(alpha)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        factor = 1.25 if event.angleDelta().y() > 0 else 0.8
-        self.scale(factor, factor)
+        if self._base is not None:
+            factor = 1.25 if event.angleDelta().y() > 0 else 0.8
+            self.scale(factor, factor)
+        else:
+            super().wheelEvent(event)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                path = Path(urls[0].toLocalFile())
+                if path.is_file():
+                    event.acceptProposedAction()
+                    self.image_dropped.emit(path)
+                    return
+        super().dropEvent(event)
