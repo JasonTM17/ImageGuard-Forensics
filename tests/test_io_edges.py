@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import struct
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +12,24 @@ import pytest
 from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.io import safe_open
 from imageguard.core.models import ImageDocument
+
+
+def _png_header_only(width: int, height: int) -> bytes:
+    """PNG chỉ có vỉa: signature + IHDR(width×height) + IEND, KHÔNG pixel data.
+
+    IHDR khai 20000×20000 → Pillow ném DecompressionBombError ngay khi đọc
+    header; dùng để chứng minh header probe phải trả ErrorResult, không raise.
+    """
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    ihdr_chunk = (
+        struct.pack(">I", len(ihdr))
+        + b"IHDR"
+        + ihdr
+        + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr))
+    )
+    iend_chunk = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", zlib.crc32(b"IEND"))
+    return sig + ihdr_chunk + iend_chunk
 
 
 def test_open_valid_png(valid_png: Path, ts) -> None:
@@ -59,6 +79,17 @@ def test_too_many_pixels(tmp_path: Path, ts, monkeypatch: pytest.MonkeyPatch) ->
     cv2.imwrite(str(p), img)
     r = safe_open(p, ts)
     assert isinstance(r, ErrorResult) and r.code == ErrorCode.TOO_MANY_PIXELS
+
+
+def test_png_header_bomb_returns_error(tmp_path: Path, ts) -> None:
+    # 45-byte PNG vỉa, IHDR khai 20000×20000 — Pillow bắn DecompressionBombError
+    # trong Image.open (header probe), safe_open phải trả TOO_MANY_PIXELS.
+    p = tmp_path / "bomb.png"
+    p.write_bytes(_png_header_only(20000, 20000))
+    assert p.stat().st_size == 45  # vỉa tối thiểu, không có IDAT
+    r = safe_open(p, ts)
+    assert isinstance(r, ErrorResult)
+    assert r.code == ErrorCode.TOO_MANY_PIXELS
 
 
 def test_exif_dict_returned(valid_jpg: Path, ts) -> None:
