@@ -45,11 +45,14 @@ def test_noise_map_downscales_and_upscales() -> None:
 def test_noise_local_downscales_and_upscales() -> None:
     from imageguard.forensics.auxiliary.noise_local import NoiseLocal
 
-    r = NoiseLocal().analyze(_doc(), _cfg(128))
+    cfg = _cfg(128)
+    r = NoiseLocal().analyze(_doc(), cfg)
     assert r.heatmap.shape == (256, 256)
     assert r.mask is None or r.mask.shape == (256, 256)
     assert any("downscale" in l for l in r.limitations)
     assert r.evidence["scale"] == 0.5
+    assert r.evidence["min_region_blocks"] == cfg.value(
+        "noise", "min_region_blocks")
 
 
 def test_freq_view_downscales_and_upscales() -> None:

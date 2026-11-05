@@ -11,13 +11,14 @@ Thuật toán v4:
   t1    = q  · median(σ) — ứng viên: σ thấp hơn nền (q≈0.6)
   t2    = q2 · median(σ) — component-mean σ < t2 mới giữ (q2≈0.45):
           LaMa-fill mịn SÂU hơn flat tự nhiên; đo GT-comp 3.2-4.9 vs
-          natural-flat 4.5-5.7, held-out: orig flag 10-18%→0%.
+          natural-flat 4.5-5.7; tầng 2 giảm nhưng KHÔNG triệt tiêu cue trên ảnh gốc
+          (holdout 1/6 control còn mask khác rỗng — docs/modelforge.md).
   flag  = component đủ lớn (≥min_region_blocks) và đủ mịn
   evidence thêm seam-ring: local-MAD z_cao (đã đo: KHÔNG tách được
   edited vs natural — giữ làm evidence mô tả, không dùng để lọc).
 
 q=0.6/q2=0.45 chọn từ bộ seed 2026, validate held-out seed 7777 —
-không overfit (docs/modelforge.md).
+ngưỡng thực nghiệm tạm, chưa hiệu chỉnh trên ảnh thật (docs/modelforge.md).
 
 Giới hạn: vùng phẳng tự nhiên (bầu trời, tường) có σ thấp THẬT → false
 positive theo đúng bản chất; Otsu yếu khi vùng chỉnh < vài % diện tích;
@@ -42,7 +43,6 @@ from imageguard.core.preprocess import (
     scaled_kernel,
     upscale_to_doc,
 )
-from imageguard.forensics.auxiliary.noise_map import NoiseMap
 from imageguard.forensics.base import cancelled
 
 SCORE_DEF = ("tỉ lệ block có σ < q·median toàn ảnh sau lọc component "
@@ -60,8 +60,10 @@ class NoiseLocal:
     ) -> AlgorithmResult:
         t0 = time.perf_counter()
         lim = [
-            "block nhiễu/mịn bất thường CỤC BỘ có thể là chuyển vùng texture "
-            "tự nhiên (vật phẳng cạnh nền nhiễu) — không đồng nghĩa chỉnh sửa",
+            (
+                "block nhiễu/mịn bất thường CỤC BỘ có thể là chuyển vùng texture "
+                "tự nhiên (vật phẳng cạnh nền nhiễu) — không đồng nghĩa chỉnh sửa"
+            ),
             "độ chính xác giảm ở viền ảnh (median láng giềng nhân bản mép)",
             "signal khám phá — corroborate bằng detector conclusive",
         ]
@@ -84,9 +86,9 @@ class NoiseLocal:
         k_eff = scaled_kernel(k, scale)
         bs_eff = scaled_block(bs, scale)
         kl_eff = scaled_kernel(kl, scale)
-        # Diện tích component tối thiểu (đơn vị block) giữ nguyên kích thước vật lý.
+        # Ngưỡng tính theo block; block và working copy cùng scale nên số block
+        # tối thiểu không đổi khi downscale.
         min_comp = int(cfg.value("noise", "min_region_blocks"))
-        min_comp_eff = max(1, round(min_comp * scale * scale))
 
         gray = cv2.cvtColor(work.array, cv2.COLOR_BGR2GRAY).astype(np.float32)
         if cancelled(cancel):
@@ -121,13 +123,13 @@ class NoiseLocal:
         # Lọc component hai tầng: (1) đủ lớn → loại nhiễu lẻ;
         # (2) component-mean σ < q2·median — LaMa-fill mịn SÂU hơn flat
         # tự nhiên (đo: GT-comp σ≈3.2-4.9 vs natural-flat ≈4.5-5.7).
-        # Tầng 2 giảm flag-rate trên ảnh gốc 10-18% → ~0% (held-out).
+        # Tầng 2 giảm flag-rate trên ảnh gốc (không phải 0% tuyệt đối — xem docs/modelforge.md).
         q2 = float(cfg.value("noise", "region_sigma_ratio"))
         n_lbl, lbl, stats, _ = cv2.connectedComponentsWithStats(low, 8)
         keep = np.zeros_like(low)
         kept_area = 0
         for i in range(1, n_lbl):
-            if stats[i, cv2.CC_STAT_AREA] < min_comp_eff:
+            if stats[i, cv2.CC_STAT_AREA] < min_comp:
                 continue
             cm = lbl == i
             if sigma[cm].mean() < q2 * med_g:
@@ -141,7 +143,7 @@ class NoiseLocal:
         z_hi = (sigma - med_l) / (1.4826 * mad_l)
         n_hi = int((z_hi >= tz).sum())
 
-        # heatmap: độ "mịn hơn baseline" — 0.5 tại ngưỡng q·median
+        # Heatmap tăng khi σ thấp hơn median; giá trị 0.5 tại σ = median.
         heat = np.clip((med_g - sigma) / (2 * med_g * q + 1e-6) + 0.5, 0, 1)
         heat_img = upscale_to_doc(heat, doc, cv2.INTER_LINEAR)
         mask = upscale_to_doc((keep * 255).astype(np.uint8), doc,
@@ -162,7 +164,8 @@ class NoiseLocal:
             evidence={"low_sigma_t": round(t_sig, 3), "ratio": q,
                       "sigma_median": round(med_g, 3),
                       "kept_blocks": kept_area, "seam_ring_blocks": n_hi,
-                      "block": bs_eff, "scale": round(scale, 4)},
+                      "block": bs_eff, "scale": round(scale, 4),
+                      "min_region_blocks": min_comp},
             params_hash=cfg.snapshot_hash())
 
     def _done(self, verdict, score, t0, limitations, evidence=None,
