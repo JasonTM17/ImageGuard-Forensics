@@ -39,7 +39,7 @@ class StatsScreen(QWidget):
     def refresh(self) -> None:
         try:
             s = self._svc.stats()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
             QMessageBox.warning(
                 self, "Lỗi cơ sở dữ liệu",
                 f"Không đọc được thống kê phiên: {type(e).__name__}: {e}")

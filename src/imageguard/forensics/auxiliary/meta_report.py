@@ -58,8 +58,8 @@ def audit_exif(doc: ImageDocument, cfg: ThresholdSet | None = None,
         evidence={"findings": findings, "exif_present": present,
                   "exif_missing": missing},
         limitations=[
-            "metadata là dữ kiện khai báo — dễ chỉnh/xoá; finding chỉ gợi ý "
-            "hướng điều tra, không đứng một mình",
+            ("metadata là dữ kiện khai báo — dễ chỉnh/xoá; finding chỉ gợi ý "
+             "hướng điều tra, không đứng một mình"),
             "không có EXIF ≠ ảnh giả — nhiều pipeline hợp pháp xoá metadata",
         ],
         duration_ms=int((time.perf_counter() - t0) * 1000),

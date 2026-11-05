@@ -24,7 +24,7 @@ def extract_exif(path: Path | str) -> dict[str, Any]:
             exif = im.getexif()
             result["tag_count"] = len(exif)
             named = {TAGS.get(tag_id, str(tag_id)): str(val) for tag_id, val in exif.items()}
-    except Exception:
+    except Exception:  # noqa: BLE001 - ranh giới metadata: EXIF hỏng không được crash, ghi nhận missing
         # Ảnh hợp lệ pixel nhưng EXIF hỏng → ghi nhận như missing toàn bộ.
         result["missing"] = list(KEY_TAGS)
         return result
@@ -44,6 +44,6 @@ def extract_exif(path: Path | str) -> dict[str, Any]:
                     if name in KEY_TAGS and name not in result["present"]:
                         result["present"][name] = str(val)
                         result["missing"].remove(name)
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - IFD EXIF tùy chọn: lỗi đọc bỏ qua có chủ đích, không crash
             pass
     return result

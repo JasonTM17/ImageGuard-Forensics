@@ -41,7 +41,7 @@ class AnalysisWorker(QRunnable):
         try:
             out = self._svc.analyze(self._req)
             self.signals.result.emit(out)
-        except Exception as e:  # không bao giờ để exception chết thread
+        except Exception as e:  # noqa: BLE001 - không bao giờ để exception chết thread
             self.signals.failed.emit(str(e))
 
 

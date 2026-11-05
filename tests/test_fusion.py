@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from imageguard.core.enums import MethodName, Verdict
@@ -36,14 +35,14 @@ def test_combine_table(verdicts, expected) -> None:
     methods = [KP, BL, EL, EX]
     results = [_r(methods[i % 4], v, score=1.0 if v == Verdict.SUSPICIOUS_INDICATION else None)
                for i, v in enumerate(verdicts)]
-    v, signals, warnings = combine(results)
+    v, signals, _ = combine(results)
     assert v == expected
     if expected == Verdict.SUSPICIOUS_INDICATION:
         assert signals  # phải liệt kê method nào kết luận
 
 
 def test_empty_results_inconclusive() -> None:
-    v, s, w = combine([])
+    v, _, w = combine([])
     assert v == Verdict.INCONCLUSIVE and w
 
 

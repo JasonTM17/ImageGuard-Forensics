@@ -81,7 +81,7 @@ def test_rotate_scale_medium(ts) -> None:
     base = rng.integers(0, 255, (400, 400, 3), dtype=np.uint8)
     spec = ForgeSpec((400, 400), "rect", [[50, 50], [150, 50], [150, 150], [50, 150]],
                      (140, 120), rotate_deg=15.0, scale=1.0, postproc="none", tier="medium")
-    forged, mask = forge(base, spec)
+    forged, _ = forge(base, spec)
     r = KeypointCopyMove().analyze(_doc_from(forged), ts)
     # Medium tier: chấp nhận SUSPICIOUS hoặc INCONCLUSIVE — không NO_INDICATION
     # (vùng copy 100×100 rotate 15° trên nền nhiễu ngẫu nhiên phải để lại dấu).

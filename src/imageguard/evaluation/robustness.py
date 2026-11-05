@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import Verdict

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -78,7 +78,9 @@ def load_thresholds(path: Path | None = None) -> ThresholdSet:
     p = path or DEFAULT_CONFIG
     data = yaml.safe_load(p.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{p} không phải mapping yaml")
+        raise ValueError(  # noqa: TRY004 - ValueError nhất quán với ThresholdSet.get cho node không phải mapping
+            f"{p} không phải mapping yaml"
+        )
     data.pop("version", None)
     canonical = json.dumps(data, sort_keys=True, default=str).encode()
     return ThresholdSet(raw=data, config_hash=hashlib.sha256(canonical).hexdigest()[:16])

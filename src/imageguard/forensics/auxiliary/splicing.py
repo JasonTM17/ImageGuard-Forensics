@@ -42,8 +42,8 @@ class SplicingCues:
         t0 = time.perf_counter()
         lim = [
             "signal thí nghiệm L2 — chưa benchmark trên splicing dataset",
-            "chỉ là cross-cue noise×ELA; vùng khớp nhau có thể do texture "
-            "tự nhiên gây cả hai cùng nóng",
+            ("chỉ là cross-cue noise×ELA; vùng khớp nhau có thể do texture "
+             "tự nhiên gây cả hai cùng nóng"),
             "KHÔNG trả SUSPICIOUS — corroboration cue cho reviewer",
         ]
         if cancelled(cancel):

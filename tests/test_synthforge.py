@@ -18,7 +18,6 @@ def test_deterministic_same_seed(tmp_path: Path) -> None:
 
 
 def test_forged_differs_and_mask_nonempty() -> None:
-    rng = np.random.default_rng(7)
     base = np.random.default_rng(7).integers(0, 255, (256, 256, 3), dtype=np.uint8)
     spec = ForgeSpec(
         size=(256, 256),

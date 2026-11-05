@@ -8,10 +8,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
-    QWidget,
 )
 
-from imageguard.core.enums import MethodName, Verdict
+from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult
 from imageguard.ui import strings
 

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 from PIL import Image
@@ -26,7 +26,7 @@ from imageguard.evaluation.datasets import Sample, split_of
 
 log = logging.getLogger(__name__)
 
-_PATTERN = re.compile(r"^(?P<id>.+?)_(?P<kind>F|O|B|C|M)\.(?P<ext>png|jpg|jpeg|tif|bmp)$", re.I)
+_PATTERN = re.compile(r"^(?P<id>.+?)_(?P<kind>F|O|B|C|M)\.(?P<ext>png|jpg|jpeg|tif|bmp)$", re.IGNORECASE)
 
 
 class CoMoFoDAdapter:
@@ -55,13 +55,12 @@ class CoMoFoDAdapter:
                 originals[m["id"]] = f
             elif kind == "B":
                 masks[m["id"]] = f  # binary mask — ưu tiên tuyệt đối
-            elif kind in ("C", "M"):
+            elif kind in ("C", "M") and m["id"] not in masks:
                 # Fallback khi không có _B: giữ C/M nhưng KHÔNG ghi đè _B.
                 # docs/dataset-strategy: _B là GT binary chính thức.
-                if m["id"] not in masks:
-                    masks[m["id"]] = f
-                    log.info("comofod %s: thiếu _B — dùng _%s làm GT fallback",
-                             m["id"], kind)
+                masks[m["id"]] = f
+                log.info("comofod %s: thiếu _B — dùng _%s làm GT fallback",
+                         m["id"], kind)
         out: list[Sample] = []
         for sid, fpath in forged.items():
             mp = masks.get(sid)

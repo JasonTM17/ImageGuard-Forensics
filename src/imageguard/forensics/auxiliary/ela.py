@@ -41,15 +41,15 @@ class ELA:
     ) -> AlgorithmResult:
         t0 = time.perf_counter()
         base_lim = [
-            "ELA chỉ là bằng chứng khám phá — heatmap cao có thể do cạnh sắc/"
-            "texture tự nhiên, không đồng nghĩa vùng bị chỉnh sửa",
+            ("ELA chỉ là bằng chứng khám phá — heatmap cao có thể do cạnh sắc/"
+             "texture tự nhiên, không đồng nghĩa vùng bị chỉnh sửa"),
             "mất ý nghĩa nếu ảnh đã re-save nhiều lần sau chỉnh sửa",
         ]
         if doc.image_format != "jpeg":
             return self._done(
                 Verdict.NOT_APPLICABLE, None, t0,
-                ["ELA phân tích JPEG compression artifacts — ảnh "
-                 f"{doc.image_format} lossless/khác định dạng không có tín hiệu"],
+                [("ELA phân tích JPEG compression artifacts — ảnh "
+                  f"{doc.image_format} lossless/khác định dạng không có tín hiệu")],
             )
 
         rgb = cv2.cvtColor(doc.array, cv2.COLOR_BGR2RGB)

@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 from imageguard import __version__
-
 from imageguard.forensics.registry import load_method as _load_method
 
 

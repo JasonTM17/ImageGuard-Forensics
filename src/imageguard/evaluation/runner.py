@@ -25,7 +25,7 @@ from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open
 from imageguard.core.models import ImageDocument
-from imageguard.evaluation.datasets import DatasetAdapter, Sample
+from imageguard.evaluation.datasets import DatasetAdapter
 from imageguard.evaluation.metrics import aggregate_pixel, image_metrics, pixel_metrics
 from imageguard.forensics.base import Method
 
@@ -75,7 +75,7 @@ def _git_sha() -> str:
         return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], text=True
         ).strip()
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
 
@@ -120,7 +120,7 @@ def run_eval(
             acc = per_method_acc[m.name]
             try:
                 r = m.analyze(doc, cfg)
-            except Exception as e:  # method crash không giết cả eval
+            except Exception:  # noqa: BLE001 - method isolation: method crash không giết cả eval
                 acc["n_excluded"] += 1
                 continue
             acc["durations_ms"].append(r.duration_ms)

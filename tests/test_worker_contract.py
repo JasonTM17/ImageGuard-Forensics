@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import cv2
-import numpy as np
 import pytest
 
 pytest.importorskip("PySide6")

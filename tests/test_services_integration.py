@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import cv2
-import numpy as np
-
 from imageguard.core.enums import Verdict
 from imageguard.core.models import ForensicReport
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
@@ -36,7 +33,7 @@ def test_analyze_persist_reopen_delete(tmp_path: Path, valid_png: Path, ts) -> N
     assert events and events[-1] == 1.0  # progress đầy đủ
 
     # "Restart": session factory mới — dữ liệu phải còn nguyên.
-    svc2, hist2, rep2 = _services(tmp_path / "r2", ts)
+    _svc2, _hist2, _rep2 = _services(tmp_path / "r2", ts)
     # dùng cùng db/artifacts root → history thấy record
     lst = hist.list()
     assert any(x["id"] == out.report_id for x in lst)
