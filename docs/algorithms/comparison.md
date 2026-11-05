@@ -1,8 +1,8 @@
 # Method Comparison — số đo thật từ benchmark nội bộ
 
-Mọi số trong bảng đo từ `evaluation/robustness.py` + `modelbench.py`
+Mọi số trong bảng đo từ `src/imageguard/evaluation/robustness.py` + `src/imageguard/evaluation/modelbench.py`
 trên dataset sinh nội bộ (synthforge + modelforge). KHÔNG phải benchmark
-chuẩn quốc tế — xem `docs/evaluation-methodology.md` cho protocol.
+chuẩn quốc tế — xem [`docs/evaluation-methodology.md`](../evaluation-methodology.md) cho protocol.
 
 ## Copy-move detectors (synthforge medium, 256², seed 99, n=3/distortion)
 
@@ -18,12 +18,12 @@ chuẩn quốc tế — xem `docs/evaluation-methodology.md` cho protocol.
 detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
 — pipeline conservative by design.
 
-## Model-edited (modelforge LaMa, n=12, 384²) — ma trận đầy đủ tại docs/modelforge.md
+## Model-edited (modelforge LaMa, n=12, 384² train sau sửa ground-truth) — ma trận đầy đủ tại [modelforge.md](../modelforge.md)
 
 | kind | keypoint | block | ý nghĩa |
 |---|---|---|---|
-| splice_keep | **1.0**, IoU 0.265 | 0.0 | twin sống qua Poisson blend |
-| move | 0.333 | 0.0 | gốc bị LaMa xoá → twin phá |
+| splice_keep | **1.0**, IoU 0.006 (bF1 0.139) | 0.0 | twin sống qua Poisson blend |
+| move | 0.0 (3 inc), IoU 0.000 | 0.0 | gốc bị LaMa xoá → twin phá (holdout 512²: 2 sus, IoU 0.042) |
 | erase / foreign | 0.0 | 0.0 | không twin → đúng luật miss |
 
 ## Đặc tính từng method
@@ -34,7 +34,7 @@ detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
 | block (DCT) | không cần feature point; baseline kinh điển | miss clone đã blend; chậm; flat-guard bắt buộc | ~5–10s |
 | ELA | JPEG history cue | chỉ JPEG; re-save phá; không standalone | ~0.1s |
 | noise σ-MAD | model-edit σ-separation p<0.001 (erase/move) | localize yếu (IoU≈0.005) | ~0.02s |
-| noise_local v3 | localize model-fill: IoU 0.17–0.22, bF1 0.33–0.45 | false-positive vùng phẳng tự nhiên; vẫn aux | ~0.05s |
+| noise_local (two-tier) | localize model-fill: IoU 0.335–0.665, bF1 0.559–0.888 | false-positive vùng phẳng tự nhiên; vẫn aux | ~0.05s |
 | freq cues | spectrum/blockiness artifact | mô tả hơn phán đoán | ~0.02s |
 | splicing cues | cross-cue noise×ELA | suy giảm trên non-JPEG | ~0.05s |
 
@@ -44,4 +44,4 @@ detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
   thắng ở "có gì đó lạ" trên model-edit; fusion rule tận dụng điều đó.
 - Khoảng trống lớn nhất: **localize vùng generative-edited** — cue
   σ-separation tồn tại (p<0.001) nhưng cần detector cục bộ hơn →
-  `docs/ml-extension.md`.
+  [`docs/ml-extension.md`](../ml-extension.md).

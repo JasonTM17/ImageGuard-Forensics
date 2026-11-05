@@ -25,7 +25,7 @@
 
 ## Nguyên tắc bất biến
 
-1. **Engine Qt-free** — `src/imageguard/core/`, `methods/`, `evaluation/` không import PySide6. Test headless bằng pytest.
+1. **Engine Qt-free** — `src/imageguard/core/`, `forensics/`, `evaluation/` không import PySide6. Test headless bằng pytest.
 2. **GUI thread sở hữu widget** — worker chỉ trả `AlgorithmResult`/`ForensicReport` qua signal; không chạm widget.
 3. **Ngưỡng tập trung** — mọi constant thuật toán nằm trong `configs/thresholds.yaml` với `source` giải thích nguồn.
 4. **Không overclaim** — Verdict 5 trạng thái; ELA/EXIF/noise là exploratory; report có disclaimer + `score_definition`.
@@ -43,12 +43,12 @@ file → safe_open (magic→caps→decode→exif_transpose) → ImageDocument
 
 ```
 src/imageguard/
-  core/      io.py metadata.py preprocess.py models.py errors.py limits.py config.py enums.py
-  methods/   (P02–P04)
-  fusion/    (P04)
-  services/  (P06)
-  ui/        (P07)
-  evaluation/ synthforge.py metrics.py adapters/ (P05)
+  core/       io.py metadata.py preprocess.py models.py errors.py limits.py config.py enums.py
+  forensics/  keypoint/ block/ auxiliary/ fusion.py registry.py base.py
+  services/   analysis.py history.py eval_svc.py
+  storage/    db.py artifacts.py history.py
+  ui/         app.py main_window.py screens/ widgets/ workers.py strings.py
+  evaluation/ synthforge.py metrics.py runner.py comofod.py modelforge.py modelbench.py robustness.py
 configs/thresholds.yaml
 tests/
 docs/      environment.md architecture.md

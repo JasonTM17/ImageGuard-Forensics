@@ -27,5 +27,5 @@ python -m imageguard
 - `src/imageguard/` — package chính (engine forensics Qt-free + UI PySide6)
 - `configs/thresholds.yaml` — mọi ngưỡng thuật toán tập trung, có ghi nguồn
 - `tests/` — pytest
-- `docs/` — tài liệu kỹ thuật (xem `docs/README.md`)
+- `docs/` — tài liệu kỹ thuật (bắt đầu từ `docs/user-guide.md`)
 - `data/`, `artifacts/` — dữ liệu runtime, **không commit**
