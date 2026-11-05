@@ -32,6 +32,7 @@ Output giữ contract synthforge: `*_O.png` (original), `*_F.png` (forged),
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -42,6 +43,31 @@ from imageguard.evaluation.synthforge import _base_image
 
 MODEL_PATH = Path("models/lama_fp32.onnx")
 KINDS = ("erase", "move", "splice_keep", "splice_foreign")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_image(path: Path, image: np.ndarray,
+                 params: list | None = None) -> None:
+    """Ghi ảnh bằng imencode + write_bytes: cv2.imwrite trả False âm thầm với
+    đường dẫn non-ASCII trên Windows → manifest sẽ trỏ vào file không tồn tại."""
+    ok, buf = cv2.imencode(path.suffix, image, params or [])
+    if not ok:
+        raise OSError(f"không encode được ảnh: {path.name}")
+    path.write_bytes(buf.tobytes())
+
+
+def _inset_ellipse(mask: np.ndarray, w: int, h: int) -> None:
+    """Ellipse khớp patch w×h, thụt 2px — clamp ≥1 để patch ~3px không làm
+    cv2.ellipse raise (axes âm)."""
+    cv2.ellipse(mask, (w // 2, h // 2),
+                (max(1, w // 2 - 2), max(1, h // 2 - 2)), 0, 0, 360, 255, -1)
 
 
 class LaMaEditor:
@@ -64,6 +90,7 @@ class LaMaEditor:
         if not Path(model_path).exists():
             raise FileNotFoundError(
                 f"không thấy {model_path} — tải theo docs/modelforge.md")
+        self.model_sha256 = _sha256_file(Path(model_path))
         so = ort.SessionOptions()
         so.log_severity_level = 3
         self._sess = ort.InferenceSession(
@@ -129,16 +156,91 @@ def make_editor(backend: str):
 def _rand_region(rng: np.random.Generator, size: tuple[int, int],
                  lo=0.15, hi=0.28) -> tuple[int, int, int, int]:
     h, w = size
-    rh = int(h * rng.uniform(lo, hi))
-    rw = int(w * rng.uniform(lo, hi))
+    # Patch ≥5px: cv2.seamlessClone raise với patch 3–4px. Ảnh <34px mà không
+    # clamp thì int(h*0.15) rơi xuống 3–4 → crash opaque.
+    rh = max(5, int(h * rng.uniform(lo, hi)))
+    rw = max(5, int(w * rng.uniform(lo, hi)))
     hi_y, hi_x = h - rh - 4, w - rw - 4
     if hi_y <= 4 or hi_x <= 4:
         raise ValueError(
             f"modelforge: ảnh {w}×{h} quá nhỏ cho region {rw}×{rh} "
-            f"(cần h,w ≥ ~24px) — giảm --size hoặc lo/hi")
+            f"(cần h ≥ {rh + 9}, w ≥ {rw + 9}) — giảm --size hoặc lo/hi")
     y = int(rng.integers(4, hi_y))
     x = int(rng.integers(4, hi_x))
     return x, y, rw, rh
+
+
+def _rand_move_destination(
+    rng: np.random.Generator,
+    size: tuple[int, int],
+    source: tuple[int, int, int, int],
+) -> tuple[int, int, int, int]:
+    """Choose a same-size, in-bounds destination disjoint from the source."""
+    h, w = size
+    sx, sy, sw, sh = source
+    hi_y, hi_x = h - sh - 4, w - sw - 4
+    if hi_y <= 4 or hi_x <= 4:
+        raise ValueError(
+            f"modelforge: ảnh {w}×{h} quá nhỏ để chứa hai patch {sw}×{sh} "
+            f"tách rời — move/splice_keep cần w ≥ {2 * sw + 9}, h ≥ {2 * sh + 9}")
+
+    def overlaps(x: int, y: int) -> bool:
+        return x < sx + sw and sx < x + sw and y < sy + sh and sy < y + sh
+
+    for _ in range(128):
+        y = int(rng.integers(4, hi_y))
+        x = int(rng.integers(4, hi_x))
+        if not overlaps(x, y):
+            return x, y, sw, sh
+
+    # Keep generation bounded even for unusual image/patch geometry.
+    for y in range(4, hi_y):
+        for x in range(4, hi_x):
+            if not overlaps(x, y):
+                return x, y, sw, sh
+    raise ValueError(
+        f"modelforge: không tìm được move destination tách rời source "
+        f"({sw}×{sh} trên ảnh {w}×{h})")
+
+
+def _rand_splice_destination(
+    rng: np.random.Generator,
+    size: tuple[int, int],
+    source: tuple[int, int, int, int],
+    disjoint: bool,
+) -> tuple[int, int]:
+    """Choose an in-bounds destination for a splice patch. `splice_keep` needs
+    a destination disjoint from its source; `splice_foreign` may overlap.
+    Bounded like `_rand_move_destination`: finite random tries, then a finite
+    scan, then ValueError — never spins forever on tiny images."""
+    h, w = size
+    sx, sy, sw, sh = source
+    hi_y, hi_x = h - sh - 4, w - sw - 4
+    if hi_y <= 4 or hi_x <= 4:
+        if disjoint:
+            raise ValueError(
+                f"modelforge: ảnh {w}×{h} quá nhỏ để chứa hai patch {sw}×{sh} "
+                f"tách rời — splice_keep cần w ≥ {2 * sw + 9}, h ≥ {2 * sh + 9}")
+        raise ValueError(
+            f"modelforge: ảnh {w}×{h} quá nhỏ cho patch {sw}×{sh} "
+            f"(cần h ≥ {sh + 9}, w ≥ {sw + 9})")
+
+    def overlaps(x: int, y: int) -> bool:
+        return x < sx + sw and sx < x + sw and y < sy + sh and sy < y + sh
+
+    for _ in range(128):
+        x = int(rng.integers(4, hi_x))
+        y = int(rng.integers(4, hi_y))
+        if not disjoint or not overlaps(x, y):
+            return x, y
+
+    for y in range(4, hi_y):
+        for x in range(4, hi_x):
+            if not disjoint or not overlaps(x, y):
+                return x, y
+    raise ValueError(
+        f"modelforge: không tìm được destination tách rời source "
+        f"({sw}×{sh} trên ảnh {w}×{h})")
 
 
 _SHAPES = ("rect", "ellipse", "polygon", "blob")
@@ -201,19 +303,22 @@ def forge(
 
     elif kind == "move":
         srect = _rand_region(rng, (h, w))
-        drect = _rand_region(rng, (h, w))
+        drect = _rand_move_destination(rng, (h, w), srect)
         sx, sy, sw, sh = srect
-        dx, dy, dw, dh = drect
+        dx, dy, _, _ = drect
         patch = base[sy:sy + sh, sx:sx + sw].copy()
         pm = np.full((sh, sw), 255, np.uint8)
-        cv2.ellipse(pm, (sw // 2, sh // 2), (sw // 2 - 2, sh // 2 - 2),
-                    0, 0, 360, 255, -1)
+        _inset_ellipse(pm, sw, sh)
+        center = (dx + sw // 2, dy + sh // 2)
         out = editor.clone(
-            patch, pm, out, (dx + dw // 2, dy + dh // 2))
+            patch, pm, out, center)
         sm = _shape_mask((h, w), srect, shape, rng)
         out = editor.inpaint(out, sm)  # xoá gốc — object đã "đi"
         m_gt[sm > 0] = 255
-        dm = _ellipse_mask((h, w), drect)
+        # Ground truth uses the exact clone mask at the actual patch placement.
+        dm = np.zeros((h, w), np.uint8)
+        x0, y0 = center[0] - sw // 2, center[1] - sh // 2
+        dm[y0:y0 + sh, x0:x0 + sw] = pm
         m_gt[dm > 0] = 255
         spec.update(src=list(srect), dst=list(drect))
 
@@ -228,19 +333,14 @@ def forge(
             fx, fy, fw2, fh2 = rect
             patch = base[fy:fy + fh2, fx:fx + fw2].copy()
         pm = np.full((fh2, fw2), 255, np.uint8)
-        cv2.ellipse(pm, (fw2 // 2, fh2 // 2), (fw2 // 2 - 2, fh2 // 2 - 2),
-                    0, 0, 360, 255, -1)
-        while True:
-            dx = int(rng.integers(4, w - fw2 - 4))
-            dy = int(rng.integers(4, h - fh2 - 4))
-            if kind == "splice_keep" and \
-                    abs(dx - fx) < fw2 and abs(dy - fy) < fh2:
-                continue  # dest trùng source → vô nghĩa, chọn lại
-            break
+        _inset_ellipse(pm, fw2, fh2)
+        dx, dy = _rand_splice_destination(
+            rng, (h, w), (fx, fy, fw2, fh2), disjoint=(kind == "splice_keep"))
         out = editor.clone(patch, pm, out, (dx + fw2 // 2, dy + fh2 // 2))
+        # GT = đúng clone mask tại vị trí clone (như move) — ellipse lớn hơn sẽ
+        # đếm cả vùng chưa bị sửa.
         dm = np.zeros((h, w), np.uint8)
-        cv2.ellipse(dm, (dx + fw2 // 2, dy + fh2 // 2),
-                    (fw2 // 2, fh2 // 2), 0, 0, 360, 255, -1)
+        dm[dy:dy + fh2, dx:dx + fw2] = pm
         m_gt[dm > 0] = 255
         spec.update(src=list(rect), dst=[dx, dy, fw2, fh2],
                     foreign=kind == "splice_foreign")
@@ -274,11 +374,12 @@ def generate_set(
         save_jpeg = bool(rng.integers(0, 2))
         ext, param = (".jpg", [cv2.IMWRITE_JPEG_QUALITY, 90]) if save_jpeg \
             else (".png", [])
-        cv2.imwrite(str(out_dir / f"{stem}_O.png"), base)
-        cv2.imwrite(str(out_dir / f"{stem}_F{ext}"), forged, param)
-        cv2.imwrite(str(out_dir / f"{stem}_M.png"), mask)
+        _write_image(out_dir / f"{stem}_O.png", base)
+        _write_image(out_dir / f"{stem}_F{ext}", forged, param)
+        _write_image(out_dir / f"{stem}_M.png", mask)
         entries.append({"id": stem, "seed": seed, "kind": kind,
                         "backend": backend, "spec": spec,
+                        "model_sha256": getattr(editor, "model_sha256", None),
                         "format": "jpeg" if save_jpeg else "png"})
     manifest = out_dir / "meta.json"
     manifest.write_text(json.dumps(entries, indent=1), encoding="utf-8")
