@@ -127,7 +127,7 @@ def test_happy_path_export_history_reopen_delete(
     assert report.report_id in content
 
     # History tab refresh là lúc bảng được nạp.
-    window.tabs.setCurrentIndex(1)
+    window.tabs.setCurrentIndex(2)
     qtbot.waitUntil(lambda: window.history.table.rowCount() == 1, timeout=10000)
     assert window.history.table.item(0, 1).text() == synth_384.name
     analysis_id = window.history.table.item(0, 4).text()
@@ -158,7 +158,7 @@ def test_happy_path_export_history_reopen_delete(
     assert window.isVisible()
     assert a.banner.isVisible()
     assert a._report is report
-    window.tabs.setCurrentIndex(1)
+    window.tabs.setCurrentIndex(2)
     assert window.history.table.rowCount() == 0
 
 
@@ -195,7 +195,7 @@ def test_run_twice(qtbot, window, synth_384):
             and a.btn_export.isVisible(),
             timeout=30000,
         )
-    window.tabs.setCurrentIndex(1)
+    window.tabs.setCurrentIndex(2)
     qtbot.waitUntil(lambda: window.history.table.rowCount() == 2, timeout=10000)
 
 

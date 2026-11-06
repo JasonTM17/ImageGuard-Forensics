@@ -12,6 +12,11 @@ DISCLAIMER = (
     "ELA/EXIF/noise chỉ là bằng chứng khám phá."
 )
 
+ENHANCE_BANNER = (
+    "Ảnh đã tăng cường bằng thuật toán hoặc mô hình AI. Đây là bản xem, "
+    "không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với file gốc."
+)
+
 VERDICT_LABEL = {
     "suspicious_indication": "Có dấu hiệu nghi vấn",
     "no_indication": "Không thấy dấu hiệu",
@@ -45,6 +50,7 @@ BTN_CANCEL = "Hủy"
 BTN_DELETE = "Xóa"
 BTN_REOPEN = "Mở lại"
 TAB_ANALYZE = "Phân tích"
+TAB_ENHANCE = "Tăng cường"
 TAB_HISTORY = "Lịch sử"
 TAB_SETTINGS = "Cài đặt"
 
