@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open
 from imageguard.core.models import ImageDocument
 from imageguard.evaluation.synthforge import ForgeSpec, forge, generate_set
+from imageguard.forensics.block import pipeline as block_pipeline
 from imageguard.forensics.block.pipeline import BlockCopyMove
 
 
@@ -74,3 +76,34 @@ def test_synthforge_easy_majority(tmp_path: Path, ts) -> None:
         if r.verdict == Verdict.SUSPICIOUS_INDICATION:
             hits += 1
     print(f"\n[block easy-tier] suspicious {hits}/{n}")
+
+
+def test_cancel_after_vote_mask_returns_inconclusive(ts, monkeypatch) -> None:
+    cancel = threading.Event()
+    empty_features = np.empty((0, 1), dtype=np.float32)
+    empty_positions = np.empty((0, 2), dtype=np.int32)
+    empty_pairs = np.empty((0, 2), dtype=np.int32)
+    monkeypatch.setattr(
+        block_pipeline,
+        "extract_features",
+        lambda gray, block_size, n_coeffs, flat_std_eps: (empty_features, empty_positions),
+    )
+    monkeypatch.setattr(block_pipeline, "match_pairs", lambda *args: empty_pairs)
+
+    def cancel_during_vote(pairs, positions, block_size, shape, min_votes):
+        assert pairs.shape == (0, 2)
+        cancel.set()
+        height, width = shape
+        return (
+            np.zeros((height, width), dtype=np.uint8),
+            np.zeros((height, width), dtype=np.float32),
+            {"n_pairs": len(pairs), "n_shifts_kept": 0},
+        )
+
+    monkeypatch.setattr(block_pipeline, "vote_mask", cancel_during_vote)
+
+    result = BlockCopyMove().analyze(_doc(np.zeros((64, 64, 3), np.uint8)), ts, cancel)
+
+    assert cancel.is_set()
+    assert result.verdict == Verdict.INCONCLUSIVE
+    assert "n_candidate_pairs" not in result.evidence

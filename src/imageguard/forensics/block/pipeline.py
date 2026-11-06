@@ -79,6 +79,8 @@ class BlockCopyMove:
         mask, heat, stats = vote_mask(
             pairs, pos, B, gray.shape, int(cfg.value("block", "min_shift_votes"))
         )
+        if cancelled(cancel):
+            return self._done(Verdict.INCONCLUSIVE, 0.0, t0, ["cancelled after voting"])
         mask = upscale_mask(mask, scale, (doc.height, doc.width))
         frac = float(np.count_nonzero(mask)) / mask.size
         if scale < 1.0:
