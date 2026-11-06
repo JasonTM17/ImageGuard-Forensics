@@ -79,11 +79,18 @@ def test_splicing_jpeg_cues(valid_jpg, ts):
 
 
 def test_splicing_nonjpeg_degrades(valid_png, ts):
-    """Non-JPEG → ELA N/A → cue suy giảm thành NO_INDICATION + ghi lý do."""
+    """Non-JPEG → thiếu ELA cue nên INCONCLUSIVE, không negative."""
     doc = _doc(valid_png, ts)
     r = SplicingCues().analyze(doc, ts)
-    assert r.verdict == Verdict.NO_INDICATION
-    assert any("suy giảm" in l or "không áp dụng" in l for l in r.limitations)
+    assert r.verdict == Verdict.INCONCLUSIVE
+    assert r.score is None
+    assert r.evidence["cue_unavailable"] is True
+    assert any(
+        "cue suy giảm" in limitation
+        and "ELA không áp dụng (non-JPEG)" in limitation
+        and "không đủ cặp tín hiệu" in limitation
+        for limitation in r.limitations
+    )
 
 
 def test_registry_l2_specs():

@@ -9,10 +9,12 @@ from imageguard.core.models import AlgorithmResult
 from imageguard.forensics.fusion import combine
 
 
-def _r(method: MethodName, verdict: Verdict, score: float | None = None):
+def _r(method: MethodName, verdict: Verdict, score: float | None = None,
+       evidence: dict | None = None):
     return AlgorithmResult(
         method=method, verdict=verdict, score=score,
         score_definition="test def" if score is not None else "",
+        evidence=evidence or {},
     )
 
 
@@ -51,6 +53,27 @@ def test_aux_can_never_convict() -> None:
     results = [_r(EL, Verdict.INCONCLUSIVE), _r(EX, Verdict.INCONCLUSIVE)]
     v, _, _ = combine(results)
     assert v == Verdict.INCONCLUSIVE
+
+
+def test_aux_corroboration_skips_unavailable_cue() -> None:
+    results = [
+        _r(MethodName.SPLICING_CUES, Verdict.INCONCLUSIVE,
+           evidence={"cue_unavailable": True}),
+        _r(MethodName.NOISE_INCONSISTENCY, Verdict.INCONCLUSIVE),
+    ]
+    _, signals, _ = combine(results)
+    assert signals == []
+
+
+def test_aux_corroboration_counts_available_cues() -> None:
+    results = [
+        _r(MethodName.SPLICING_CUES, Verdict.INCONCLUSIVE),
+        _r(MethodName.NOISE_INCONSISTENCY, Verdict.INCONCLUSIVE),
+    ]
+    _, signals, _ = combine(results)
+    assert signals == [
+        "aux_corroboration: splicing_cues, noise_inconsistency",
+    ]
 
 
 def test_score_without_definition_fails() -> None:
