@@ -186,7 +186,7 @@ class AnalysisDetailDialog(QDialog):
         rel = self.combo.currentData()
         if not rel or not rel.lower().endswith((".png", ".jpg", ".bmp")):
             self.lbl_art_err.setText("")
-            self.canvas.set_overlay(None)
+            self.canvas.clear_image()
             return
         try:
             data = self._svc.store.read(rel)

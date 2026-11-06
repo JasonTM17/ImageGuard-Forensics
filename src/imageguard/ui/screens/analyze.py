@@ -185,6 +185,7 @@ class AnalyzeScreen(QWidget):
         out = safe_open(path, load_thresholds())
         if isinstance(out, ErrorResult):
             self._path = None
+            self._doc = None
             self.canvas.clear_image()
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             self.btn_run.setEnabled(False)
@@ -319,12 +320,14 @@ class AnalyzeScreen(QWidget):
     def _apply_overlay(self) -> None:
         data = self.overlay_box.currentData()
         if data is None or self._doc is None:
+            self.lbl_err.setText("")
             self.canvas.set_overlay(None)
             return
         kind, m = data
         shape = self._doc.array.shape[:2]
         if kind == "mask" and m.mask is not None:
             if m.mask.shape != shape:
+                self.canvas.set_overlay(None)
                 self.lbl_err.setText(
                     f"Overlay bỏ qua: dims mask {m.mask.shape} ≠ ảnh {shape}")
                 return

@@ -80,6 +80,7 @@ class ImageCanvas(QGraphicsView):
         self._scene.clear()
         self._base = self._scene.addPixmap(ndarray_to_qpixmap(bgr))
         self._overlay = None
+        self.setSceneRect(self._base.boundingRect())
         self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
 
     def resizeEvent(self, event) -> None:
