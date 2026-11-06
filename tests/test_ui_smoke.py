@@ -27,10 +27,15 @@ def test_app_shell(qtbot, services):
     analysis, history = services
     w = MainWindow(analysis, history)
     qtbot.addWidget(w)
-    assert w.tabs.count() == 4
-    texts = [w.tabs.tabText(i) for i in range(4)]
-    assert texts == [strings.TAB_ANALYZE, strings.TAB_HISTORY,
-                     "Thống kê", strings.TAB_SETTINGS]
+    assert w.tabs.count() == 5
+    texts = [w.tabs.tabText(i) for i in range(5)]
+    assert texts == [
+        strings.TAB_ANALYZE,
+        strings.TAB_ENHANCE,
+        strings.TAB_HISTORY,
+        "Thống kê",
+        strings.TAB_SETTINGS,
+    ]
     # Disclaimer cố định luôn hiển thị
     found = w.findChildren(type(w.centralWidget().layout().itemAt(1).widget()))
     assert any(strings.DISCLAIMER[:20] in d.findChildren(

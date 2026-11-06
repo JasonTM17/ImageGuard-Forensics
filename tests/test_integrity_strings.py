@@ -19,6 +19,9 @@ BANNED = [
     "VERDICT_FORGED",
     "100% authentic",
     "đã bị giả mạo",
+    "đã khôi phục",
+    "ảnh rõ là ảnh thật",
+    "enhancement xác nhận",
 ]
 
 

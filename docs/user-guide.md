@@ -33,6 +33,26 @@ Hoặc bản đóng gói: `dist/ImageGuard/ImageGuard.exe` (xem `docs/packaging.
 6. **Lịch sử** — tab "Lịch sử" liệt kê phân tích đã lưu (SQLite); xóa sẽ
    xóa cả artifacts. Tab "Thống kê" tổng hợp phiên làm việc.
 
+## Tab Tăng cường (xem, không phân tích)
+
+Tab "Tăng cường" chạy ba operator cổ điển — *Unsharp mask*, *CLAHE*,
+*Non-local means* — để xem thử hiệu ứng trên ảnh. Tab này **không phân
+tích**, không gọi `AnalysisService`, không ghi lịch sử hay database, và
+không kết luận điều gì về ảnh.
+
+- **Banner cố định**: "Ảnh đã tăng cường bằng thuật toán hoặc mô hình AI.
+  Đây là bản xem, không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với
+  file gốc." Nghĩa là ảnh tăng cường chỉ để xem; dấu hiệu forensics chỉ
+  được gắn với file gốc, không phải với bản tăng cường.
+- **Thanh trộn**: 0 = ảnh gốc, 100 = ảnh tăng cường. Thanh chỉ đổi hiển thị
+  (pixmap), không ghi pixel và không chạy lại operator.
+- **Xuất**: chọn đích PNG, hệ thống ghi thêm một file `.json` kế bên
+  (cùng tên) ghi `parent_sha256`, `derived_sha256`, `method`, `params`,
+  `model_sha256` (null) và `created_utc`. File gốc không bao giờ bị ghi đè;
+  đích trùng file gốc bị từ chối, đích đã tồn tại phải xác nhận ghi đè.
+- Tab này không khôi phục dấu vết camera và không phục hồi ảnh về trạng
+  thái gốc.
+
 ## Đọc verdict đúng cách
 
 - *Có dấu hiệu nghi vấn* ≠ "ảnh giả" — nghĩa là ≥1 detector tìm thấy
