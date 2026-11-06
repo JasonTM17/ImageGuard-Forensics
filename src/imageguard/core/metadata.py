@@ -3,6 +3,7 @@ thiếu metadata cũng là một quan sát (không phải lỗi)."""
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -13,14 +14,15 @@ from PIL.ExifTags import TAGS
 KEY_TAGS = ("Make", "Model", "Software", "DateTime", "DateTimeOriginal", "Orientation")
 
 
-def extract_exif(path: Path | str) -> dict[str, Any]:
+def extract_exif(source: Path | str | bytes) -> dict[str, Any]:
     """Đọc EXIF; trả {present: {...}, missing: [...], tag_count: int}.
 
     Không raise — ảnh không có EXIF vẫn là input hợp lệ.
     """
     result: dict[str, Any] = {"present": {}, "missing": [], "tag_count": 0}
     try:
-        with Image.open(path) as im:
+        raw = source if isinstance(source, bytes) else Path(source).read_bytes()
+        with Image.open(BytesIO(raw)) as im:
             exif = im.getexif()
             result["tag_count"] = len(exif)
             named = {TAGS.get(tag_id, str(tag_id)): str(val) for tag_id, val in exif.items()}
@@ -37,7 +39,7 @@ def extract_exif(path: Path | str) -> dict[str, Any]:
     # IFD lồng (ExifOffset) — Pillow đã flatten một phần; DateTimeOriginal thường nằm đây.
     if "DateTimeOriginal" not in result["present"] and "ExifOffset" in named:
         try:
-            with Image.open(path) as im:
+            with Image.open(BytesIO(raw)) as im:
                 ifd = im.getexif().get_ifd(0x8769)
                 for tag_id, val in ifd.items():
                     name = TAGS.get(tag_id, str(tag_id))
