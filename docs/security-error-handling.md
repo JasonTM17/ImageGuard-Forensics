@@ -23,6 +23,15 @@ tầng domain.
 
 ## Không làm
 
-- Không gửi ảnh ra ngoài (offline hoàn toàn; không telemetry).
+- Không tải ảnh lên dịch vụ khác; chỉ tạo yêu cầu kéo HTTP snapshot khi được cấu hình như mô tả bên dưới, không telemetry.
 - Không ghi path tuyệt đối vào DB — chỉ relative artifact paths.
 - Không log secrets (project không có secret nào theo thiết kế).
+
+## Ingest HTTP snapshots
+
+- Chỉ kéo ảnh từ host có trong allowlist; mọi redirect được kiểm tra lại. Loopback cần bật `allow_loopback`; link-local và metadata cần bật `allow_link_local`. RFC1918 vẫn được phép khi host hoặc IP nằm trong allowlist.
+- Mật khẩu chỉ đọc từ tên biến môi trường đã cấu hình hoặc từ tệp secrets tuyệt đối nằm ngoài repository. Không đặt userinfo trong URL. Log và kết quả không chứa URL hay thông tin xác thực. Cấu hình thông tin đăng nhập không xác minh danh tính camera.
+- `urllib` chuẩn phân giải DNS trước khi kết nối, nhưng DNS rebinding giữa lần kiểm tra và TCP connect vẫn là rủi ro còn lại.
+- Snapshot tải về được giữ lại cho đến khi operator xóa; ứng dụng không tải ảnh lên dịch vụ khác.
+- Khi được bật, tính năng này tạo yêu cầu HTTP(S) tới các host trong allowlist để kéo snapshot; ảnh không được gửi tới dịch vụ bên ngoài.
+- Thư mục ingest có thể chứa ảnh người. `consent_note` trong log thư mục là ghi chú do operator nhập, không phải bằng chứng về sự đồng ý.
