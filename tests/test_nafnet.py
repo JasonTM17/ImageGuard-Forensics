@@ -142,6 +142,9 @@ def test_nafnet_arm_reuses_paired_protocol_with_stubbed_inference(
 ) -> None:
     from imageguard.evaluation import enhance_study, nafnet_arm
 
+    weight = tmp_path / "weight.onnx"
+    weight.write_bytes(b"stub-weight")
+    monkeypatch.setattr(nafnet, "MODEL_PATH", weight)
     session = _FakeSession()
     model_metadata = {
         "model_sha256": nafnet.MODEL_SHA256,
