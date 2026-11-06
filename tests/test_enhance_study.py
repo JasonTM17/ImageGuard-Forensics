@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from imageguard.evaluation.enhance_study import run_study
 from imageguard.evaluation.synthforge import generate_set
@@ -100,4 +103,33 @@ def test_enhance_study_keeps_source_immutable_and_records_limits(tmp_path: Path)
     assert all(phrase not in markdown.lower() for phrase in BANNED_MARKDOWN)
     assert all(phrase not in json.dumps(payload, ensure_ascii=False).lower()
                for phrase in BANNED_MARKDOWN)
+    assert _files_with_bytes(set_dir) == before
+
+
+def test_output_junction_into_source_is_refused(tmp_path: Path) -> None:
+    set_dir = tmp_path / "source"
+    generate_set(1, seed=3, out_dir=set_dir, size=(64, 64), tier="easy")
+    before = _files_with_bytes(set_dir)
+    out_dir = tmp_path / "out"
+    link = out_dir / "enhance_study" / "images"
+    link.parent.mkdir(parents=True)
+    created = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(link), str(set_dir)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if created.returncode != 0:
+        pytest.skip(f"junction was not created: {created.stderr.strip()}")
+
+    with pytest.raises(ValueError, match="source set"):
+        run_study(
+            set_dir,
+            out_dir,
+            seed=3,
+            degradations=["jpeg"],
+            restorers=["unsharp"],
+            methods=["noise"],
+        )
+
     assert _files_with_bytes(set_dir) == before
