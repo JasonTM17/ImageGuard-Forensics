@@ -1,6 +1,7 @@
 """Evaluation runner — chạy methods trên dataset, tái lập hoàn toàn.
 
-Mọi report ghi provenance: {seed, config_hash, git_sha, dataset_version,
+Mọi report ghi provenance: {seed, config_hash, git_sha, working_tree_clean,
+dataset_version,
 n, n_excluded, n_anomaly}. Verdict→label: SUSPICIOUS → forged;
 NO_INDICATION/INCONCLUSIVE → authentic (INCONCLUSIVE đếm riêng — độ thận trọng).
 NOT_APPLICABLE và ERROR loại khỏi xét hoàn toàn (đếm n_not_applicable/n_error) —
@@ -70,13 +71,18 @@ def _flatten(d: dict, prefix: str = "") -> dict:
     return out
 
 
-def _git_sha() -> str:
+def _git_snapshot() -> tuple[str, bool | None]:
+    repo_root = Path(__file__).resolve().parents[3]
     try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], text=True
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=repo_root,
+            encoding="utf-8", errors="replace", timeout=10).strip()
+        clean = not subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=repo_root,
+            encoding="utf-8", errors="replace", timeout=10).strip()
+        return sha, clean
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", None
 
 
 def run_eval(
@@ -157,13 +163,15 @@ def run_eval(
             cacc[m.name]["gt"].append(gt_forged)
             cacc[m.name]["n"] += 1
 
+    git_sha, working_tree_clean = _git_snapshot()
     report = EvalReport(
         experiment_id=f"{adapter.name}-{split}-{int(time.time())}-{uuid.uuid4().hex[:8]}",
         dataset=adapter.name, split=split,
         provenance={
             "seed": seed,
             "config_hash": cfg.snapshot_hash(),
-            "git_sha": _git_sha(),
+            "git_sha": git_sha,
+            "working_tree_clean": working_tree_clean,
             "dataset_version": adapter.version(),
         },
     )
