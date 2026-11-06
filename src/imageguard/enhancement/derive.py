@@ -15,13 +15,17 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from imageguard.evaluation.enhance_ops import restore
+from imageguard.evaluation.enhance_ops import restore as restore_classical
 
 
 def derive(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict]:
-    """Apply one classical restoration operator and return (array, metadata)."""
+    """Apply a viewing operator and return (array, metadata)."""
     source = np.asarray(image).copy()
-    return restore(source, kind, params)
+    if kind == "nafnet":
+        from imageguard.enhancement.nafnet import infer
+
+        return infer(source)
+    return restore_classical(source, kind, params)
 
 
 def _same_as_source(path: Path, source: Path) -> bool:
@@ -45,6 +49,7 @@ def write_sibling(
     parent_sha256: str,
     *,
     overwrite: bool = False,
+    model_sha256: str | None = None,
 ) -> Path:
     """Write ``image`` as PNG and a ``.json`` provenance sibling.
 
@@ -89,7 +94,7 @@ def write_sibling(
         "derived_sha256": hashlib.sha256(payload).hexdigest(),
         "method": method,
         "params": _json_safe(params),
-        "model_sha256": None,
+        "model_sha256": model_sha256,
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     json_path.write_text(

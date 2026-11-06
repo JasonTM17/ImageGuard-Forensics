@@ -147,3 +147,17 @@ Each cell is the sample mean and the percentile 95% interval. `sus` is the suspi
 | downsample / nlm | — (null) | — (null) | 0.0207 [-0.0139, 0.0551] (overlaps 0) | 0.0000 [0.0000, 0.0000] (overlaps 0) |
 
 PSNR gain is not a detection gain on this set. Gaussian unsharp raises PSNR by 0.6068 and the interval excludes zero, while the paired block-IoU interval overlaps zero. Oracle Lucy on the same blur raises PSNR by 1.7582 (interval excludes zero) and lowers block IoU by 0.1086 (interval also excludes zero, in the other direction). AWGN followed by non-local means raises PSNR by 0.4999 (interval excludes zero) while the paired keypoint-IoU interval overlaps zero and block IoU stays 0. Wrong Wiener on Gaussian blur lowers PSNR by 3.2681 and raises keypoint IoU by 0.1173; both intervals exclude zero, so a worse similarity score can coincide with a higher keypoint overlap.
+
+## E3 NAFNet (AI, viewing)
+
+This optional view uses the OpenCV Zoo NAFNet ONNX weight (`deblurring_nafnet_2025may.onnx`), pinned at 91,736,251 bytes with SHA-256 `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`. The model directory README lists the [MIT License](https://github.com/opencv/opencv_zoo/blob/main/models/deblurring_nafnet/README.md). Inference uses CPUExecutionProvider, sequential execution, one intra-op and inter-op thread, basic graph optimization, and RGB float32 NCHW input scaled by 0.00392. A 256-pixel side collapses inside this ONNX (zero-sized Pad). The network canvas therefore keeps every side at least 512 and the long side at most 1024, with replicate padding when a downscale would leave the short side below 512. The result is a viewing image. Padding and resizing are not recovered detail.
+
+### Runtime gate
+
+| Tier | Size | Requested N | Processed N | Seed | Status | Measurement |
+|---|---:|---:|---:|---:|---|---|
+| easy | 256×256 | 24 | 0 | 20261106 | NOT_RUN | A native 256 input collapses in the ONNX Pad node. One 256 image padded to a 512 canvas completed in 26.3 seconds, including session load. The N=24 arm was not started. |
+
+The paired synthetic study did not start, so there are no PSNR, SSIM, detector, or bootstrap cells for E3. No NAFNet metrics are inferred from the classical study. The study runner leaves generated sets and intermediate images in temporary directories.
+
+NAFNet is a regression network and can still synthesize texture. This is a synthetic viewing study, not an IoT camera result. PSNR measures image similarity and does not establish a detection gain.

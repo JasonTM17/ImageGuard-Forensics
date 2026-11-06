@@ -17,6 +17,11 @@ ENHANCE_BANNER = (
     "không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với file gốc."
 )
 
+ENHANCE_AI_BANNER = (
+    "Dạng xem này dùng mô hình AI; một số chi tiết có thể do mô hình tạo ra. "
+    "Đây không phải bằng chứng; phân tích dấu hiệu vẫn dựa trên file gốc."
+)
+
 VERDICT_LABEL = {
     "suspicious_indication": "Có dấu hiệu nghi vấn",
     "no_indication": "Không thấy dấu hiệu",
