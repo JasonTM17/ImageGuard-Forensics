@@ -1,4 +1,4 @@
-"""CLI entry: `python -m imageguard [eval | gui | analyze ...]`."""
+"""CLI entry: `python -m imageguard [eval | gui | analyze | ingest ...]`."""
 
 from __future__ import annotations
 
@@ -58,6 +58,12 @@ def main() -> None:
         action="store_true",
         help="không ghi cơ sở dữ liệu hay artifacts",
     )
+    ingest_p = sub.add_parser("ingest", help="theo dõi thư mục ảnh tĩnh", parents=[_ver])
+    ingest_sub = ingest_p.add_subparsers(dest="ingest_mode", required=True)
+    for mode in ("watch", "once"):
+        mode_p = ingest_sub.add_parser(mode, parents=[_ver])
+        mode_p.add_argument("directory", type=Path)
+        mode_p.add_argument("--config", type=Path, help="tệp cấu hình ingest")
     args = ap.parse_args()
 
     if args.cmd in (None, "gui"):
@@ -92,6 +98,12 @@ def main() -> None:
         _run_analyze_command(args)
         return
 
+    if args.cmd == "ingest":
+        from imageguard.ingest.commands import run_ingest
+
+        raise SystemExit(
+            run_ingest(args.ingest_mode, args.directory, args.config)
+        )
     print(f"ImageGuard Forensics v{__version__} — python -m imageguard eval --help")
 
 

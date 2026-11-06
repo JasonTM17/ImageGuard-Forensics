@@ -80,3 +80,15 @@ python -m imageguard eval --dataset synth --root data/synth_eval \
 ```
 
 Report JSON/CSV vào `reports/` kèm experiment_id, seed, config hash.
+
+## Ingest ảnh từ thư mục
+
+Quét một lần hoặc theo dõi liên tục một thư mục ảnh tĩnh:
+
+```bash
+python -m imageguard ingest once <dir>
+python -m imageguard ingest watch <dir>
+```
+
+Thêm `--config <file>` sau `<dir>` để dùng cấu hình riêng. Cấu hình và log
+mặc định nằm trong `data/`, thư mục đã được gitignore.

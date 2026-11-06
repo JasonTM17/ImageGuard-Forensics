@@ -39,6 +39,10 @@ file → safe_open (magic→caps→decode→exif_transpose) → ImageDocument
      → fusion.adjudicate() → ForensicReport → artifacts/{report_id}/ + SQLite
 ```
 
+Folder ingest lives outside `forensics/` and `core/`; it waits for finished
+still images, then calls the headless `AnalysisService` and appends custody
+events without changing the analysis or verdict pipeline.
+
 ## Folder tree
 
 ```
