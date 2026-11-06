@@ -59,8 +59,9 @@ class SplicingCues:
         if noise.mask is None or ela.mask is None:
             why = ("ELA không áp dụng (non-JPEG)" if ela.mask is None
                    else "noise map không có outlier")
+            ev["cue_unavailable"] = True
             return self._done(
-                Verdict.NO_INDICATION, 0.0, t0,
+                Verdict.INCONCLUSIVE, None, t0,
                 [f"cue suy giảm: {why} — không đủ cặp tín hiệu để đối chiếu"]
                 + lim, evidence=ev, params_hash=cfg.snapshot_hash())
 

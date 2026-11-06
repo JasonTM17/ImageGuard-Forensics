@@ -53,7 +53,8 @@ def combine(
     # thì reviewer nên xem, dù verdict không đổi).
     aux_hit = [r.method.value for r in usable
                if r.method in AUX_METHODS
-               and r.verdict == Verdict.INCONCLUSIVE]
+               and r.verdict == Verdict.INCONCLUSIVE
+               and not r.evidence.get("cue_unavailable")]
     if len(aux_hit) >= 2:
         signals.append("aux_corroboration: " + ", ".join(aux_hit))
     if not usable:
