@@ -8,7 +8,9 @@ Acceptance nội bộ (ghi N mẫu đo thật, KHÔNG phải benchmark claim):
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -18,6 +20,9 @@ from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open
 from imageguard.core.models import ImageDocument
 from imageguard.evaluation.synthforge import ForgeSpec, forge, generate_set
+from imageguard.forensics.keypoint import pipeline as keypoint_pipeline
+from imageguard.forensics.keypoint.geo_verify import VerifyResult
+from imageguard.forensics.keypoint.matchers import MatchPairs
 from imageguard.forensics.keypoint.pipeline import KeypointCopyMove
 
 
@@ -98,3 +103,33 @@ def test_mask_maps_to_original_size(ts) -> None:
     if r.mask is not None:
         assert r.mask.shape == (300, 300)
         assert set(np.unique(r.mask)) <= {0, 255}
+
+
+def test_cancel_after_geometric_verify_returns_inconclusive(ts, monkeypatch) -> None:
+    cancel = threading.Event()
+    k_min = int(ts.value("keypoint", "k_min"))
+    kps = [object() for _ in range(k_min)]
+    descriptors = np.empty((k_min, 1), dtype=np.float32)
+    backend = SimpleNamespace(
+        norm=0,
+        detect=lambda gray: (kps, descriptors),
+    )
+    monkeypatch.setattr(keypoint_pipeline, "create_backend", lambda cfg: backend)
+    monkeypatch.setattr(
+        keypoint_pipeline,
+        "self_match",
+        lambda *args: MatchPairs(pairs=np.empty((0, 2), dtype=np.int32)),
+    )
+
+    def cancel_during_verify(pairs, kps, cfg):
+        assert pairs.shape == (0, 2)
+        cancel.set()
+        return VerifyResult(inlier_pairs=np.empty(0, dtype=np.int32), n_clusters=0)
+
+    monkeypatch.setattr(keypoint_pipeline, "geometric_verify", cancel_during_verify)
+
+    result = KeypointCopyMove().analyze(_doc_from(np.zeros((64, 64, 3), np.uint8)), ts, cancel)
+
+    assert cancel.is_set()
+    assert result.verdict == Verdict.INCONCLUSIVE
+    assert "n_verified" not in result.evidence

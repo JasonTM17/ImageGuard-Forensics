@@ -69,6 +69,10 @@ class KeypointCopyMove:
             return self._result(Verdict.INCONCLUSIVE, 0, t0, ["cancelled after match"])
 
         ver = geometric_verify(matches.pairs, kps, cfg)
+        if cancelled(cancel):
+            return self._result(
+                Verdict.INCONCLUSIVE, 0, t0, ["cancelled after geometric verification"]
+            )
         n_ver = len(ver.inlier_pairs)
         score = float(n_ver)
 
