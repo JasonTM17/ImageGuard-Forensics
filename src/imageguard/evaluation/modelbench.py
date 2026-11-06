@@ -81,9 +81,13 @@ def localization_scores(pred: np.ndarray | None, gt: np.ndarray) -> dict:
               "iou": None, "bf1": None}
     if not (gt > 0).any():
         return result
-    evaluated = pred if status == "valid" else np.zeros_like(gt)
-    result["iou"] = iou(evaluated, gt)
-    result["bf1"] = boundary_f1(evaluated, gt)
+    if status == "valid":
+        result["iou"] = iou(pred, gt)
+        result["bf1"] = boundary_f1(pred, gt)
+    elif status == "missing":
+        evaluated = np.zeros_like(gt)
+        result["iou"] = iou(evaluated, gt)
+        result["bf1"] = boundary_f1(evaluated, gt)
     return result
 
 
@@ -186,9 +190,16 @@ def run_bench(
     git_sha, git_clean = _git_snapshot()
     run_id = (f"modelbench-{set_dir.name}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-"
               f"{uuid.uuid4().hex[:8]}")
+    agg = aggregate(samples)
+    n_malformed_gt = sum(
+        c.get("n_malformed_gt", 0)
+        for meths in agg.values()
+        for c in meths.values()
+    )
     return {"experiment_id": run_id, "set": set_dir.name, "n": len(samples),
             "n_skipped_missing_gt": n_missing,
             "n_skipped_unreadable": n_unreadable,
+            "n_malformed_gt": n_malformed_gt,
             "original_controls": {
                 "n": len(originals),
                 "n_skipped": n_missing_originals,
@@ -214,7 +225,7 @@ def run_bench(
                 "methods": [m.name for m in methods],
             },
             "samples": samples,
-            "aggregate": aggregate(samples)}
+            "aggregate": agg}
 
 
 def _imread_unicode(path: Path, flags: int) -> np.ndarray | None:
@@ -369,7 +380,7 @@ def aggregate(samples: list[dict]) -> dict:
         for name, m in s["methods"].items():
             cell = agg.setdefault(kind, {}).setdefault(
                 name, {"n": 0, "suspicious": 0, "inconclusive": 0,
-                       "n_mask": 0, "n_mask_invalid": 0,
+                       "n_mask": 0, "n_mask_invalid": 0, "n_malformed_gt": 0,
                        "ious": [], "bf1s": []})
             cell["n"] += 1
             if m["verdict"] == Verdict.SUSPICIOUS_INDICATION.value:
@@ -380,6 +391,7 @@ def aggregate(samples: list[dict]) -> dict:
                 cell["n_mask"] += 1
             if m.get("mask_status") == "shape_mismatch":
                 cell["n_mask_invalid"] += 1
+                cell["n_malformed_gt"] += 1
             if m.get("iou") is not None:
                 cell["ious"].append(m["iou"])
                 cell["bf1s"].append(m["bf1"])
@@ -399,6 +411,8 @@ def render_markdown(res: dict) -> str:
         skip_bits.append(f"{res['n_skipped_missing_gt']} missing-GT")
     if res.get("n_skipped_unreadable"):
         skip_bits.append(f"{res['n_skipped_unreadable']} unreadable")
+    if res.get("n_malformed_gt"):
+        skip_bits.append(f"{res['n_malformed_gt']} malformed-GT")
     skip_s = f", skipped {', '.join(skip_bits)}" if skip_bits else ""
     lines = [
         "# ModelForge Detection Bench",
