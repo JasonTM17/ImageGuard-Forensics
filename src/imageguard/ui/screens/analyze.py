@@ -337,6 +337,7 @@ class AnalyzeScreen(QWidget):
             self.canvas.set_overlay(ndarray_to_qpixmap(blend), alpha=1.0)
         elif kind == "heat" and m.heatmap is not None:
             if m.heatmap.shape[:2] != shape:
+                self.canvas.set_overlay(None)
                 self.lbl_err.setText(
                     f"Overlay bỏ qua: dims heatmap {m.heatmap.shape} ≠ ảnh {shape}")
                 return
@@ -347,5 +348,6 @@ class AnalyzeScreen(QWidget):
             if pi.shape[:2] == shape:
                 self.canvas.set_overlay(ndarray_to_qpixmap(pi), alpha=1.0)
             else:
+                self.canvas.set_overlay(None)
                 self.lbl_err.setText(
                     f"Overlay bỏ qua: dims pairs {pi.shape} ≠ ảnh {shape}")
