@@ -18,6 +18,7 @@ import numpy as np
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
+from imageguard.evaluation.blind_kernel import estimate_kernel, kernel_error
 from imageguard.evaluation.datasets import SynthAdapter
 from imageguard.evaluation.enhance_bootstrap import (
     bootstrap_mean,
@@ -48,6 +49,11 @@ DEFAULT_RESTORERS = (
 DEFAULT_METHODS = ("keypoint", "block", "ela", "noise")
 BLUR_DEGRADATIONS = frozenset(("gaussian", "disk", "motion"))
 KERNEL_RESTORERS = frozenset(("richardson_lucy", "wiener"))
+BLIND_KERNEL_RESTORERS = frozenset(("blind_lucy", "blind_wiener"))
+RESTORER_OPERATORS = {
+    "blind_lucy": "richardson_lucy",
+    "blind_wiener": "wiener",
+}
 
 DEGRADATION_PARAMS: dict[str, dict[str, Any]] = {
     "gaussian": {"ksize": 7, "sigma": 1.4},
@@ -68,6 +74,8 @@ RESTORER_PARAMS: dict[str, dict[str, Any]] = {
     },
     "richardson_lucy": {"iterations": 10},
     "wiener": {"nsr": 0.01},
+    "blind_lucy": {"iterations": 10},
+    "blind_wiener": {"nsr": 0.01},
 }
 _SAMPLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -459,6 +467,11 @@ def _summarize_manipulated_arms(
                 if "block" in arm.get("methods", {})
             ],
         }
+        if group["restorer"] in BLIND_KERNEL_RESTORERS:
+            metric_values["kernel_error"] = [
+                (arm.get("metrics") or {}).get("kernel_error")
+                for _, arm in run_records
+            ]
         intervals = {
             metric_name: bootstrap_mean(values, rng)
             for metric_name, values in metric_values.items()
@@ -803,14 +816,22 @@ def run_study(
                 )
 
                 for restorer_name in selected_restorers:
-                    if restorer_name in KERNEL_RESTORERS:
+                    uses_kernel = restorer_name in (
+                        KERNEL_RESTORERS | BLIND_KERNEL_RESTORERS
+                    )
+                    if uses_kernel:
                         if degradation_name not in BLUR_DEGRADATIONS:
+                            kernel_role = (
+                                "estimated"
+                                if restorer_name in BLIND_KERNEL_RESTORERS
+                                else None
+                            )
                             sample_record["arms"].append(
                                 {
                                     "arm": "restoration",
                                     "degradation": degradation_name,
                                     "restorer": restorer_name,
-                                    "kernel_role": None,
+                                    "kernel_role": kernel_role,
                                     "status": "NOT_RUN",
                                     "reason": "no generating blur PSF",
                                     "operator_params": {},
@@ -826,13 +847,52 @@ def run_study(
                             )
                             continue
                         variants = (
-                            ("oracle", "wrong")
+                            ("estimated",)
+                            if restorer_name in BLIND_KERNEL_RESTORERS
+                            else ("oracle", "wrong")
                         )
                     else:
                         variants = (None,)
 
                     for kernel_role in variants:
-                        if kernel_role is None:
+                        estimator_record = None
+                        estimated_kernel = None
+                        if kernel_role == "estimated":
+                            estimated_kernel, estimator_record = estimate_kernel(
+                                degraded
+                            )
+                            if estimated_kernel is None:
+                                sample_record["arms"].append(
+                                    {
+                                        "arm": "restoration",
+                                        "degradation": degradation_name,
+                                        "restorer": restorer_name,
+                                        "kernel_role": "estimated",
+                                        "status": "NOT_RUN",
+                                        "reason": estimator_record["reason"],
+                                        "operator_params": {
+                                            "estimator": estimator_record
+                                        },
+                                        "image_path": None,
+                                        "image_shape": None,
+                                        "metrics": {
+                                            "psnr": None,
+                                            "ssim": None,
+                                            "kernel_error": None,
+                                        },
+                                        "gt_alignment": None,
+                                        "methods": {},
+                                    }
+                                )
+                                continue
+                            restoration_params = deepcopy(
+                                RESTORER_PARAMS[restorer_name]
+                            )
+                            restoration_params.update(
+                                kernel=estimated_kernel,
+                                kernel_role="estimated",
+                            )
+                        elif kernel_role is None:
                             restoration_params = deepcopy(
                                 RESTORER_PARAMS[restorer_name]
                             )
@@ -843,9 +903,14 @@ def run_study(
                                 restorer_name,
                                 kernel_role,
                             )
-                        restored, restoration_metadata = restore(
-                            degraded, restorer_name, restoration_params
+                        operator_name = RESTORER_OPERATORS.get(
+                            restorer_name, restorer_name
                         )
+                        restored, restoration_metadata = restore(
+                            degraded, operator_name, restoration_params
+                        )
+                        if estimator_record is not None:
+                            restoration_metadata["estimator"] = estimator_record
                         role_label = kernel_role or "single"
                         restored_relative = (
                             Path(report_stem)
@@ -867,6 +932,20 @@ def run_study(
                             )
                         )
                         n_align_failed += failed
+                        restoration_metrics = {
+                            "psnr": _as_json_number(psnr(restored, sharp)),
+                            "ssim": _as_json_number(ssim(restored, sharp)),
+                        }
+                        if estimated_kernel is not None:
+                            restoration_metrics["kernel_error"] = _as_json_number(
+                                kernel_error(
+                                    estimated_kernel,
+                                    np.asarray(
+                                        degradation_metadata["kernel"],
+                                        dtype=np.float32,
+                                    ),
+                                )
+                            )
                         restoration_arm = {
                             "arm": "restoration",
                             "degradation": degradation_name,
@@ -877,10 +956,7 @@ def run_study(
                             "operator_params": restoration_metadata,
                             "image_path": restored_relative.as_posix(),
                             "image_shape": list(restored.shape),
-                            "metrics": {
-                                "psnr": _as_json_number(psnr(restored, sharp)),
-                                "ssim": _as_json_number(ssim(restored, sharp)),
-                            },
+                            "metrics": restoration_metrics,
                             "gt_alignment": restoration_alignment,
                             "methods": restoration_methods,
                         }

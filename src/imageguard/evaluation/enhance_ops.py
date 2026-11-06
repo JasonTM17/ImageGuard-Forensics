@@ -318,8 +318,10 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
 
     if kind in ("richardson_lucy", "wiener"):
         role = params["kernel_role"]
-        if role not in ("oracle", "wrong"):
-            raise ValueError("kernel_role must be 'oracle' or 'wrong'")
+        if role not in ("oracle", "wrong", "estimated"):
+            raise ValueError(
+                "kernel_role must be 'oracle', 'wrong', or 'estimated'"
+            )
         kernel = _kernel_from_params(params)
         kernel_record = kernel.tolist()
         if kind == "richardson_lucy":

@@ -161,3 +161,59 @@ This optional view uses the OpenCV Zoo NAFNet ONNX weight (`deblurring_nafnet_20
 The paired synthetic study did not start, so there are no PSNR, SSIM, detector, or bootstrap cells for E3. No NAFNet metrics are inferred from the classical study. The study runner leaves generated sets and intermediate images in temporary directories.
 
 NAFNet is a regression network and can still synthesize texture. This is a synthetic viewing study, not an IoT camera result. PSNR measures image similarity and does not establish a detection gain.
+
+## Blind kernel (experimental)
+
+This optional evaluation arm estimates a disk or motion kernel from normalized straight-edge profiles in the blurred image. The estimator receives image pixels only; the generating kernel is used afterward for the kernel-error score. `blind_lucy` and `blind_wiener` use the estimate with Richardson–Lucy and Wiener, respectively. They remain outside `DEFAULT_RESTORERS`, and this arm is not part of the app or fusion.
+
+### Run and limits
+
+- Synthetic synthforge set: 24 manipulated samples and 24 matched originals, 256×256, easy tier, seed `20261106`.
+- Restorers: `blind_lucy`, `blind_wiener`. Methods: `keypoint`, `block`, `ela`, `noise`.
+- Degradation grid: Gaussian, disk, motion, AWGN, JPEG, and downsample. The last three have no generating blur PSF and their blind restoration arms are `NOT_RUN` with reason `no generating blur PSF`.
+- The captured run used one OpenCV thread and took 465.5 seconds. Alignment failures: `0`.
+- Provenance: config hash `df80dcb9a6d32070`, git SHA `69f3cd4`, dataset version `37eb9971ab03`. The worktree was dirty because this implementation was under evaluation.
+- Percentile bootstrap, 2,000 resamples. Intervals are descriptive, not p-values; an interval overlapping zero does not establish a change.
+
+### Kernel error
+
+Both estimate and reference kernels are normalized to sum to one, zero-padded to common support, and aligned by integer translation only. Error is `||k_hat - k_gt||₂ / ||k_gt||₂`; there is no rotation or rescaling. Results below cover manipulated samples for which edge evidence was sufficient.
+
+| Blur | Restorer | Estimated / 24 | NOT_RUN / 24 | Kernel error mean [95% interval] |
+|---|---|---:|---:|---:|
+| Gaussian | blind_lucy | 20 | 4 | 1.1687 [0.9005, 1.4463] |
+| Gaussian | blind_wiener | 20 | 4 | 1.1687 [0.8964, 1.4698] |
+| Disk | blind_lucy | 18 | 6 | 0.8492 [0.4644, 1.3227] |
+| Disk | blind_wiener | 18 | 6 | 0.8492 [0.4294, 1.3166] |
+| Motion | blind_lucy | 10 | 14 | 0.9868 [0.9352, 1.0649] |
+| Motion | blind_wiener | 10 | 14 | 0.9868 [0.9360, 1.0581] |
+
+The dataset kernel errors are high, and motion blur produced the most `NOT_RUN` estimates for insufficient straight-edge evidence. The estimator does not reject a result based on its ground-truth error. These measurements do not support accurate kernel recovery across this set.
+
+### Restored manipulated samples
+
+Each cell is the mean and 95% percentile interval among successful estimates. IoU and suspicious-indication rates are detector outputs, not proof of tampering.
+
+| Blur / restorer | PSNR | SSIM | Keypoint IoU | Block IoU | Keypoint suspicious rate | Block suspicious rate |
+|---|---|---|---|---|---|---|
+| Gaussian / blind_lucy (n=20) | 24.5418 [23.2999, 25.6210] | 0.6944 [0.6369, 0.7498] | 0.2374 [0.1807, 0.2926] | 0.1518 [0.0739, 0.2270] | 0.600 [0.400, 0.800] | 0.450 [0.250, 0.700] |
+| Gaussian / blind_wiener (n=20) | 20.2896 [18.4880, 22.0299] | 0.5130 [0.3927, 0.6163] | 0.2433 [0.1856, 0.2955] | 0.1011 [0.0348, 0.1790] | 0.550 [0.350, 0.750] | 0.300 [0.100, 0.500] |
+| Disk / blind_lucy (n=18) | 22.2339 [21.5242, 22.9242] | 0.5126 [0.4785, 0.5468] | 0.0889 [0.0469, 0.1340] | 0.1590 [0.0836, 0.2390] | 0.056 [0.000, 0.167] | 0.500 [0.278, 0.722] |
+| Disk / blind_wiener (n=18) | 19.5897 [18.5645, 20.4826] | 0.4285 [0.3469, 0.5056] | 0.1353 [0.0889, 0.1826] | 0.0447 [0.0000, 0.1139] | 0.333 [0.111, 0.556] | 0.111 [0.000, 0.278] |
+| Motion / blind_lucy (n=10) | 21.8617 [20.9366, 22.7754] | 0.5444 [0.5032, 0.5847] | 0.1756 [0.1092, 0.2379] | 0.0780 [0.0000, 0.1604] | 0.200 [0.000, 0.500] | 0.300 [0.000, 0.600] |
+| Motion / blind_wiener (n=10) | 16.9601 [15.1817, 18.7600] | 0.2560 [0.1656, 0.3436] | 0.1277 [0.0575, 0.1994] | 0.0556 [0.0000, 0.1353] | 0.200 [0.000, 0.500] | 0.200 [0.000, 0.500] |
+
+### Paired change from the degraded image
+
+Values are restored minus degraded, using the same samples. `Excludes zero` is a descriptive interval result and does not imply generalization beyond this synthetic set.
+
+| Blur / restorer | PSNR | SSIM | Keypoint IoU | Block IoU |
+|---|---|---|---|---|
+| Gaussian / blind_lucy (n=20) | -0.0861 [-1.0154, 0.7194] (overlaps 0) | -0.0042 [-0.0553, 0.0371] (overlaps 0) | +0.0816 [0.0377, 0.1326] (excludes 0) | -0.1056 [-0.1701, -0.0482] (excludes 0) |
+| Gaussian / blind_wiener (n=20) | -4.3382 [-5.9563, -2.9815] (excludes 0) | -0.1856 [-0.2878, -0.0895] (excludes 0) | +0.0876 [0.0323, 0.1454] (excludes 0) | -0.1562 [-0.2371, -0.0794] (excludes 0) |
+| Disk / blind_lucy (n=18) | +0.4407 [-0.0706, 0.8790] (overlaps 0) | +0.030684 [0.000028, 0.0572] (excludes 0) | +0.0347 [0.0127, 0.0600] (excludes 0) | -0.1046 [-0.1682, -0.0468] (excludes 0) |
+| Disk / blind_wiener (n=18) | -2.2035 [-3.2853, -1.2738] (excludes 0) | -0.0534 [-0.1364, 0.0185] (overlaps 0) | +0.0811 [0.0400, 0.1183] (excludes 0) | -0.2188 [-0.3004, -0.1312] (excludes 0) |
+| Motion / blind_lucy (n=10) | -0.8726 [-1.5069, -0.3512] (excludes 0) | -0.0534 [-0.0899, -0.0213] (excludes 0) | +0.0388 [-0.0467, 0.1390] (overlaps 0) | -0.1780 [-0.2954, -0.0739] (excludes 0) |
+| Motion / blind_wiener (n=10) | -5.7742 [-7.3831, -4.2585] (excludes 0) | -0.3418 [-0.4272, -0.2634] (excludes 0) | -0.0090 [-0.1214, 0.1016] (overlaps 0) | -0.2004 [-0.3184, -0.0803] (excludes 0) |
+
+PSNR and detector impact diverge: several paired keypoint-IoU intervals exclude zero in the positive direction while all six paired block-IoU intervals exclude zero in the negative direction. The result is mixed by detector and blur family; it is not a general detection improvement.
