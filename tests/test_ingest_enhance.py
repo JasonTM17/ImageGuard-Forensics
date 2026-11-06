@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
+from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.enhancement.derive import write_sibling
 from imageguard.ingest.config import IngestConfig
 from imageguard.ingest.folder import FolderIngestor
@@ -93,6 +94,34 @@ def test_enhance_sibling_writes_sidecars_preserves_source(tmp_path: Path) -> Non
     assert record["parent_sha256"] == before_sha
     assert "parent_name" not in record
     assert str(watch_dir) not in view_json.read_text(encoding="utf-8")
+
+
+def test_sibling_reread_failure_uses_fixed_custody_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    watch_dir = tmp_path / "incoming"
+    watch_dir.mkdir()
+    source = watch_dir / "photo.jpg"
+    payload = _jpeg_bytes(7)
+    source.write_bytes(payload)
+
+    def unreadable(*_args: object, **_kwargs: object) -> ErrorResult:
+        return ErrorResult(ErrorCode.FILE_UNREADABLE, r"D:\secret\photo.jpg")
+
+    monkeypatch.setattr("imageguard.ingest.folder.safe_open", unreadable)
+    data_dir = tmp_path / "data"
+    ingestor = FolderIngestor(
+        _config(data_dir, enhance_sibling=True), AnalysisService(), "hash", settle_delay=0
+    )
+    summary = ingestor.scan_once(watch_dir)
+    log = (data_dir / "ingest" / "custody.jsonl").read_text(encoding="utf-8")
+
+    assert summary.analyzed == 1
+    assert "enhance_sibling_failed" in log
+    assert "FILE_UNREADABLE" not in log
+    assert "secret" not in log
+    assert not (watch_dir / "photo.view.png").exists()
+    assert source.read_bytes() == payload
 
 
 def test_write_sibling_still_refuses_destination_same_as_source(

@@ -175,7 +175,7 @@ class FolderIngestor:
         cfg = getattr(self.service, "cfg", None) or load_thresholds()
         doc = safe_open(path, cfg)
         if isinstance(doc, ErrorResult):
-            return f"enhance_sibling_safe_open:{doc.code.value}"
+            return "enhance_sibling_failed"
         try:
             out, _meta = derive(doc.array, "unsharp", params)
             dest_png = path.with_name(path.stem + ".view.png")
