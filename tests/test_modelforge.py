@@ -157,6 +157,26 @@ def test_splice_ground_truth_matches_clone_mask(base, kind):
     assert np.array_equal(gt, dest_gt)
 
 
+@pytest.mark.parametrize("kind", ("move", "splice_keep", "splice_foreign"))
+def test_clone_mask_is_inset_ellipse(base, kind):
+    """Clone mask phải là ellipse thụt 2px trên nền 0 — góc 0, tâm 255.
+    np.full(..., 255) khiến _inset_ellipse vô nghĩa → mask thành rectangle."""
+    class RecordingEditor:
+        def clone(self, patch, pmask, dst, center):
+            self.clone_mask = pmask.copy()
+            return dst
+
+        def inpaint(self, bgr, mask):
+            return bgr
+
+    editor = RecordingEditor()
+    forge(base, kind, editor, np.random.Generator(np.random.PCG64(5)), base)
+    pm = editor.clone_mask
+    assert pm[0, 0] == 0, f"{kind}: góc clone mask phải 0"
+    cy, cx = pm.shape[0] // 2, pm.shape[1] // 2
+    assert pm[cy, cx] == 255, f"{kind}: tâm clone mask phải 255"
+
+
 def test_generate_set_writes_images_to_non_ascii_dir(tmp_path):
     import json
 
