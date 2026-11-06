@@ -17,8 +17,8 @@ under the gitignored `data/` directory.
 The config supports `camera_label`, `max_pending` (default `1`), `methods`
 (default `keypoint`, `block`, `ela`), a cwd-relative `data_dir` (default
 `data`), an optional `consent_note`, and an optional raw `http` mapping. When
-enabled, an available later HTTP puller may place finished JPEGs in the watched
-folder; folder ingest itself does not fetch network content.
+enabled, the HTTP snapshot puller may place finished JPEGs in the watched
+folder. Folder scanning itself does not open network connections.
 
 Optional boolean `enhance_sibling` (default `false`): when `true`, after a
 successful ingest analysis the scanner loads the same source file with
