@@ -31,4 +31,5 @@ n_excluded. CẤM một con số headline gộp.
   keypoint F1 0.50, recall 1/3, macro pixel IoU 0.258; block recall 0/3.
   Đây là bộ medium nhỏ, không phải benchmark công bố.
 - LaMa edits and clean controls: xem [modelforge.md](modelforge.md) để đọc kết quả, split sizes và giới hạn.
+- Classical enhancement, evaluation only: xem [enhancement-study.md](enhancement-study.md). PSNR/SSIM trên bộ synth đó không phải detection gain.
 - Không chạy locked test split; không có CoMoFoD dataset trong workspace.
