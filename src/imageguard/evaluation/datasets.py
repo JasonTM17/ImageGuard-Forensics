@@ -71,7 +71,9 @@ class SynthAdapter:
             ext = ".jpg" if e.get("format") == "jpeg" else ".png"
             f = self.root / f"{stem}_F{ext}"
             m = self.root / f"{stem}_M.png"
-            o = self.root / f"{stem}_O{ext}"
+            o = self.root / f"{stem}_O.png"
+            if not o.exists():
+                o = self.root / f"{stem}_O{ext}"
             if f.exists() and m.exists():
                 yield Sample(f, m, "forged", cat, base_id)
             if o.exists():

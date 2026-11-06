@@ -346,6 +346,28 @@ def test_synth_adapter_accepts_modelforge_manifest(tmp_path: Path) -> None:
     assert forged[0].category.startswith("ellipse/")
 
 
+def test_synth_adapter_jpeg_variant_uses_original_png(tmp_path: Path) -> None:
+    from imageguard.evaluation.datasets import SynthAdapter
+
+    meta = [{"id": "m1", "seed": 2026, "spec": {"kind": "erase"},
+             "format": "jpeg"}]
+    (tmp_path / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    image = np.zeros((16, 16, 3), dtype=np.uint8)
+    mask = np.zeros((16, 16), dtype=np.uint8)
+    mask[4:8, 4:8] = 255
+    (tmp_path / "m1_O.png").write_bytes(cv2.imencode(".png", image)[1].tobytes())
+    (tmp_path / "m1_F.jpg").write_bytes(cv2.imencode(".jpg", image)[1].tobytes())
+    (tmp_path / "m1_M.png").write_bytes(cv2.imencode(".png", mask)[1].tobytes())
+
+    adapter = SynthAdapter(tmp_path)
+    found = [sample for split in ("dev", "test")
+             for sample in adapter.samples(split)]
+    forged = [sample for sample in found if sample.label == "forged"]
+    authentic = [sample for sample in found if sample.label == "authentic"]
+    assert len(forged) == 1 and forged[0].image_path.name == "m1_F.jpg"
+    assert len(authentic) == 1 and authentic[0].image_path.name == "m1_O.png"
+
+
 # ---------- F-A6: local_k range validation ----------
 
 def test_local_k_out_of_range_rejected() -> None:

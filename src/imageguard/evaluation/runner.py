@@ -196,7 +196,11 @@ def run_eval(
 def _load_mask(path, doc: ImageDocument) -> np.ndarray | None:
     if path is None:
         return None
-    m = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return None
+    m = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
     if m is None:
         return None
     if m.shape != (doc.height, doc.width):

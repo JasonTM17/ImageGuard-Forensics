@@ -80,6 +80,19 @@ def test_aggregate_macro_micro() -> None:
     assert agg["micro"]["f1"] is not None
 
 
+def test_aggregate_all_miss_micro_f1_is_zero() -> None:
+    gt = np.zeros((10, 10), np.uint8)
+    gt[2:6, 2:6] = 255
+    agg = aggregate_pixel([pixel_metrics(None, gt)])
+
+    assert agg["micro"]["f1"] == 0.0
+    assert agg["micro"]["recall"] == 0.0
+    assert agg["micro"]["precision"] is None
+    assert agg["macro"]["f1"] == 0.0
+
+
 def test_aggregate_empty_split() -> None:
     agg = aggregate_pixel([])
-    assert agg["n_images_scored"] == 0 and agg["macro"]["f1"] is None
+    assert agg["n_images_scored"] == 0
+    assert all(value is None for value in agg["macro"].values())
+    assert all(value is None for value in agg["micro"].values())

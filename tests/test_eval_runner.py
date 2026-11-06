@@ -36,3 +36,24 @@ def test_report_files_written(tmp_path: Path, ts) -> None:
     data = json.loads(jp.read_text())
     assert data["provenance"]["git_sha"]
     assert cp.exists() and "copy_move_keypoint" in cp.read_text()
+
+
+def test_load_mask_reads_non_ascii_path(tmp_path: Path) -> None:
+    import cv2
+    import numpy as np
+
+    from imageguard.core.models import ImageDocument
+    from imageguard.evaluation.runner import _load_mask
+
+    mask = np.zeros((24, 40), dtype=np.uint8)
+    mask[4:12, 7:19] = 255
+    mask_path = tmp_path / "mặt_nạ.png"
+    mask_path.write_bytes(cv2.imencode(".png", mask)[1].tobytes())
+    doc = ImageDocument(
+        array=np.zeros((24, 40, 3), dtype=np.uint8), width=40, height=24,
+        channels=3, image_format="png", sha256="x", file_bytes=1,
+        file_name="image.png")
+
+    loaded = _load_mask(mask_path, doc)
+    assert isinstance(loaded, np.ndarray)
+    assert loaded.shape == mask.shape
