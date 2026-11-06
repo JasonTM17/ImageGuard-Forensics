@@ -33,7 +33,7 @@ detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
 | keypoint (SIFT) | twin blended/rotated/scaled; mask + pairs | vùng phẳng/texture kém → INCONCLUSIVE | ~0.1–0.5s |
 | block (DCT) | không cần feature point; baseline kinh điển | miss clone đã blend; chậm; flat-guard bắt buộc | ~5–10s |
 | ELA | JPEG history cue | chỉ JPEG; re-save phá; không standalone | ~0.1s |
-| noise σ-MAD | model-edit σ-separation p<0.001 (erase/move) | localize yếu (IoU≈0.005) | ~0.02s |
+| noise σ-MAD | train model-edit σ-separation MWU p per sample (N=12, n=3/kind, seed=2026, config_hash=`df80dcb9a6d32070`): erase_0000=8.803304263477716e-13, erase_0004=0.4566456368698131, erase_0008=0.00635903098503261; move_0001=1.728408115408002e-05, move_0005=1.5301133820660006e-06, move_0009=0.0016727292286712369 | localize yếu (IoU≈0.005) | ~0.02s |
 | noise_local (two-tier) | localize model-fill: IoU 0.335–0.665, bF1 0.559–0.888 | false-positive vùng phẳng tự nhiên; vẫn aux | ~0.05s |
 | freq cues | spectrum/blockiness artifact | mô tả hơn phán đoán | ~0.02s |
 | splicing cues | cross-cue noise×ELA | suy giảm trên non-JPEG | ~0.05s |
@@ -42,6 +42,5 @@ detection qua re-encode. Phần còn lại INCONCLUSIVE (không phải clean)
 
 - Không method nào "tốt nhất" — keypoint thắng ở twin-copy-move, aux cues
   thắng ở "có gì đó lạ" trên model-edit; fusion rule tận dụng điều đó.
-- Khoảng trống lớn nhất: **localize vùng generative-edited** — cue
-  σ-separation tồn tại (p<0.001) nhưng cần detector cục bộ hơn →
+- Khoảng trống lớn nhất: **localize vùng generative-edited** — holdout σ-separation MWU p per sample (N=6, n=2/kind, seed=7777, config_hash=`df80dcb9a6d32070`): erase_0000=5.870311664222097e-25, erase_0004=4.51494454293609e-28, move_0001=5.114573614120509e-10, move_0005=9.85708489286173e-07; vẫn cần detector cục bộ hơn →
   [`docs/ml-extension.md`](../ml-extension.md).

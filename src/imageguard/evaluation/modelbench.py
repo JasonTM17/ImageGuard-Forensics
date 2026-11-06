@@ -135,8 +135,8 @@ def analyze_sample(
         row["noise_sigma"] = {"in_median": None, "out_median": None,
                               "mwu_p": None}
     else:
-        gt_blk = cv2.resize(gt.astype(np.uint8), (bw, bh),
-                            interpolation=cv2.INTER_NEAREST) > 0
+        gt_crop = gt[:bh * 16, :bw * 16]
+        gt_blk = (gt_crop.reshape(bh, 16, bw, 16) > 0).any(axis=(1, 3))
         sig_in, sig_out = sig[gt_blk], sig[~gt_blk]
         p = mann_whitney_u(sig_in, sig_out)
         row["noise_sigma"] = {
