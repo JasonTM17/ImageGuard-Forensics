@@ -206,6 +206,49 @@ def test_password_authentication_redacts_logs_results_and_userinfo(
     _assert_no_temporary_files(tmp_path)
 
 
+def test_same_origin_redirect_path_cannot_publish_basic_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("IG_TEST_CAMERA_USERNAME", "user")
+    monkeypatch.setenv("IG_TEST_CAMERA_PASSWORD", "pass")
+    token = base64.b64encode(b"user:pass").decode("ascii")
+    assert token.isalnum()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path == "/start":
+                self.send_response(302)
+                self.send_header("Location", f"/{token}.jpg")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            body = b"\xff\xd8\xffpayload"
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            return
+
+    with _serve(Handler) as base_url, caplog.at_level(logging.DEBUG):
+        result = pull_due(
+            _config(
+                f"{base_url}/start",
+                username_env="IG_TEST_CAMERA_USERNAME",
+                password_env="IG_TEST_CAMERA_PASSWORD",
+            ),
+            tmp_path,
+        )
+
+    assert result[0]["status"] == "written"
+    assert token not in result[0]["basename"]
+    assert token not in caplog.text
+    assert list(tmp_path.glob(f"*{token}*")) == []
+    _assert_no_temporary_files(tmp_path)
+
+
 def test_external_secrets_file_supplies_password(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
