@@ -9,6 +9,16 @@
 
 Hoặc bản đóng gói: `dist/ImageGuard/ImageGuard.exe` (xem `docs/packaging.md`).
 
+## Phân tích qua CLI (báo cáo JSON)
+
+```bash
+python -m imageguard analyze <file> [--methods keypoint,block,ela] [--no-persist]
+```
+
+Lệnh in ra stdout cùng cấu trúc JSON mà ứng dụng lưu khi phân tích (báo cáo dấu hiệu).
+Nếu thoát mã khác 0, đó là `ErrorResult` (ví dụ file không đọc được), không phải một verdict
+forensics trên ảnh.
+
 ## Quy trình phân tích
 
 1. **Mở ảnh** — kéo-thả vào canvas hoặc nút "Mở ảnh…". Định dạng: JPEG,
