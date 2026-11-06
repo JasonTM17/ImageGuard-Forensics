@@ -196,7 +196,7 @@ def report_dur_ms(report: ForensicReport) -> int:
     return sum(m.duration_ms for m in report.methods)
 
 
-def _report_dict(report: ForensicReport) -> dict:
+def report_to_dict(report: ForensicReport) -> dict:
     return {
         "report_id": report.report_id,
         "image_sha256": report.image_sha256,
@@ -216,3 +216,6 @@ def _report_dict(report: ForensicReport) -> dict:
             "has_mask": m.mask is not None,
         } for m in report.methods],
     }
+
+
+_report_dict = report_to_dict
