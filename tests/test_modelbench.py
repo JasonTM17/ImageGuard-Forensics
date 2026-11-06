@@ -21,6 +21,7 @@ from imageguard.evaluation.modelbench import (
     analyze_sample,
     boundary_f1,
     iou,
+    localization_scores,
     mann_whitney_u,
     noise_sigma_map,
     render_markdown,
@@ -94,6 +95,50 @@ def test_aggregate_counts():
     assert cell["n"] == 3 and cell["inconclusive"] == 3
     assert cell["mean_iou"] == pytest.approx(0.1)
     assert cell["detection_rate"] == 0.0
+
+
+def test_shape_mismatch_localization_not_scored_as_miss():
+    gt = _mask(100, 100, (10, 10, 30, 30))
+    pred = _mask(80, 80, (5, 5, 20, 20))
+    scores = localization_scores(pred, gt)
+    assert scores["mask_status"] == "shape_mismatch"
+    assert scores["iou"] is None
+    assert scores["bf1"] is None
+
+
+def test_shape_mismatch_aggregate_excludes_iou_and_counts_malformed_gt():
+    gt_row = {
+        "verdict": Verdict.INCONCLUSIVE.value,
+        "mask_present": True,
+        "mask_status": "shape_mismatch",
+        "iou": None,
+        "bf1": None,
+    }
+    scored_row = {
+        "verdict": Verdict.INCONCLUSIVE.value,
+        "mask_present": True,
+        "mask_status": "valid",
+        "iou": 0.5,
+        "bf1": 0.4,
+    }
+    cell = aggregate([
+        {"kind": "erase", "methods": {"test": gt_row}},
+        {"kind": "erase", "methods": {"test": scored_row}},
+    ])["erase"]["test"]
+    assert cell["n_malformed_gt"] == 1
+    assert cell["n_iou_scored"] == 1
+    assert cell["mean_iou"] == pytest.approx(0.5)
+    assert cell["n_mask_invalid"] == 1
+
+    report = {
+        "set": "tiny", "n": 2,
+        "n_malformed_gt": cell["n_malformed_gt"],
+        "aggregate": {"erase": {"test": cell}},
+        "samples": [],
+    }
+    assert report["n_malformed_gt"] == 1
+    md = render_markdown(report)
+    assert "1 malformed-GT" in md
 
 
 def test_missing_mask_counts_as_zero_in_localization_mean():
