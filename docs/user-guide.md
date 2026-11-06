@@ -2,9 +2,9 @@
 
 ## Chạy app
 
-```bash
-.venv/Scripts/python -m imageguard        # GUI mặc định
-.venv/Scripts/python -m imageguard gui    # tường minh
+```powershell
+.\.venv\Scripts\python.exe -m imageguard        # GUI mặc định
+.\.venv\Scripts\python.exe -m imageguard gui    # tường minh
 ```
 
 Hoặc bản đóng gói: `dist/ImageGuard/ImageGuard.exe` (xem `docs/packaging.md`).

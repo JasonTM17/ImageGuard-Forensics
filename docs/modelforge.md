@@ -38,14 +38,14 @@ Lệnh sinh và bench (chạy với Python trong `.venv\Scripts\python.exe`):
 ```powershell
 # Train
 $py = .\.venv\Scripts\python.exe
-$train = Join-Path <temp-dir> 'ig-phaseb-train'
-$py -m imageguard.evaluation.modelforge --n 12 --seed 2026 --out $train --backend lama --size 384
-$py -m imageguard.evaluation.modelbench --set $train --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path <temp-dir> 'ig-phaseb-bench-train')
+$train = Join-Path $env:TEMP 'ig-phaseb-train'
+& $py -m imageguard.evaluation.modelforge --n 12 --seed 2026 --out $train --backend lama --size 384
+& $py -m imageguard.evaluation.modelbench --set $train --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path $env:TEMP 'ig-phaseb-bench-train')
 
 # Holdout
-$hold = Join-Path <temp-dir> 'ig-phaseb-holdout'
-$py -m imageguard.evaluation.modelforge --n 6 --seed 7777 --out $hold --backend lama --size 512
-$py -m imageguard.evaluation.modelbench --set $hold --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path <temp-dir> 'ig-phaseb-bench-holdout')
+$hold = Join-Path $env:TEMP 'ig-phaseb-holdout'
+& $py -m imageguard.evaluation.modelforge --n 6 --seed 7777 --out $hold --backend lama --size 512
+& $py -m imageguard.evaluation.modelbench --set $hold --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path $env:TEMP 'ig-phaseb-bench-holdout')
 ```
 
 IoU/bF1 là trung bình trên **tất cả mẫu** của mỗi loại; không có mask dự đoán

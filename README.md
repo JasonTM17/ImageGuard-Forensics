@@ -28,4 +28,4 @@ python -m imageguard
 - `configs/thresholds.yaml` — mọi ngưỡng thuật toán tập trung, có ghi nguồn
 - `tests/` — pytest
 - `docs/` — tài liệu kỹ thuật (bắt đầu từ `docs/user-guide.md`)
-- `data/`, `artifacts/` — dữ liệu runtime, **không commit**
+- `data/` — dữ liệu runtime, gồm `data/artifacts/`, **không commit**
