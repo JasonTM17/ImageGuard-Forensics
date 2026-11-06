@@ -31,6 +31,7 @@ class IngestConfig:
     data_dir: Path = Path("data")
     consent_note: str | None = None
     http: dict[str, Any] | None = None
+    enhance_sibling: bool = False
 
     @property
     def custody_path(self) -> Path:
@@ -56,7 +57,7 @@ def load_ingest_config(path: Path | str | None = None) -> IngestConfig:
 
     allowed = {
         "camera_label", "max_pending", "methods", "data_dir",
-        "consent_note", "http",
+        "consent_note", "http", "enhance_sibling",
     }
     unknown = set(raw) - allowed
     if unknown:
@@ -107,6 +108,10 @@ def load_ingest_config(path: Path | str | None = None) -> IngestConfig:
         if "enabled" in http and not isinstance(http["enabled"], bool):
             raise IngestConfigError("http.enabled must be a boolean")
 
+    enhance_sibling = raw.get("enhance_sibling", False)
+    if not isinstance(enhance_sibling, bool):
+        raise IngestConfigError("enhance_sibling must be a boolean")
+
     return IngestConfig(
         camera_label=camera_label,
         max_pending=max_pending,
@@ -114,6 +119,7 @@ def load_ingest_config(path: Path | str | None = None) -> IngestConfig:
         data_dir=data_dir,
         consent_note=consent_note,
         http=http,
+        enhance_sibling=enhance_sibling,
     )
 
 

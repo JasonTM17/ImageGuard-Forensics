@@ -6,5 +6,6 @@ methods:
   - ela
 data_dir: data
 consent_note: "Operator-provided context for this folder"
+enhance_sibling: false
 http:
   enabled: false
