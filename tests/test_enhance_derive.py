@@ -65,6 +65,27 @@ def test_write_sibling_records_provenance_without_paths(tmp_path: Path) -> None:
     assert "parent_name" not in record
 
 
+def test_write_sibling_records_optional_model_hash(tmp_path: Path) -> None:
+    image = np.full((24, 26, 3), 90, dtype=np.uint8)
+    source = tmp_path / "goc.png"
+    source.write_bytes(_png_bytes(image))
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    model_digest = "a" * 64
+
+    out, _meta = derive(image, "unsharp", dict(_PARAMS))
+    sidecar = write_sibling(
+        source,
+        tmp_path / "goc_enhanced.png",
+        out,
+        "nafnet",
+        {},
+        digest,
+        model_sha256=model_digest,
+    )
+
+    assert json.loads(sidecar.read_text(encoding="utf-8"))["model_sha256"] == model_digest
+
+
 def test_write_sibling_refuses_source_and_existing_destination(
     tmp_path: Path,
 ) -> None:

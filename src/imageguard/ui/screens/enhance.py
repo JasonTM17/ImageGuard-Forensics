@@ -1,8 +1,8 @@
 """Enhance screen — xem ảnh gốc/ảnh tăng cường, KHÔNG phân tích.
 
-Tab này chỉ chạy các operator cổ điển (unsharp/CLAHE/NLM) để xem thử. Không
-gọi AnalysisService, không ghi database, không kết luận điều gì. Ảnh gốc và
-bytes của nó không bao giờ bị ghi đè.
+Tab này chạy operator cổ điển hoặc NAFNet để xem thử. Không chạy dịch vụ phân
+tích, không ghi database, không kết luận điều gì. Ảnh gốc và bytes của nó
+không bao giờ bị ghi đè.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ _OPERATORS = (
     ("unsharp", "Unsharp mask"),
     ("clahe", "CLAHE"),
     ("nlm", "Non-local means"),
+    ("nafnet", "NAFNet (AI)"),
 )
 
 _UNSHARP = RESTORER_PARAMS["unsharp"]
@@ -82,6 +83,7 @@ class EnhanceScreen(QWidget):
         self._doc = None
         self._derived: np.ndarray | None = None
         self._derived_pixmap: QPixmap | None = None
+        self._run_meta: dict | None = None
         self._run_kind: str | None = None
         self._run_params: dict | None = None
         self._fields: dict[tuple[str, str], tuple[QLabel, QWidget]] = {}
@@ -110,6 +112,20 @@ class EnhanceScreen(QWidget):
         banner_lay.addWidget(banner_lbl)
         rl.addWidget(self.banner)
 
+        self.ai_banner = QFrame()
+        self.ai_banner.setObjectName("enhance_ai_banner")
+        self.ai_banner.setFrameShape(QFrame.Shape.StyledPanel)
+        self.ai_banner.setStyleSheet(
+            "background:#ede9fe; color:#4c1d95; padding:4px;"
+        )
+        ai_banner_lay = QVBoxLayout(self.ai_banner)
+        ai_banner_lay.setContentsMargins(8, 4, 8, 4)
+        ai_banner_lbl = QLabel(strings.ENHANCE_AI_BANNER)
+        ai_banner_lbl.setWordWrap(True)
+        ai_banner_lay.addWidget(ai_banner_lbl)
+        self.ai_banner.hide()
+        rl.addWidget(self.ai_banner)
+
         self.btn_open = QPushButton(strings.BTN_OPEN)
         self.btn_open.clicked.connect(self._pick_file)
         rl.addWidget(self.btn_open)
@@ -128,6 +144,7 @@ class EnhanceScreen(QWidget):
         rl.addWidget(self.combo_op)
 
         box = QGroupBox("Tham số")
+        self.params_box = box
         form = QFormLayout(box)
         for kind, specs in _FIELD_SPECS.items():
             for name, text, wtype, mn, mx, step, default in specs:
@@ -238,6 +255,8 @@ class EnhanceScreen(QWidget):
     # --- params ---
     def _on_operator_changed(self) -> None:
         kind = self.combo_op.currentData()
+        self.ai_banner.setVisible(kind == "nafnet")
+        self.params_box.setVisible(kind != "nafnet")
         for (field_kind, _name), (label, widget) in self._fields.items():
             visible = field_kind == kind
             label.setVisible(visible)
@@ -248,6 +267,8 @@ class EnhanceScreen(QWidget):
 
     def _current_params(self) -> dict:
         kind = self.combo_op.currentData()
+        if kind == "nafnet":
+            return {}
         if kind == "unsharp":
             return {
                 "ksize": self._field(kind, "ksize").value(),
@@ -283,6 +304,7 @@ class EnhanceScreen(QWidget):
     def _clear_result(self) -> None:
         self._derived = None
         self._derived_pixmap = None
+        self._run_meta = None
         self._run_kind = None
         self._run_params = None
         self.canvas.set_overlay(None)
@@ -339,8 +361,9 @@ class EnhanceScreen(QWidget):
     def _on_result(self, payload) -> None:
         if self._cancel_event.is_set():
             return  # đã hủy — bỏ qua kết quả
-        image, _meta = payload
+        image, meta = payload
         self._derived = image
+        self._run_meta = meta
         self._derived_pixmap = ndarray_to_qpixmap(image)
         self.canvas.set_overlay(self._derived_pixmap, alpha=1.0)
         self.slider_blend.blockSignals(True)
@@ -398,7 +421,8 @@ class EnhanceScreen(QWidget):
             json_path = write_sibling(
                 self._path, dest, self._derived,
                 self._run_kind, self._run_params, self._doc.sha256,
-                overwrite=overwrite)
+                overwrite=overwrite,
+                model_sha256=(self._run_meta or {}).get("model_sha256"))
         except Exception:  # noqa: BLE001 - ranh giới UI: báo lỗi, không crash
             QMessageBox.warning(
                 self, "Xuất thất bại",
