@@ -116,6 +116,90 @@ def test_analyze_overlay_mismatch_and_clear(qtbot, tmp_path: Path) -> None:
     assert screen.lbl_err.text() == ""
 
 
+def test_analyze_overlay_heatmap_mismatch_clears_overlay(qtbot, tmp_path: Path) -> None:
+    from imageguard.ui.app import build_services
+    from imageguard.ui.screens.analyze import AnalyzeScreen
+
+    analysis_svc, _ = build_services(
+        db_path=tmp_path / "t.db",
+        artifacts_root=tmp_path / "art",
+    )
+    screen = AnalyzeScreen(analysis_svc)
+    qtbot.addWidget(screen)
+
+    img_path = tmp_path / "test_100x100.png"
+    arr = np.zeros((100, 100, 3), dtype=np.uint8)
+    img_path.write_bytes(cv2.imencode(".png", arr)[1].tobytes())
+
+    screen.load_path(img_path)
+    assert screen._doc is not None
+    assert screen._doc.array.shape[:2] == (100, 100)
+
+    m_valid = SimpleNamespace(heatmap=np.zeros((100, 100), dtype=np.float32))
+    m_bad = SimpleNamespace(heatmap=np.zeros((50, 50), dtype=np.float32))
+
+    screen.overlay_box.addItem("Heatmap hợp lệ", ("heat", m_valid))
+    screen.overlay_box.addItem("Heatmap lệch kích thước", ("heat", m_bad))
+
+    # 1. Valid choice sets overlay
+    screen.overlay_box.setCurrentIndex(1)
+    assert screen.canvas._overlay is not None
+
+    # 2. Bad choice clears overlay and sets lbl_err
+    screen.overlay_box.setCurrentIndex(2)
+    assert screen.canvas._overlay is None
+    assert screen.lbl_err.text() != ""
+
+    # 3. "Không overlay" clears lbl_err
+    screen.overlay_box.setCurrentIndex(0)
+    assert screen.canvas._overlay is None
+    assert screen.lbl_err.text() == ""
+
+
+def test_analyze_overlay_pairs_mismatch_clears_overlay(qtbot, tmp_path: Path) -> None:
+    from imageguard.ui.app import build_services
+    from imageguard.ui.screens.analyze import AnalyzeScreen
+
+    analysis_svc, _ = build_services(
+        db_path=tmp_path / "t.db",
+        artifacts_root=tmp_path / "art",
+    )
+    screen = AnalyzeScreen(analysis_svc)
+    qtbot.addWidget(screen)
+
+    img_path = tmp_path / "test_100x100.png"
+    arr = np.zeros((100, 100, 3), dtype=np.uint8)
+    img_path.write_bytes(cv2.imencode(".png", arr)[1].tobytes())
+
+    screen.load_path(img_path)
+    assert screen._doc is not None
+    assert screen._doc.array.shape[:2] == (100, 100)
+
+    m_valid = SimpleNamespace(
+        evidence={"pairs_image": np.zeros((100, 100, 3), dtype=np.uint8)}
+    )
+    m_bad = SimpleNamespace(
+        evidence={"pairs_image": np.zeros((50, 50, 3), dtype=np.uint8)}
+    )
+
+    screen.overlay_box.addItem("Pairs hợp lệ", ("pairs", m_valid))
+    screen.overlay_box.addItem("Pairs lệch kích thước", ("pairs", m_bad))
+
+    # 1. Valid choice sets overlay
+    screen.overlay_box.setCurrentIndex(1)
+    assert screen.canvas._overlay is not None
+
+    # 2. Bad choice clears overlay and sets lbl_err
+    screen.overlay_box.setCurrentIndex(2)
+    assert screen.canvas._overlay is None
+    assert screen.lbl_err.text() != ""
+
+    # 3. "Không overlay" clears lbl_err
+    screen.overlay_box.setCurrentIndex(0)
+    assert screen.canvas._overlay is None
+    assert screen.lbl_err.text() == ""
+
+
 def test_analyze_load_path_error_clears_doc(qtbot, tmp_path: Path) -> None:
     from imageguard.ui.app import build_services
     from imageguard.ui.screens.analyze import AnalyzeScreen
