@@ -12,6 +12,7 @@ engine không bao giờ crash vì input xấu.
 from __future__ import annotations
 
 import hashlib
+from io import BytesIO
 from pathlib import Path
 
 import cv2
@@ -67,6 +68,12 @@ def safe_open(
         raw = p.read_bytes()
     except OSError as e:
         return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
+    if len(raw) > max_bytes:
+        return _err(
+            ErrorCode.FILE_TOO_LARGE,
+            f"File {len(raw)} bytes vượt giới hạn {max_bytes}",
+            size=len(raw),
+        )
     head = raw[: limits.SNIFF_BYTES]
     fmt = _sniff_format(head)
     if fmt is None:
@@ -78,7 +85,7 @@ def safe_open(
 
     # Header probe: Pillow đọc dims KHÔNG decode toàn bộ — bắt bomb trước khi alloc.
     try:
-        with Image.open(p) as probe:
+        with Image.open(BytesIO(raw)) as probe:
             w, h = probe.size
             declared_fmt = (probe.format or "").lower()
     except Image.DecompressionBombError as e:
@@ -104,7 +111,7 @@ def safe_open(
 
     # Decode thật + exif_transpose (sai orientation = mask lệch toạ độ).
     try:
-        with Image.open(p) as im:
+        with Image.open(BytesIO(raw)) as im:
             im = ImageOps.exif_transpose(im)
             rgb = np.asarray(im.convert("RGB"), dtype=np.uint8)
     except Exception as e:  # noqa: BLE001 - ranh giới decode: Pillow raise nhiều loại, ảnh hỏng không được crash engine
@@ -115,7 +122,7 @@ def safe_open(
     # để doc.width/height khớp doc.array (mask/heatmap upscale theo doc dims).
     h, w = rgb.shape[:2]
     sha = hashlib.sha256(raw).hexdigest()
-    exif = extract_exif(p)
+    exif = extract_exif(raw)
     return ImageDocument(
         array=bgr,
         width=w,
@@ -123,7 +130,7 @@ def safe_open(
         channels=3,
         image_format=declared_fmt or fmt,
         sha256=sha,
-        file_bytes=file_size,
+        file_bytes=len(raw),
         file_name=p.name,
         exif=exif,
     )

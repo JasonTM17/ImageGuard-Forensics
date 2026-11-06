@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import struct
 import zlib
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
+from imageguard.core.config import ThresholdSet
 from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.io import safe_open
 from imageguard.core.models import ImageDocument
@@ -96,3 +99,56 @@ def test_exif_dict_returned(valid_jpg: Path, ts) -> None:
     doc = safe_open(valid_jpg, ts)
     assert isinstance(doc, ImageDocument)
     assert "present" in doc.exif and "missing" in doc.exif
+
+
+def test_safe_open_uses_the_bytes_it_hashed(
+    tmp_path: Path, ts, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image_a = np.full((256, 256, 3), (10, 40, 200), dtype=np.uint8)
+    image_b = np.full((256, 256, 3), (230, 150, 20), dtype=np.uint8)
+    ok_a, encoded_a = cv2.imencode(".png", image_a)
+    ok_b, encoded_b = cv2.imencode(".png", image_b)
+    assert ok_a and ok_b
+    raw_a = encoded_a.tobytes()
+    raw_b = encoded_b.tobytes()
+    path = tmp_path / "substituted.png"
+    path.write_bytes(raw_a)
+
+    original_read_bytes = Path.read_bytes
+
+    def read_a_then_replace_path(self: Path) -> bytes:
+        if self == path:
+            path.write_bytes(raw_b)
+            return raw_a
+        return original_read_bytes(self)
+
+    # The captured buffer is image A while later path reads would see image B.
+    monkeypatch.setattr(Path, "read_bytes", read_a_then_replace_path)
+
+    doc = safe_open(path, ts)
+
+    assert isinstance(doc, ImageDocument)
+    assert doc.sha256 == hashlib.sha256(raw_a).hexdigest()
+    assert doc.file_bytes == len(raw_a)
+    np.testing.assert_array_equal(doc.array, image_a)
+
+
+def test_safe_open_rejects_read_buffer_over_max_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "oversized.png"
+    path.write_bytes(b"x")
+    cfg = ThresholdSet(raw={"limits": {"max_file_bytes": {"value": 3}}})
+    original_read_bytes = Path.read_bytes
+
+    def return_oversized_buffer(self: Path) -> bytes:
+        if self == path:
+            return b"four"
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", return_oversized_buffer)
+
+    result = safe_open(path, cfg)
+
+    assert isinstance(result, ErrorResult)
+    assert result.code == ErrorCode.FILE_TOO_LARGE
