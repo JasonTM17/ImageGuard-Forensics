@@ -55,7 +55,35 @@ class SynthAdapter:
         mf = self.root / "meta.json"
         if not mf.exists():
             return "absent"
-        return hashlib.sha256(mf.read_bytes()).hexdigest()[:12]
+
+        named_files = {mf.name: mf}
+        for entry in self.entries:
+            stem = entry["id"]
+            ext = ".jpg" if entry.get("format") == "jpeg" else ".png"
+            original = self.root / f"{stem}_O.png"
+            if not original.is_file():
+                original = self.root / f"{stem}_O{ext}"
+            for path in (
+                original,
+                self.root / f"{stem}_F{ext}",
+                self.root / f"{stem}_M.png",
+            ):
+                named_files[path.name] = path
+
+        digest = hashlib.sha256()
+        for filename in sorted(named_files):
+            path = named_files[filename]
+            digest.update(filename.encode("utf-8"))
+            digest.update(b"\0")
+            if path.is_file():
+                content = path.read_bytes()
+                digest.update(b"file\0")
+                digest.update(len(content).to_bytes(8, "big"))
+                digest.update(content)
+            else:
+                digest.update(b"<missing>")
+            digest.update(b"\0")
+        return digest.hexdigest()[:12]
 
     def samples(self, split: str = "dev") -> Iterable[Sample]:
         for e in self.entries:
