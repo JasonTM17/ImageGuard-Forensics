@@ -79,6 +79,42 @@ def test_noise_sigma_map_catches_smooth_patch():
     assert inner < outer * 0.6
 
 
+def test_analyze_sample_labels_noise_blocks_by_any_gt_pixel(monkeypatch):
+    class NoMaskMethod:
+        name = "test"
+
+        def analyze(self, doc, cfg):
+            return SimpleNamespace(
+                verdict=Verdict.INCONCLUSIVE, score=0.01, mask=None,
+                params_hash=cfg.snapshot_hash())
+
+    seen = {}
+
+    def capture_mwu(sig_in, sig_out):
+        seen["in"] = sig_in.copy()
+        seen["out"] = sig_out.copy()
+        return 0.5
+
+    monkeypatch.setattr(
+        "imageguard.evaluation.modelbench.noise_sigma_map",
+        lambda gray: np.arange(16, dtype=np.float64).reshape(4, 4),
+    )
+    monkeypatch.setattr(
+        "imageguard.evaluation.modelbench.mann_whitney_u", capture_mwu,
+    )
+
+    image = np.zeros((65, 66, 3), dtype=np.uint8)
+    gt = np.zeros((65, 66), dtype=np.uint8)
+    gt[15, 15] = 1  # Inside block (0, 0), but nearest resize can miss it.
+    gt[64, 64] = 1  # Cropped remainder strip; it must not mark a block.
+    row = analyze_sample(
+        SimpleNamespace(array=image), gt, [NoMaskMethod()], load_thresholds())
+
+    assert seen["in"].tolist() == [0]
+    assert seen["out"].tolist() == list(range(1, 16))
+    assert row["noise_sigma"]["mwu_p"] == 0.5
+
+
 def test_aggregate_counts():
     samples = [{
         "kind": "erase",
