@@ -1,0 +1,10 @@
+camera_label: "Entrance camera 1"
+max_pending: 1
+methods:
+  - keypoint
+  - block
+  - ela
+data_dir: data
+consent_note: "Operator-provided context for this folder"
+http:
+  enabled: false
