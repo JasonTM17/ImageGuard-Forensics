@@ -19,6 +19,11 @@ from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.evaluation.datasets import SynthAdapter
+from imageguard.evaluation.enhance_bootstrap import (
+    bootstrap_mean,
+    bootstrap_paired_diff,
+    overlaps_zero,
+)
 from imageguard.evaluation.enhance_metrics import align_mask, iou, psnr, ssim
 from imageguard.evaluation.enhance_ops import degrade, restore, wrong_kernel
 from imageguard.forensics.registry import load_method
@@ -284,6 +289,8 @@ def _git_snapshot() -> tuple[str, bool | None]:
 
 
 def _arm_id(arm: dict[str, Any]) -> str:
+    if arm["arm"] == "sharp":
+        return "sharp"
     if arm["arm"] == "degradation":
         return f"degradation:{arm['degradation']}"
     return ":".join(
@@ -314,6 +321,160 @@ def _count_transitions(
         cell["n"] += 1
         cell["changed"] += int(from_verdict != to_verdict)
         cell["counts"][transition] = cell["counts"].get(transition, 0) + 1
+
+
+def _arm_method_value(
+    arm: dict[str, Any], method_name: str, metric_name: str
+) -> Any:
+    method = arm.get("methods", {}).get(method_name)
+    return method.get(metric_name) if method is not None else None
+
+
+def _paired_arm_differences(
+    records: list[tuple[dict[str, Any], dict[str, Any]]],
+    rng: np.random.Generator,
+) -> dict[str, dict[str, Any]]:
+    values: dict[str, tuple[list[Any], list[Any]]] = {
+        name: ([], [])
+        for name in ("psnr", "ssim", "keypoint_iou", "block_iou")
+    }
+    for sample, restoration_arm in records:
+        degradation_arm = next(
+            (
+                candidate
+                for candidate in sample["arms"]
+                if candidate["arm"] == "degradation"
+                and candidate["degradation"] == restoration_arm["degradation"]
+            ),
+            None,
+        )
+        if degradation_arm is None:
+            raise ValueError(
+                "restoration arm is missing its same-sample degradation arm"
+            )
+
+        for metric_name in ("psnr", "ssim"):
+            values[metric_name][0].append(
+                (restoration_arm.get("metrics") or {}).get(metric_name)
+            )
+            values[metric_name][1].append(
+                (degradation_arm.get("metrics") or {}).get(metric_name)
+            )
+        for method_name, metric_name in (
+            ("keypoint", "keypoint_iou"),
+            ("block", "block_iou"),
+        ):
+            values[metric_name][0].append(
+                _arm_method_value(restoration_arm, method_name, "iou")
+            )
+            values[metric_name][1].append(
+                _arm_method_value(degradation_arm, method_name, "iou")
+            )
+
+    differences: dict[str, dict[str, Any]] = {}
+    for metric_name, (enhanced_values, degraded_values) in values.items():
+        interval = bootstrap_paired_diff(
+            enhanced_values,
+            degraded_values,
+            rng,
+        )
+        interval["overlaps_zero"] = overlaps_zero(interval)
+        differences[metric_name] = interval
+    return differences
+
+
+def _summarize_manipulated_arms(
+    samples: list[dict[str, Any]], rng: np.random.Generator
+) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for sample in samples:
+        if sample["role"] != "manipulated_sample":
+            continue
+        for arm in sample["arms"]:
+            arm_id = _arm_id(arm)
+            group = groups.setdefault(
+                arm_id,
+                {
+                    "arm_id": arm_id,
+                    "arm": arm["arm"],
+                    "degradation": arm.get("degradation"),
+                    "restorer": arm.get("restorer"),
+                    "kernel_role": arm.get("kernel_role"),
+                    "records": [],
+                },
+            )
+            group["records"].append((sample, arm))
+
+    summaries: list[dict[str, Any]] = []
+    for group in groups.values():
+        records = group.pop("records")
+        run_records = [
+            (sample, arm) for sample, arm in records if arm["status"] == "RUN"
+        ]
+        not_run_records = [
+            arm for _, arm in records if arm["status"] == "NOT_RUN"
+        ]
+        summary = {
+            **group,
+            "status": "RUN" if run_records else "NOT_RUN",
+            "n_samples": len(run_records),
+            "n_not_run": len(not_run_records),
+        }
+        if not run_records:
+            summary["reason"] = (
+                not_run_records[0].get("reason") if not_run_records else None
+            )
+            summary["bootstrap_intervals"] = None
+            summary["paired_differences"] = None
+            summaries.append(summary)
+            continue
+
+        metric_values = {
+            "psnr": [
+                (arm.get("metrics") or {}).get("psnr") for _, arm in run_records
+            ],
+            "ssim": [
+                (arm.get("metrics") or {}).get("ssim") for _, arm in run_records
+            ],
+            "keypoint_iou": [
+                _arm_method_value(arm, "keypoint", "iou") for _, arm in run_records
+            ],
+            "block_iou": [
+                _arm_method_value(arm, "block", "iou") for _, arm in run_records
+            ],
+            "keypoint_suspicious_rate": [
+                int(
+                    _arm_method_value(arm, "keypoint", "verdict")
+                    == Verdict.SUSPICIOUS_INDICATION.value
+                )
+                for _, arm in run_records
+                if "keypoint" in arm.get("methods", {})
+            ],
+            "block_suspicious_rate": [
+                int(
+                    _arm_method_value(arm, "block", "verdict")
+                    == Verdict.SUSPICIOUS_INDICATION.value
+                )
+                for _, arm in run_records
+                if "block" in arm.get("methods", {})
+            ],
+        }
+        intervals = {
+            metric_name: bootstrap_mean(values, rng)
+            for metric_name, values in metric_values.items()
+        }
+        intervals["psnr"]["omitted"] = (
+            len(run_records) - intervals["psnr"]["n"]
+        )
+        summary["bootstrap_intervals"] = intervals
+        summary["paired_differences"] = (
+            _paired_arm_differences(run_records, rng)
+            if group["arm"] == "restoration"
+            else None
+        )
+        summaries.append(summary)
+
+    return summaries
 
 
 def _restoration_params(
@@ -351,6 +512,23 @@ def _write_reports(
     return json_path, markdown_path
 
 
+def _format_bootstrap_interval(interval: dict[str, Any]) -> str:
+    mean = interval["mean"]
+    mean_text = "null" if mean is None else f"{mean:.4g}"
+    low = interval["low"]
+    high = interval["high"]
+    if low is None or high is None:
+        bounds_text = "95% percentile interval=null"
+    else:
+        bounds_text = f"95% percentile interval=[{low:.4g}, {high:.4g}]"
+    omitted = interval.get("omitted")
+    omitted_text = f", omitted={omitted}" if omitted is not None else ""
+    return (
+        f"mean={mean_text}, {bounds_text}, n={interval['n']}"
+        f"{omitted_text}"
+    )
+
+
 def _render_markdown(payload: dict[str, Any]) -> str:
     provenance = payload["provenance"]
     lines = [
@@ -377,9 +555,42 @@ def _render_markdown(payload: dict[str, Any]) -> str:
         f"- Dataset version: `{provenance['dataset_version']}`",
         f"- Alignment failures: `{payload['n_align_failed']}`",
         "",
-        "## Verdict transitions",
+        "## Bootstrap intervals",
+        "",
+        "A confidence interval which overlaps zero does not establish a change.",
         "",
     ]
+    summaries = payload.get("manipulated_arm_summaries", [])
+    if summaries:
+        for summary in summaries:
+            lines.append(
+                f"### `{summary['arm_id']}` ({summary['status']}; "
+                f"n={summary['n_samples']} manipulated samples)"
+            )
+            if summary["status"] == "NOT_RUN":
+                lines.append(f"- NOT_RUN: {summary.get('reason') or 'not available'}")
+                lines.append("")
+                continue
+            for metric_name, interval in summary["bootstrap_intervals"].items():
+                lines.append(
+                    f"- `{metric_name}`: {_format_bootstrap_interval(interval)}"
+                )
+            for metric_name, interval in (summary["paired_differences"] or {}).items():
+                lines.append(
+                    f"- Paired enhanced-minus-degraded `{metric_name}`: "
+                    f"{_format_bootstrap_interval(interval)}; "
+                    f"overlaps_zero={interval['overlaps_zero']}"
+                )
+            lines.append("")
+    else:
+        lines.extend(("No manipulated-sample arms were available.", ""))
+
+    lines.extend(
+        (
+            "## Verdict transitions",
+            "",
+        )
+    )
     if payload["transition_counts"]:
         for role, arms in payload["transition_counts"].items():
             lines.extend((f"### {role.replace('_', ' ').title()}", ""))
@@ -480,6 +691,7 @@ def run_study(
     git_sha, working_tree_clean = _git_snapshot()
     transition_counts: dict[str, Any] = {}
     samples: list[dict[str, Any]] = []
+    bootstrap_rng = np.random.default_rng(seed)
     n_align_failed = 0
 
     for sample_index, entry in enumerate(entries):
@@ -683,6 +895,7 @@ def run_study(
 
             samples.append(sample_record)
 
+    manipulated_arm_summaries = _summarize_manipulated_arms(samples, bootstrap_rng)
     provenance = {
         "n": len(entries),
         "seed": seed,
@@ -712,6 +925,7 @@ def run_study(
         },
         "n_align_failed": n_align_failed,
         "transition_counts": transition_counts,
+        "manipulated_arm_summaries": manipulated_arm_summaries,
         "samples": samples,
     }
     _write_reports(payload, output_dir, report_stem)
