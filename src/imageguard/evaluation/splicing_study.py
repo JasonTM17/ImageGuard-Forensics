@@ -108,7 +108,8 @@ def run_splicing_study() -> dict[str, object]:
             predicted = result.mask > 0
             truth = ground_truth > 0
             union = int(np.logical_or(predicted, truth).sum())
-            iou = float(np.logical_and(predicted, truth).sum() / union) if union else 0.0
+            intersection = int(np.logical_and(predicted, truth).sum())
+            iou = intersection / union if union else 0.0
             ious.append(iou)
 
         samples.append(
