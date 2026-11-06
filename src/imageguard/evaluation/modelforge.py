@@ -307,7 +307,7 @@ def forge(
         sx, sy, sw, sh = srect
         dx, dy, _, _ = drect
         patch = base[sy:sy + sh, sx:sx + sw].copy()
-        pm = np.full((sh, sw), 255, np.uint8)
+        pm = np.zeros((sh, sw), np.uint8)
         _inset_ellipse(pm, sw, sh)
         center = (dx + sw // 2, dy + sh // 2)
         out = editor.clone(
@@ -332,7 +332,7 @@ def forge(
             rect = _rand_region(rng, (h, w))
             fx, fy, fw2, fh2 = rect
             patch = base[fy:fy + fh2, fx:fx + fw2].copy()
-        pm = np.full((fh2, fw2), 255, np.uint8)
+        pm = np.zeros((fh2, fw2), np.uint8)
         _inset_ellipse(pm, fw2, fh2)
         dx, dy = _rand_splice_destination(
             rng, (h, w), (fx, fy, fw2, fh2), disjoint=(kind == "splice_keep"))
