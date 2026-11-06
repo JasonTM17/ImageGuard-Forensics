@@ -610,6 +610,12 @@ def pull_due(
     except UnicodeError:
         return [_refused("credentials_invalid", active_logger) for _ in urls]
     secret_values = tuple(value for value in (credentials or ()) if value)
+    if authorization:
+        secret_values = (
+            *secret_values,
+            authorization,
+            authorization.removeprefix("Basic ").strip(),
+        )
 
     has_clock_override = now is not None or last_at is not None
     if now is not None:
