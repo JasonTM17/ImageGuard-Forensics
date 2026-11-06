@@ -18,11 +18,12 @@ _REPO_SRC = Path(__file__).resolve().parents[1] / "src"
 
 
 def _run_analyze(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-    merged = {"timeout": 60, "check": False, "capture_output": True,
-              "text": True, "encoding": "utf-8", "errors": "replace"}
+    merged = {"timeout": 60, "capture_output": True, "text": True,
+              "encoding": "utf-8", "errors": "replace"}
     merged.update(kwargs)
     return subprocess.run(
         [sys.executable, "-m", "imageguard", *args],
+        check=False,
         **merged,
     )
 
