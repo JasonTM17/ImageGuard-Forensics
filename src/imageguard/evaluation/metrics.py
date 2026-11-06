@@ -66,8 +66,11 @@ def aggregate_pixel(per_image: list[dict]) -> dict:
     fn = sum(m["fn"] for m in scored)
     micro_p = tp / (tp + fp) if (tp + fp) else None
     micro_r = tp / (tp + fn) if (tp + fn) else None
-    micro_f1 = (2 * micro_p * micro_r / (micro_p + micro_r)) \
-        if micro_p is not None and micro_r is not None and (micro_p + micro_r) else None
+    if tp == 0 and fp == 0 and fn > 0:
+        micro_f1 = 0.0
+    else:
+        micro_f1 = (2 * micro_p * micro_r / (micro_p + micro_r)) \
+            if micro_p is not None and micro_r is not None and (micro_p + micro_r) else None
     micro_iou = tp / (tp + fp + fn) if (tp + fp + fn) else None
     return {"n_images_scored": n_px,
             "macro": macro,
