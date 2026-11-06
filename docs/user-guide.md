@@ -91,4 +91,6 @@ python -m imageguard ingest watch <dir>
 ```
 
 Thêm `--config <file>` sau `<dir>` để dùng cấu hình riêng. Cấu hình và log
-mặc định nằm trong `data/`, thư mục đã được gitignore.
+mặc định nằm trong `data/`, thư mục đã được gitignore. `enhance_sibling` mặc
+định tắt. Khi bật, ingest ghi thêm `<tên>.view.png` để xem, không phân tích
+file đó và không đổi file gốc.

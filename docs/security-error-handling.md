@@ -35,3 +35,15 @@ tầng domain.
 - Snapshot tải về được giữ lại cho đến khi operator xóa; ứng dụng không tải ảnh lên dịch vụ khác.
 - Khi được bật, tính năng này tạo yêu cầu HTTP(S) tới các host trong allowlist để kéo snapshot; ảnh không được gửi tới dịch vụ bên ngoài.
 - Thư mục ingest có thể chứa ảnh người. `consent_note` trong log thư mục là ghi chú do operator nhập, không phải bằng chứng về sự đồng ý.
+
+## Ingest viewing sibling
+
+`enhance_sibling` defaults off. When an operator turns it on, ingest writes
+`<stem>.view.png` and `<stem>.view.json` beside the source after a successful
+analysis. The source bytes stay unchanged. Later scans ignore those `.view`
+names, and `AnalysisService` is called only with the source path. The sibling
+is a viewing file with a new digest. It is not the parent exhibit, and its
+pixels are not passed to fusion. A custody failure tag is the fixed string
+`enhance_sibling_failed` with no exception text and no path. The operator
+still has to treat the watched folder as sensitive: it holds the original
+images and, when this option is on, a derived copy.

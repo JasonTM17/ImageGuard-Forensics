@@ -20,6 +20,17 @@ The config supports `camera_label`, `max_pending` (default `1`), `methods`
 enabled, an available later HTTP puller may place finished JPEGs in the watched
 folder; folder ingest itself does not fetch network content.
 
+Optional boolean `enhance_sibling` (default `false`): when `true`, after a
+successful ingest analysis the scanner loads the same source file with
+`safe_open`, runs the classical unsharp derive used elsewhere, and writes
+`<stem>.view.png` plus `<stem>.view.json` next to it (never renaming or
+overwriting the original). Those `.view.*` names are ignored on later scans so
+they are not analyzed again; `AnalysisService` still receives only the original
+path. Failures are noted on the custody line as the stable tag
+`enhance_sibling_failed` (no exception text and no path) without aborting
+the run. The sibling is a viewing file. It is not parent evidence, and ingest
+does not analyze it.
+
 Each JSONL line in `data/ingest/custody.jsonl` records `record_version`,
 `event_id`, UTC `event_time`, `event`, `image_sha256`, basename-only `basename`,
 `camera_label` with its `operator_supplied` trust label, `file_mtime` with its

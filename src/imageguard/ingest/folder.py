@@ -9,8 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from imageguard import __version__
+from imageguard.core.config import load_thresholds
 from imageguard.core.errors import ErrorResult
+from imageguard.core.io import safe_open
 from imageguard.core.limits import MAGIC_TABLE, SNIFF_BYTES
+from imageguard.enhancement.derive import derive, write_sibling
 from imageguard.ingest.config import IngestConfig
 from imageguard.ingest.custody import CustodyLog
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
@@ -96,7 +99,7 @@ class FolderIngestor:
         )
         summary = ScanSummary()
         submitted = 0
-        for path, signature, image_sha256, _key in candidates:
+        for path, signature, image_sha256, key in candidates:
             if image_sha256 in self._seen_hashes:
                 self._append_event(
                     "skipped_duplicate", path, signature, image_sha256,
@@ -137,9 +140,13 @@ class FolderIngestor:
                 )
                 summary.errors += 1
             else:
+                sibling_error: str | None = None
+                if self.config.enhance_sibling:
+                    sibling_error = self._try_enhance_sibling(path, image_sha256)
                 self._append_event(
                     "analyzed", path, signature, image_sha256,
                     analysis_id=result.report_id,
+                    error_code=sibling_error,
                 )
                 summary.analyzed += 1
             self._handled[path] = signature
@@ -157,7 +164,29 @@ class FolderIngestor:
 
     def _ignored(self, path: Path) -> bool:
         name = path.name
-        return name.startswith(".") or name.casefold().endswith(_IGNORED_SUFFIXES)
+        if name.startswith(".") or name.casefold().endswith(_IGNORED_SUFFIXES):
+            return True
+        stem = path.stem.casefold()
+        return stem.endswith(".view") and path.suffix.casefold() in (".png", ".json")
+
+    def _try_enhance_sibling(self, path: Path, image_sha256: str) -> str | None:
+        """Write ``<stem>.view.png`` (+ .json) next to source; return error tag or None."""
+        params = {"ksize": 5, "sigma": 1.0, "amount": 0.7}
+        cfg = getattr(self.service, "cfg", None) or load_thresholds()
+        doc = safe_open(path, cfg)
+        if isinstance(doc, ErrorResult):
+            return f"enhance_sibling_safe_open:{doc.code.value}"
+        try:
+            out, _meta = derive(doc.array, "unsharp", params)
+            dest_png = path.with_name(path.stem + ".view.png")
+            write_sibling(
+                path, dest_png, out, "unsharp", params, image_sha256
+            )
+        except (OSError, ValueError):
+            return "enhance_sibling_failed"
+        except Exception:  # noqa: BLE001 — do not fail scan
+            return "enhance_sibling_failed"
+        return None
 
     def _append_event(
         self,
