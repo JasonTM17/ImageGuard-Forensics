@@ -18,7 +18,6 @@ import numpy as np
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
-from imageguard.evaluation.blind_kernel import estimate_kernel, kernel_error
 from imageguard.evaluation.datasets import SynthAdapter
 from imageguard.evaluation.enhance_bootstrap import (
     bootstrap_mean,
@@ -858,6 +857,11 @@ def run_study(
                         estimator_record = None
                         estimated_kernel = None
                         if kernel_role == "estimated":
+                            from imageguard.evaluation.blind_kernel import (
+                                estimate_kernel,
+                                kernel_error,
+                            )
+
                             estimated_kernel, estimator_record = estimate_kernel(
                                 degraded
                             )
