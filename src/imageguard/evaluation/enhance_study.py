@@ -236,8 +236,22 @@ def _method_results(
     return results, alignment, n_align_failed
 
 
-def _save_image(path: Path, image: np.ndarray) -> None:
+def _assert_outside_source(path: Path, source_dir: Path) -> None:
+    """Refuse a write whose resolved path sits inside the source set.
+
+    ``Path.resolve`` follows a junction or symlink, so a pre-created output
+    directory that points at the synthforge set cannot receive derived bytes.
+    """
+    source = source_dir.resolve()
+    resolved = path.resolve()
+    if resolved == source or source in resolved.parents:
+        raise ValueError("refusing to write inside the source set")
+
+
+def _save_image(path: Path, image: np.ndarray, source_dir: Path) -> None:
+    _assert_outside_source(path, source_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _assert_outside_source(path, source_dir)
     ok, encoded = cv2.imencode(".png", image)
     if not ok:
         raise ValueError("OpenCV could not encode a study image")
@@ -539,7 +553,7 @@ def run_study(
                 )
                 degraded_relative = Path(report_stem) / "images" / sample_id / role
                 degraded_relative /= f"{degradation_name}.png"
-                _save_image(output_root / degraded_relative, degraded)
+                _save_image(output_root / degraded_relative, degraded, source_dir)
                 degraded_methods, degraded_alignment, failed = _method_results(
                     degraded,
                     sample_id,
@@ -628,7 +642,7 @@ def run_study(
                             / role
                             / f"{degradation_name}_{restorer_name}_{role_label}.png"
                         )
-                        _save_image(output_root / restored_relative, restored)
+                        _save_image(output_root / restored_relative, restored, source_dir)
                         restoration_methods, restoration_alignment, failed = (
                             _method_results(
                                 restored,
