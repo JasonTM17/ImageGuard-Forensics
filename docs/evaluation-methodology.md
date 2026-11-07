@@ -52,6 +52,49 @@ desktop app does not load LaMa as a forgery classifier. The `noise_local`
 thresholds are provisional synthetic-data heuristics, not learned weights or a
 real-photo calibration.
 
+## Frozen CoMoFoD studies
+
+Use the research entry point
+[`scripts/evaluate_detector_quality.py`](../scripts/evaluate_detector_quality.py)
+when a study needs a fixed sample inventory and a paired baseline/candidate
+comparison. It wraps the existing evaluation runner; it does not change app
+thresholds or detector behavior. Its `--help`, `_lock_pair`, and `compare` own
+the command options and JSON contracts.
+
+From the repository root in the project Python environment, choose fresh local
+output paths:
+
+```powershell
+python scripts/evaluate_detector_quality.py freeze --root data/comofod_base --out reports/detector-quality-study/manifest.json --seed 42
+python scripts/evaluate_detector_quality.py evaluate --manifest reports/detector-quality-study/manifest.json --split dev --config configs/thresholds.yaml --methods keypoint,block --out reports/detector-quality-study/baseline-dev
+```
+
+Freeze requires the dataset's `provenance.json`, matching file hashes and strict
+non-empty binary masks. Review its exclusions before inference. Originals and
+derivatives share a base partition; previously exposed bases belong only to the
+diagnostic inventory. Declare additional exposure with `freeze --exposed` before
+freezing a new study, rather than describing inspected examples as unseen test
+data. Keep official assets unchanged and local under their research-use terms.
+
+Each evaluation directory contains `report.json` and available predicted masks.
+The report links per-image traces to the same method calls used for aggregates,
+with manifest, protocol, source/import, config, runtime and seed identities.
+Use those traces and excluded/error counts to check denominators; a headline
+score alone is insufficient evidence. Output paths are not overwritten.
+
+Before opening `locked`, freeze the primary objective and user-approved
+numerical tradeoffs from dev diagnosis. Locked inference requires a clean source
+checkout, `--pair-contract` and `--role baseline|candidate`; the contract binds
+manifest, protocol, seed, ordered methods, approved criteria hash and each
+role's source/config hashes. An exclusive event-role receipt prevents an
+ordinary repeat of that role. `compare` checks the paired reports against the
+preregistered criteria. Preserve interrupted events for review; do not change a
+candidate after seeing test outputs and rerun it as an unseen evaluation.
+
+These controls support reproducibility, not detector accuracy. Report observed
+false positives, misses, abstention and localization limits with sample counts;
+a successful study does not establish general real-photo performance.
+
 ## Provenance
 
 `python -m imageguard eval` records experiment ID, seed, config hash, git SHA,
