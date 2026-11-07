@@ -70,17 +70,23 @@ python scripts/evaluate_detector_quality.py evaluate --manifest reports/detector
 ```
 
 Freeze requires the dataset's `provenance.json`, matching file hashes and strict
-non-empty binary masks. Review its exclusions before inference. Originals and
-derivatives share a base partition; previously exposed bases belong only to the
-diagnostic inventory. Declare additional exposure with `freeze --exposed` before
-freezing a new study, rather than describing inspected examples as unseen test
-data. Keep official assets unchanged and local under their research-use terms.
+non-empty binary masks. Review its exclusions before inference. Protocol v2 groups
+variants by base ID and exact original RGB pixels and dimensions, checking both
+stored and detector-normalized EXIF orientation.
+Groups linked to prior exposure stay outside `locked`. Declare additional exposure
+with `freeze --exposed`. When migrating a v1 study on the same inventory, pass its
+sealed manifest with `freeze --prior-manifest`: v2 preserves prior dev rows and
+sends their aliases to diagnostics. V1 manifests and reports remain historical
+and are rejected for inference or comparison. Exact pixel equality does not catch
+all related scenes. Keep official assets local under their research-use terms.
 
 Each evaluation directory contains `report.json` and available predicted masks.
 The report links per-image traces to the same method calls used for aggregates,
 with manifest, protocol, source/import, config, runtime and seed identities.
 Use those traces and excluded/error counts to check denominators; a headline
 score alone is insufficient evidence. Output paths are not overwritten.
+Use each row's `scene_id` to group repeated originals when reporting independent
+sample counts and scene-weighted metrics alongside row totals.
 
 Before opening `locked`, freeze the primary objective and user-approved
 numerical tradeoffs from dev diagnosis. Locked inference requires a clean source

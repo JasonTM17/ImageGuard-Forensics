@@ -13,6 +13,7 @@ import json
 import math
 import platform
 import re
+import struct
 import subprocess
 import sys
 from dataclasses import asdict
@@ -20,7 +21,7 @@ from pathlib import Path, PurePosixPath
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import ExifTags, Image, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -33,7 +34,7 @@ from imageguard.evaluation.runner import run_eval
 from imageguard.forensics.registry import load_method
 
 REPO = Path(__file__).resolve().parents[1]
-PROTOCOL = 1
+PROTOCOL = 2
 EXPOSED = frozenset(["006", "028", "029", "048", "058", "098", "099", "121", "127", "132", "138"])
 _BASE = re.compile(r"^(\d{3})(?:[_-].*)?$")
 _SUFFIX = re.compile(r"^(.+)_(F|O|B|C|M)\.(png|jpg|jpeg|tif|bmp)$", re.IGNORECASE)
@@ -43,6 +44,10 @@ _SCORED_STATUS = frozenset(v.value for v in (
     Verdict.SUSPICIOUS_INDICATION, Verdict.NO_INDICATION, Verdict.INCONCLUSIVE))
 _UNSCORED_STATUS = frozenset((Verdict.ERROR.value, Verdict.NOT_APPLICABLE.value,
                              "method_exception", "input_excluded"))
+
+
+class HistoricalProtocolError(ValueError):
+    """V1 data may establish exposure history but cannot support inference."""
 
 
 def digest(value) -> str:
@@ -135,9 +140,83 @@ def _inventory(files: dict) -> dict:
     return groups
 
 
+def _rgb_sha(image: Image.Image) -> str:
+    rgb = image.convert("RGB")
+    return hashlib.sha256(struct.pack(">II", *rgb.size) + rgb.tobytes()).hexdigest()
+
+
+def _scene_ids(root: Path, inventory: dict) -> dict[str, str]:
+    """Join bases with identical stored or detector-oriented RGB originals."""
+    bases = {_base(sid) for sid in inventory}
+    parent = {base: base for base in bases}
+
+    def representative(base: str) -> str:
+        while parent[base] != base:
+            parent[base] = parent[parent[base]]
+            base = parent[base]
+        return base
+
+    original_owner = {}
+    originals_by_base = {}
+    for sid, group in sorted(inventory.items()):
+        base = _base(sid)
+        with Image.open(_inside(root, group["O"])) as image:
+            pixel_hashes = {_rgb_sha(image)}
+            if image.getexif().get(ExifTags.Base.Orientation, 1) != 1:
+                # safe_open normalizes orientation before exposing pixels to a detector.
+                with ImageOps.exif_transpose(image) as oriented:
+                    pixel_hashes.add(_rgb_sha(oriented))
+        for pixel_sha in sorted(pixel_hashes):
+            other = original_owner.setdefault(pixel_sha, base)
+            parent[representative(base)] = representative(other)
+        originals_by_base.setdefault(base, set()).update(pixel_hashes)
+
+    components = {}
+    for base, hashes in originals_by_base.items():
+        components.setdefault(representative(base), set()).update(hashes)
+    ids = {base: digest(sorted(hashes)) for base, hashes in components.items()}
+    return {base: ids[representative(base)] for base in originals_by_base}
+
+
+def _base_partitions(scenes, exposed, prior):
+    prior_dev = {row["base_image_id"] for row in prior["rows"] if row["split"] == "dev"} if prior else set()
+    exposed_scenes = {scenes[base] for base in exposed | prior_dev if base in scenes}
+    first_base = {}
+    for base, scene in sorted(scenes.items()):
+        first_base.setdefault(scene, base)
+    return {base: ("dev" if base in prior_dev else
+                   "diagnostic" if scene in exposed_scenes else
+                   "dev" if not prior and split_of(first_base[scene]) == "dev" else "locked")
+            for base, scene in scenes.items()}
+
+
+def _validate_prior_manifest(prior, manifest):
+    """Tie observed v1 rows to the exact same inventory and eligibility."""
+    if not isinstance(prior, dict) or prior.get("protocol") != 1:
+        raise ValueError("prior manifest must be a sealed protocol v1 manifest")
+    payload = {k: v for k, v in prior.items() if k != "sha256"}
+    if prior.get("sha256") != digest(payload):
+        raise ValueError("prior manifest checksum mismatch")
+    if any(prior[field] != manifest[field] for field in ("provenance_sha256", "files", "exclusions")):
+        raise ValueError("prior manifest inventory, provenance or eligibility differs")
+    exposed = set(prior["exposed_bases"])
+    if not EXPOSED.issubset(exposed) or not exposed.issubset(manifest["exposed_bases"]):
+        raise ValueError("prior manifest exposure inventory was narrowed")
+    expected = []
+    for row in manifest["rows"]:
+        base = row["base_image_id"]
+        legacy = {key: value for key, value in row.items() if key != "scene_id"}
+        legacy["split"] = ("diagnostic" if base in exposed else
+                           "dev" if split_of(base) == "dev" else "locked")
+        expected.append(legacy)
+    if sorted(prior["rows"], key=lambda row: row["image_path"]) != sorted(
+            expected, key=lambda row: row["image_path"]):
+        raise ValueError("prior manifest row accounting or legacy split differs")
+
+
 def freeze(root: Path, out: Path, *, seed: int = 42,
-           exposed=(), repo: Path = REPO) -> dict:
-    """Audit all provenance files before constructing an immutable base split."""
+           exposed=(), prior_manifest: Path | None = None, repo: Path = REPO) -> dict:
+    """Audit provenance and construct a split isolated by original scene."""
     root, repo = root.absolute(), repo.absolute()
     if type(seed) is not int or not 0 <= seed < 2 ** 31:
         raise ValueError("seed must be a nonnegative signed 32-bit integer")
@@ -162,7 +241,7 @@ def freeze(root: Path, out: Path, *, seed: int = 42,
     actual = {p.name for p in root.iterdir() if _SUFFIX.fullmatch(p.name)}
     if not files or actual != set(files):
         raise ValueError("asset inventory differs from provenance")
-    _inventory(files)
+    scenes = _scene_ids(root, _inventory(files))
     _plain_path(provenance_path)
     adapter = CoMoFoDAdapter(root)
     samples = list(adapter.samples("dev")) + list(adapter.samples("test"))
@@ -177,7 +256,13 @@ def freeze(root: Path, out: Path, *, seed: int = 42,
                   if _SUFFIX.fullmatch(name)[2].upper() == "F"}
     if forged_ids != set(pairs):
         raise ValueError("forged image missing discoverable ground truth")
+    prior = _load_sealed(prior_manifest) if prior_manifest is not None else None
+    if prior is not None and prior.get("protocol") != 1:
+        raise ValueError("prior manifest must be a sealed protocol v1 manifest")
     exposed_ids = EXPOSED | {_base(s) for s in exposed}
+    if prior is not None:
+        exposed_ids |= set(prior["exposed_bases"])
+    partitions = _base_partitions(scenes, exposed_ids, prior)
     exclusions, rows = [], []
     rejected = {}
     for sid, pair in sorted(pairs.items()):
@@ -198,27 +283,28 @@ def freeze(root: Path, out: Path, *, seed: int = 42,
             exclusions.append({"sample_id": sid, "base_image_id": base,
                                "reason": rejected[base], "n_images": 2})
             continue
-        partition = ("diagnostic" if base in exposed_ids else
-                     "dev" if split_of(base) == "dev" else "locked")
         for label in ("authentic", "forged"):
             sample = pair[label]
             rows.append({"image_path": sample.image_path.name,
                          "gt_mask_path": sample.gt_mask_path.name
                          if sample.gt_mask_path else None,
                          "label": label, "category": sample.category,
-                         "sample_id": sid, "base_image_id": base, "split": partition})
+                         "sample_id": sid, "base_image_id": base,
+                         "scene_id": scenes[base], "split": partitions[base]})
     manifest = _sealed({"protocol": PROTOCOL, "seed": seed,
                         "dataset_root": root.relative_to(repo).as_posix(),
                         "adapter_version": adapter.version(),
                         "provenance_sha256": file_hash(provenance_path),
                         "files": files, "exposed_bases": sorted(exposed_ids),
-                        "exclusions": exclusions, "rows": rows})
+                        "prior_manifest": prior, "exclusions": exclusions, "rows": rows})
     validate_manifest(manifest, root)
     _write(out, manifest)
     return manifest
 
 
 def validate_manifest(manifest: dict, root: Path) -> None:
+    if manifest.get("protocol") == 1:
+        raise HistoricalProtocolError("Protocol v1 manifest is historical. Re-freeze with --prior-manifest.")
     payload = {k: v for k, v in manifest.items() if k != "sha256"}
     if manifest.get("protocol") != PROTOCOL or manifest.get("sha256") != digest(payload):
         raise ValueError("invalid manifest identity")
@@ -234,7 +320,12 @@ def validate_manifest(manifest: dict, root: Path) -> None:
     for name, checksum in files.items():
         if file_hash(_inside(root, name)) != checksum:
             raise ValueError(f"asset changed after freeze: {name}")
-    seen, partitions, groups = set(), {}, {}
+    scenes = _scene_ids(root, inventory)
+    prior = manifest["prior_manifest"]
+    if prior is not None:
+        _validate_prior_manifest(prior, manifest)
+    partitions = _base_partitions(scenes, set(manifest["exposed_bases"]), prior)
+    seen, groups = set(), {}
     for row in manifest["rows"]:
         name, label, base = row["image_path"], row["label"], row["base_image_id"]
         if name in seen or name not in files or label not in {"authentic", "forged"}:
@@ -242,12 +333,9 @@ def validate_manifest(manifest: dict, root: Path) -> None:
         seen.add(name)
         if base != _base(row["sample_id"]):
             raise ValueError("derivative base ID mismatch")
-        expected = ("diagnostic" if base in manifest["exposed_bases"] else
-                    "dev" if split_of(base) == "dev" else "locked")
-        if base == "099" or row["split"] != expected:
-            raise ValueError("exposed/excluded base or split leakage")
-        if partitions.setdefault(base, row["split"]) != row["split"]:
-            raise ValueError("base occurs across partitions")
+        if (base == "099" or row["split"] != partitions.get(base)
+                or row["scene_id"] != scenes.get(base)):
+            raise ValueError("exposed/excluded base or scene split leakage")
         pair = groups.setdefault(row["sample_id"], {})
         if label in pair:
             raise ValueError("duplicate paired label")
@@ -570,6 +658,11 @@ def _check_report(report):
 def compare(baseline_path: Path, candidate_path: Path, criteria_path: Path, out: Path):
     baseline = _load_sealed(baseline_path / "report.json")
     candidate = _load_sealed(candidate_path / "report.json")
+    versions = {baseline.get("protocol"), candidate.get("protocol")}
+    if 1 in versions:
+        raise HistoricalProtocolError("Protocol v1 reports are historical and cannot be compared.")
+    if versions != {PROTOCOL}:
+        raise ValueError("unsupported report protocol")
     baseline_coverage = _check_report(baseline)
     candidate_coverage = _check_report(candidate)
     criteria = json.loads(criteria_path.read_text(encoding="utf-8"))
@@ -584,7 +677,9 @@ def compare(baseline_path: Path, candidate_path: Path, criteria_path: Path, out:
             or not criteria.get("approved_by")
             or set(criteria.get("methods", {})) != set(baseline["methods"])):
         raise ValueError("incomplete locked pair or unapproved criteria")
-    row_key = lambda r: (r["image_path"], r["base_image_id"], r["label"], r["method"])
+    def row_key(row):
+        return (row["image_path"], row["base_image_id"], row["scene_id"], row["label"], row["method"])
+
     if sorted(map(row_key, baseline["rows"])) != sorted(map(row_key, candidate["rows"])):
         raise ValueError("paired rows differ")
     primary = criteria.get("primary", {})
@@ -662,6 +757,8 @@ def main(argv=None):
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--exposed", nargs="*", default=[])
+    p.add_argument("--prior-manifest", type=Path,
+                   help="Preserve observed dev rows from a sealed protocol v1 manifest")
     p = commands.add_parser("evaluate")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--root", type=Path)
@@ -677,13 +774,16 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "freeze":
-            result = freeze(args.root, args.out, seed=args.seed, exposed=args.exposed)
+            result = freeze(args.root, args.out, seed=args.seed, exposed=args.exposed,
+                            prior_manifest=args.prior_manifest)
         elif args.command == "evaluate":
             result = evaluate(args.manifest, args.split, args.config,
                               [load_method(name) for name in args.methods.split(",")], args.out,
                               root=args.root, pair_contract=args.pair_contract, role=args.role)
         else:
             result = compare(args.baseline, args.candidate, args.criteria, args.out)
+    except HistoricalProtocolError as error:
+        parser.exit(2, f"{error}\n")
     except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
         parser.exit(2, f"Protocol rejected request ({type(error).__name__}); inspect inputs locally.\n")
     print(json.dumps({"command": args.command, "sha256": result["sha256"],

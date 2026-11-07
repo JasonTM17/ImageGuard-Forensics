@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageOps
 
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult
@@ -18,18 +18,100 @@ from scripts import evaluate_detector_quality as protocol
 def dataset(tmp_path):
     root = tmp_path / "data" / "assets"
     root.mkdir(parents=True)
-    image = np.random.default_rng(4).integers(0, 256, (64, 64, 3), dtype=np.uint8)
     mask = np.zeros((64, 64), np.uint8)
     mask[10:30, 10:30] = 255
     for sid in ["001", "002", "003", "004", "005", "006", "007", "008", "099", "001_variant"]:
+        image = np.random.default_rng(int(sid[:3])).integers(0, 256, (64, 64, 3), dtype=np.uint8)
         for kind, data in (("F", image), ("O", image), ("B", mask)):
             Image.fromarray(data).save(root / f"{sid}_{kind}.png")
-    records = [{"file": p.name, "bytes": p.stat().st_size, "sha256": protocol.file_hash(p)}
-               for p in sorted(root.iterdir())]
-    (root / "provenance.json").write_text(json.dumps({"files": records}), encoding="utf-8")
+    _write_provenance(root)
     out = tmp_path / "manifest.json"
     manifest = protocol.freeze(root, out, repo=tmp_path)
     return root, out, manifest
+
+
+def _write_provenance(root):
+    records = [{"file": p.name, "bytes": p.stat().st_size, "sha256": protocol.file_hash(p)}
+               for p in sorted(root.glob("*.png"))]
+    (root / "provenance.json").write_text(json.dumps({"files": records}), encoding="utf-8")
+
+
+def _legacy_manifest(path, manifest):
+    payload = {key: manifest[key] for key in (
+        "seed", "dataset_root", "adapter_version", "provenance_sha256", "files",
+        "exposed_bases", "exclusions")}
+    rows = []
+    for source in manifest["rows"]:
+        row = {key: value for key, value in source.items() if key != "scene_id"}
+        base = row["base_image_id"]
+        row["split"] = ("diagnostic" if base in payload["exposed_bases"] else
+                        "dev" if protocol.split_of(base) == "dev" else "locked")
+        rows.append(row)
+    legacy = protocol._sealed({"protocol": 1, **payload, "rows": rows})
+    protocol._write(path, legacy)
+    return legacy
+
+
+def _reencode_original(root, source, target):
+    with Image.open(root / f"{source}_O.png") as image:
+        image.save(root / f"{target}_O.png", compress_level=0)
+    assert protocol.file_hash(root / f"{source}_O.png") != protocol.file_hash(root / f"{target}_O.png")
+
+
+def test_same_pixels_across_ids_are_isolated_transitively_including_excluded_base(dataset, tmp_path):
+    root, _, _ = dataset
+    # Base 001 connects 002 to exposed but excluded 099 through its variant.
+    _reencode_original(root, "001", "002")
+    _reencode_original(root, "099", "001_variant")
+    _write_provenance(root)
+    manifest = protocol.freeze(root, tmp_path / "scenes.json", repo=tmp_path)
+    linked = [row for row in manifest["rows"] if row["base_image_id"] in {"001", "002"}]
+    assert {row["split"] for row in linked} == {"diagnostic"}
+    assert len({row["scene_id"] for row in linked}) == 1
+    assert not any(row["base_image_id"] == "099" for row in manifest["rows"])
+    bad = copy.deepcopy(manifest)
+    for row in bad["rows"]:
+        if row["base_image_id"] == "002":
+            row["split"] = "locked"
+    bad.pop("sha256")
+    with pytest.raises(ValueError, match="split leakage"):
+        protocol.validate_manifest(protocol._sealed(bad), root)
+
+
+def test_exif_rotated_original_alias_cannot_enter_locked(dataset, tmp_path):
+    root, _, _ = dataset
+    with Image.open(root / "006_O.png") as original:
+        stored = original.transpose(Image.Transpose.ROTATE_90)
+        exif = stored.getexif()
+        exif[274] = 6  # Display rotated 90 degrees clockwise.
+        stored.save(root / "002_O.png", exif=exif)
+        with Image.open(root / "002_O.png") as alias:
+            assert alias.tobytes() != original.tobytes()
+            assert ImageOps.exif_transpose(alias).tobytes() == original.tobytes()
+    _write_provenance(root)
+    manifest = protocol.freeze(root, tmp_path / "oriented-scenes.json", repo=tmp_path)
+    linked = [row for row in manifest["rows"] if row["base_image_id"] in {"002", "006"}]
+    assert {row["split"] for row in linked} == {"diagnostic"}
+    assert len({row["scene_id"] for row in linked}) == 1
+
+
+def test_migration_retains_dev_and_only_keeps_cold_groups_locked(dataset, tmp_path):
+    root, _, _ = dataset
+    _reencode_original(root, "001", "002")
+    _write_provenance(root)
+    current = protocol.freeze(root, tmp_path / "current.json", repo=tmp_path)
+    prior_path = tmp_path / "legacy.json"
+    prior = _legacy_manifest(prior_path, current)
+    manifest = protocol.freeze(root, tmp_path / "migrated.json", repo=tmp_path,
+                               prior_manifest=prior_path)
+    def dev_files(m):
+        return {row["image_path"] for row in m["rows"] if row["split"] == "dev"}
+
+    assert dev_files(manifest) == dev_files(prior)
+    assert {row["base_image_id"] for row in manifest["rows"] if row["split"] == "locked"} == {"003", "007"}
+    assert {row["split"] for row in manifest["rows"] if row["base_image_id"] == "002"} == {"diagnostic"}
+    assert manifest["prior_manifest"]["sha256"] == prior["sha256"]
+    protocol.validate_manifest(manifest, root)
 
 
 def test_freeze_groups_derivatives_and_quarantines_exposure(dataset):
@@ -174,6 +256,52 @@ def test_locked_inference_requires_bound_contract_before_method_call(dataset, tm
     assert method.calls == []
 
 
+def _complete_contract(path, manifest, config):
+    common_config = protocol.file_hash(config)
+    contract = {"approved": True, "event_id": "locked-scene-test",
+                "manifest_sha256": manifest["sha256"], "protocol_sha256": "c" * 64,
+                "criteria_sha256": "d" * 64, "seed": manifest["seed"],
+                "methods": ["copy_move_keypoint"],
+                "baseline": {"source_sha256": "b" * 64, "config_sha256": common_config},
+                "candidate": {"source_sha256": "f" * 64, "config_sha256": common_config}}
+    protocol._write(path, contract)
+
+
+def test_legacy_locked_manifest_is_historical_before_inference_or_receipt(
+        dataset, tmp_path, isolated_runtime):
+    root, _, manifest = dataset
+    legacy_path = tmp_path / "legacy.json"
+    legacy = _legacy_manifest(legacy_path, manifest)
+    config = protocol.REPO / "configs/thresholds.yaml"
+    pair = tmp_path / "pair.json"
+    _complete_contract(pair, legacy, config)
+    method = FixtureMethod()
+    out = tmp_path / "locked-out"
+    with pytest.raises(ValueError, match="historical"):
+        protocol.evaluate(legacy_path, "locked", config, [method], out,
+                          root=root, repo=tmp_path, pair_contract=pair, role="baseline")
+    assert method.calls == []
+    assert not out.exists()
+    assert not (tmp_path / "event-locked-scene-test").exists()
+
+
+def test_clean_scene_locked_pair_runs_only_selected_rows(dataset, tmp_path, isolated_runtime):
+    root, manifest_path, manifest = dataset
+    config = protocol.REPO / "configs/thresholds.yaml"
+    pair = tmp_path / "pair.json"
+    _complete_contract(pair, manifest, config)
+    method = FixtureMethod()
+    report = protocol.evaluate(manifest_path, "locked", config, [method], tmp_path / "locked-out",
+                               root=root, repo=tmp_path, pair_contract=pair, role="baseline")
+    assert report["protocol"] == 2
+    expected = {row["image_path"]: row["scene_id"] for row in manifest["rows"]
+                if row["split"] == "locked"}
+    assert expected
+    assert set(method.calls) == set(expected)
+    assert {row["image_path"]: row["scene_id"] for row in report["rows"]} == expected
+    assert (tmp_path / "event-locked-scene-test" / "baseline.json").is_file()
+
+
 def test_event_role_receipt_is_exclusive(tmp_path):
     identity = {"working_tree_clean": True, "source_sha256": "a" * 64}
     manifest = {"sha256": "b" * 64, "seed": 42}
@@ -244,6 +372,7 @@ def _coverage_reports(tmp_path, *, migrate_failure):
                     elif role == "candidate" and migrate_failure:
                         status = "method_exception"
                 rows.append({"image_path": f"{label}-{index}.png", "base_image_id": str(index),
+                             "scene_id": str(index) * 64,
                              "label": label, "method": method, "status": status})
         scored = [r for r in rows if r["status"] != "method_exception"]
         metric = protocol.image_metrics([r["status"] == "suspicious_indication" for r in scored],
@@ -253,7 +382,7 @@ def _coverage_reports(tmp_path, *, migrate_failure):
                       pixel_micro={"iou": 0.0})
         counts = {status: sum(r["status"] == status for r in rows)
                   for status in {r["status"] for r in rows}}
-        reports[role] = {"protocol": 1, "protocol_sha256": "a" * 64,
+        reports[role] = {"protocol": protocol.PROTOCOL, "protocol_sha256": "a" * 64,
                          "manifest_sha256": "b" * 64, "seed": 42, "methods": [method],
                          "runtime": {}, "n_selected": 12, "pair_sha256": "c" * 64,
                          "criteria_sha256": protocol.file_hash(criteria_path), "split": "locked",
@@ -271,6 +400,17 @@ def test_compare_rejects_new_row_failures_but_allows_recovery(tmp_path, migrate_
                               tmp_path / "comparison.json")
     assert result["status"] == ("FAIL" if migrate_failure else "PASS")
     assert ("coverage:new_failed_rows" in result["methods"]["copy_move_keypoint"]["failed"]) is migrate_failure
+
+
+def test_compare_rejects_legacy_locked_reports(tmp_path):
+    reports, criteria_path = _coverage_reports(tmp_path, migrate_failure=False)
+    for role, report in reports.items():
+        report["protocol"] = 1
+        protocol._write(tmp_path / role / "report.json", protocol._sealed(report))
+    out = tmp_path / "comparison.json"
+    with pytest.raises(ValueError, match="historical"):
+        protocol.compare(tmp_path / "baseline", tmp_path / "candidate", criteria_path, out)
+    assert not out.exists()
 
 
 @pytest.mark.parametrize("change", ["histogram", "unknown_status", "aggregate_excluded"])
