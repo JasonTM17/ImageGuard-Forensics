@@ -44,10 +44,12 @@ def test_translate_detected_with_overlap(ts) -> None:
     assert _iou(r.mask, gt) > 0.1
 
 
-def test_flat_image_no_indication(ts) -> None:
+def test_flat_image_insufficient_texture_is_inconclusive(ts) -> None:
     flat = np.full((300, 300, 3), 100, np.uint8)
     r = BlockCopyMove().analyze(_doc(flat), ts)
-    assert r.verdict == Verdict.NO_INDICATION
+    assert r.verdict == Verdict.INCONCLUSIVE
+    assert r.score == 0.0
+    assert r.mask is not None and not np.any(r.mask)
 
 
 def test_runtime_guard(ts, caplog) -> None:

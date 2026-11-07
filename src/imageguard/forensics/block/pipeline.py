@@ -2,7 +2,8 @@
 
 score = matched_area_fraction = diện tích mask / diện tích ảnh.
 Verdict: frac ≥ min_area_frac → SUSPICIOUS; 0 < frac < ngưỡng → INCONCLUSIVE;
-không có shift nào qua voting → NO_INDICATION.
+không có block đủ texture → INCONCLUSIVE; có block nhưng không shift nào qua
+voting → NO_INDICATION.
 
 Method này chậm O(H·W·B²) — chạy trên working copy cap block.max_side,
 mask upscale về ảnh gốc. Không phát hiện được rotate/scale (DCT block
@@ -87,7 +88,12 @@ class BlockCopyMove:
             heat = cv2.resize(heat, (doc.width, doc.height))
 
         min_frac = float(cfg.value("block", "min_area_frac"))
-        if frac >= min_frac:
+        if len(feats) == 0:
+            verdict = Verdict.INCONCLUSIVE
+            limitations.append(
+                "không đủ bằng chứng: không có block DCT đủ texture để đối chiếu"
+            )
+        elif frac >= min_frac:
             verdict = Verdict.SUSPICIOUS_INDICATION
         elif frac > 0:
             verdict = Verdict.INCONCLUSIVE

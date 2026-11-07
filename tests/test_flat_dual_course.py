@@ -24,13 +24,14 @@ def _flat_doc() -> ImageDocument:
     )
 
 
-def test_flat_image_keypoint_inconclusive_block_no_indication(ts) -> None:
+def test_flat_image_keypoint_and_block_are_inconclusive(ts) -> None:
     doc = _flat_doc()
     keypoint = KeypointCopyMove().analyze(doc, ts)
     block = BlockCopyMove().analyze(doc, ts)
 
     assert keypoint.verdict == Verdict.INCONCLUSIVE
     assert int(keypoint.evidence["n_keypoints"]) == 0
-    assert block.verdict == Verdict.NO_INDICATION
+    assert block.verdict == Verdict.INCONCLUSIVE
+    assert any("không đủ bằng chứng" in text for text in block.limitations)
     assert keypoint.verdict != Verdict.SUSPICIOUS_INDICATION
     assert block.verdict != Verdict.SUSPICIOUS_INDICATION
