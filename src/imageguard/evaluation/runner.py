@@ -117,6 +117,12 @@ def run_eval(
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
             continue
+        if gt_mask is None and (gt_forged or sample.gt_mask_path is not None):
+            # A missing mask is optional for authentic samples, but a forged
+            # sample or explicitly supplied unreadable mask has no usable GT.
+            for m in methods:
+                per_method_acc[m.name]["n_excluded"] += 1
+            continue
         if gt_forged and gt_mask is not None and not (gt_mask > 0).any():
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
@@ -208,7 +214,10 @@ def _load_mask(path, doc: ImageDocument) -> np.ndarray | None:
         data = Path(path).read_bytes()
     except OSError:
         return None
-    m = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
+    try:
+        m = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
+    except cv2.error:
+        return None
     if m is None:
         return None
     if m.shape != (doc.height, doc.width):

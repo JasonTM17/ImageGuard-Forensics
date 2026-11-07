@@ -352,6 +352,59 @@ def test_run_bench_counts_unreadable_edited_images(tmp_path):
     assert "skipped 1 unreadable" in render_markdown(result)
 
 
+@pytest.mark.parametrize("gt_shape", [(64, 128), (192, 128)])
+def test_run_bench_skips_gt_dimension_mismatch(tmp_path, gt_shape):
+    class NoMaskMethod:
+        name = "test"
+
+        def analyze(self, doc, cfg):
+            return SimpleNamespace(
+                verdict=Verdict.INCONCLUSIVE, score=0.01, mask=None,
+                params_hash=cfg.snapshot_hash())
+
+    image = np.random.default_rng(17).integers(
+        0, 256, (128, 128, 3), dtype=np.uint8)
+    gt = _mask(*gt_shape, (8, 8, 20, 20))
+    assert cv2.imwrite(str(tmp_path / "erase_0000_O.png"), image)
+    assert cv2.imwrite(str(tmp_path / "erase_0000_F.png"), image)
+    assert cv2.imwrite(str(tmp_path / "erase_0000_M.png"), gt)
+    (tmp_path / "meta.json").write_text(json.dumps([{
+        "id": "erase_0000", "kind": "erase", "format": "png",
+        "backend": "classic", "seed": 17, "model_sha256": None,
+    }]), encoding="utf-8")
+
+    result = run_bench(tmp_path, [NoMaskMethod()], load_thresholds())
+
+    assert result["n"] == 0
+    assert result["n_skipped_missing_gt"] == 1
+    assert "skipped 1 unusable-GT" in render_markdown(result)
+
+
+def test_run_bench_skips_empty_gt_file(tmp_path):
+    class NoMaskMethod:
+        name = "test"
+
+        def analyze(self, doc, cfg):
+            return SimpleNamespace(
+                verdict=Verdict.INCONCLUSIVE, score=0.01, mask=None,
+                params_hash=cfg.snapshot_hash())
+
+    image = np.random.default_rng(19).integers(
+        0, 256, (128, 128, 3), dtype=np.uint8)
+    assert cv2.imwrite(str(tmp_path / "erase_0000_O.png"), image)
+    assert cv2.imwrite(str(tmp_path / "erase_0000_F.png"), image)
+    (tmp_path / "erase_0000_M.png").write_bytes(b"")
+    (tmp_path / "meta.json").write_text(json.dumps([{
+        "id": "erase_0000", "kind": "erase", "format": "png",
+        "backend": "classic", "seed": 19, "model_sha256": None,
+    }]), encoding="utf-8")
+
+    result = run_bench(tmp_path, [NoMaskMethod()], load_thresholds())
+
+    assert result["n"] == 0
+    assert result["n_skipped_missing_gt"] == 1
+
+
 def test_run_bench_json_report_has_no_nan(tmp_path):
     class NoMaskMethod:
         name = "test"

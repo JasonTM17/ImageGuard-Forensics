@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
+import cv2
+import numpy as np
+import pytest
+
+from imageguard.core.config import load_thresholds
+from imageguard.core.enums import Verdict
 from imageguard.evaluation import runner
 from imageguard.evaluation.datasets import SynthAdapter
 from imageguard.evaluation.runner import run_eval
@@ -108,3 +115,58 @@ def test_load_mask_reads_non_ascii_path(tmp_path: Path) -> None:
     loaded = _load_mask(mask_path, doc)
     assert isinstance(loaded, np.ndarray)
     assert loaded.shape == mask.shape
+
+
+@pytest.mark.parametrize(
+    "mask_kind", ["corrupt", "empty_file", "empty", "forged_absent", "absent"]
+)
+def test_run_eval_excludes_bad_forged_masks_but_keeps_optional_authentic_gt(
+    tmp_path: Path, mask_kind: str
+) -> None:
+    image_path = tmp_path / "forged.png"
+    image = np.full((128, 128, 3), 100, dtype=np.uint8)
+    image_path.write_bytes(cv2.imencode(".png", image)[1].tobytes())
+    mask_path = tmp_path / "forged_M.png"
+    if mask_kind == "corrupt":
+        mask_path.write_bytes(b"not an image")
+    elif mask_kind == "empty_file":
+        mask_path.write_bytes(b"")
+    elif mask_kind == "empty":
+        empty = np.zeros((128, 128), dtype=np.uint8)
+        mask_path.write_bytes(cv2.imencode(".png", empty)[1].tobytes())
+
+    sample = SimpleNamespace(
+        image_path=image_path,
+        gt_mask_path=(
+            mask_path if mask_kind not in ("forged_absent", "absent") else None
+        ),
+        label="authentic" if mask_kind == "absent" else "forged",
+        category="fixture", base_image_id="fixture",
+    )
+
+    class FixedAdapter:
+        name = "fixture"
+
+        def samples(self, split="dev"):
+            return [sample]
+
+        def version(self):
+            return "fixture-v1"
+
+    class NoIndicationMethod:
+        name = "no_indication"
+
+        def analyze(self, doc, cfg):
+            return SimpleNamespace(
+                verdict=Verdict.NO_INDICATION, duration_ms=1, mask=None)
+
+    result = run_eval(FixedAdapter(), [NoIndicationMethod()], load_thresholds())
+    metrics = result.per_method["no_indication"]
+
+    if mask_kind == "absent":
+        assert metrics["n_scored"] == 1
+        assert metrics["tn"] == 1
+        assert metrics["n_excluded"] == 0
+    else:
+        assert metrics["n_scored"] == 0
+        assert metrics["n_excluded"] == 1

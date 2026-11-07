@@ -180,6 +180,11 @@ def run_bench(
             # GT mask thiếu/hỏng — bỏ qua sample, ghi nhận để báo cáo trung thực.
             n_missing += 1
             continue
+        if gt_img.shape != doc.array.shape[:2]:
+            # Không crop/rescale mask sai hình học: các thống kê noise và IoU
+            # phải dùng cùng hệ tọa độ với ảnh được phân tích.
+            n_missing += 1
+            continue
         gt = gt_img > 0
         row = analyze_sample(doc, gt, methods, cfg)
         row.update(id=e["id"], kind=e["kind"], format=e.get("format", "png"),
@@ -235,7 +240,10 @@ def _imread_unicode(path: Path, flags: int) -> np.ndarray | None:
         data = path.read_bytes()
     except OSError:
         return None
-    return cv2.imdecode(np.frombuffer(data, np.uint8), flags)
+    try:
+        return cv2.imdecode(np.frombuffer(data, np.uint8), flags)
+    except cv2.error:
+        return None
 
 
 def _dataset_sha256(set_dir: Path, meta: list[dict]) -> str:
@@ -408,7 +416,7 @@ def aggregate(samples: list[dict]) -> dict:
 def render_markdown(res: dict) -> str:
     skip_bits = []
     if res.get("n_skipped_missing_gt"):
-        skip_bits.append(f"{res['n_skipped_missing_gt']} missing-GT")
+        skip_bits.append(f"{res['n_skipped_missing_gt']} unusable-GT")
     if res.get("n_skipped_unreadable"):
         skip_bits.append(f"{res['n_skipped_unreadable']} unreadable")
     if res.get("n_malformed_gt"):
