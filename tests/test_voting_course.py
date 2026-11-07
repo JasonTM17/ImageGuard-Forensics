@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from imageguard.forensics.block.voting import match_pairs, vote_mask
 
@@ -67,3 +68,20 @@ def test_vote_mask_threshold_controls_both_shift_footprints() -> None:
 
     assert not np.any(empty_mask)
     assert empty_stats["n_shifts_kept"] == 0
+
+
+@pytest.mark.parametrize("translation", [(24, 0), (0, 24), (24, -16)])
+def test_vote_mask_is_invariant_to_pair_endpoint_order(translation: tuple[int, int]) -> None:
+    source = np.array([[8, 16], [8, 17], [9, 16], [9, 17]], dtype=np.int32)
+    pos = np.concatenate((source, source + np.array(translation, dtype=np.int32)))
+    pairs = np.array([[0, 4], [1, 5], [2, 6], [3, 7]], dtype=np.int32)
+    mixed_order = pairs.copy()
+    mixed_order[1::2] = mixed_order[1::2, ::-1]
+
+    expected_mask, expected_heat, expected_stats = vote_mask(pairs, pos, 8, (64, 64), 4)
+    mask, heat, stats = vote_mask(mixed_order, pos, 8, (64, 64), 4)
+
+    assert expected_stats["n_shifts_kept"] == 1
+    assert stats == expected_stats
+    np.testing.assert_array_equal(mask, expected_mask)
+    np.testing.assert_array_equal(heat, expected_heat)

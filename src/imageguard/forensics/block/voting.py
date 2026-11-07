@@ -92,6 +92,11 @@ def vote_mask(
         return np.zeros((H, W), np.uint8), count, stats
 
     shifts = pos[pairs[:, 1]] - pos[pairs[:, 0]]  # (dy, dx) per pair
+    # Feature sort orders the endpoints, but a copy-move pair has no known
+    # source direction. Put opposite shifts in the same voting bin.
+    dy, dx = shifts.T
+    reversed_direction = (dy < 0) | ((dy == 0) & (dx < 0))
+    shifts[reversed_direction] *= -1
     votes = Counter(map(tuple, shifts.tolist()))
     kept = {s for s, c in votes.items() if c >= min_votes}
     stats["n_shifts_kept"] = len(kept)

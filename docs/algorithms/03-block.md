@@ -23,8 +23,9 @@ gray(≤768px) → mọi block B×B → DCT + lượng tử → feature K=24 h�
   chủ đích).
 - **Lexicographic sort**: `O(N_b log N_b)` thay vì `O(N_b²)` — block giống
   nhau đứng cạnh nhau sau sort, chỉ duyệt 10 hàng xóm.
-- **Shift voting**: cặp thật chia sẻ cùng (dx,dy); cặp nhiễu shift rải rác
-  → histogram vote là bộ lọc hình học thô, miễn phí.
+- **Shift voting**: cặp thật chia sẻ cùng độ dịch chuyển. Gộp `(dx,dy)` và
+  `(-dx,-dy)` vào cùng bin vì thứ tự feature không cho biết hướng sao chép.
+  Cặp nhiễu thường có shift rải rác trong histogram.
 
 ## Flat-block filter (quan trọng)
 
