@@ -11,11 +11,9 @@ from typing import Any
 import cv2
 import numpy as np
 
-MODEL_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "models"
-    / "deblurring_nafnet_2025may.onnx"
-)
+from imageguard.core.paths import model_root
+
+MODEL_PATH = model_root() / "models" / "deblurring_nafnet_2025may.onnx"
 MODEL_BYTES = 91_736_251
 MODEL_SHA256 = "07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587"
 MIN_SIDE = 512
