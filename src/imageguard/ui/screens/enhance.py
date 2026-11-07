@@ -429,4 +429,5 @@ class EnhanceScreen(QWidget):
                 "Không xuất được ảnh.")
             return
         QMessageBox.information(
-            self, "Thành công", f"Đã xuất ảnh tăng cường:\n{json_path.name}")
+            self, "Thành công",
+            f"Đã xuất ảnh tăng cường:\n{dest.name}\nMetadata: {json_path.name}")
