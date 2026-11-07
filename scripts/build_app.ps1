@@ -10,5 +10,8 @@ $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { $py = "python" }
 
 & $py -m PyInstaller --noconfirm --clean ImageGuard.spec
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed (exit code $LASTEXITCODE)."
+}
 
 Write-Host "Done -> dist\ImageGuard\ImageGuard.exe"
