@@ -32,10 +32,15 @@ Vùng phẳng (bầu trời, tường trơn) → mọi block gần-identical →
 khắp ảnh → false positive kinh điển của trường phái. Loại block `std < ε`
 (ε=5) khỏi matching — chúng không mang texture nhận diện.
 
+Nếu bộ lọc loại hết block, phương pháp không có dữ liệu DCT để đối chiếu nên
+trả `INCONCLUSIVE` với giới hạn thiếu texture. Nếu còn block đủ texture nhưng
+không có shift nào qua voting, kết quả vẫn là `NO_INDICATION`.
+
 ## Giới hạn
 
 | Tình huống | Kết quả | Lý do |
 |---|---|---|
+| Không còn block đủ texture sau lọc | INCONCLUSIVE | không đủ bằng chứng DCT để đối chiếu |
 | Copy + rotate/scale/flip | NO_INDICATION | hệ số DCT đổi hoàn toàn — không bất biến hình học |
 | Copy + JPEG mạnh | suy giảm | lượng tử hoá giảm ảnh hưởng nhưng không miễn nhiễm |
 | Ảnh lớn | chậm | `N_b ≈ (H−B+1)(W−B+1)` — 512² → 247k blocks (~10s đo trên máy dev) |

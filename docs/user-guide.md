@@ -45,8 +45,9 @@ forensics trên ảnh.
 
 ## Tab Tăng cường (xem, không phân tích)
 
-Tab "Tăng cường" chạy ba operator cổ điển — *Unsharp mask*, *CLAHE*,
-*Non-local means* — để xem thử hiệu ứng trên ảnh. Tab này **không phân
+Tab "Tăng cường" có ba operator cổ điển — *Unsharp mask*, *CLAHE*,
+*Non-local means* — và lựa chọn tùy chọn *NAFNet (AI)* để xem thử hiệu ứng
+trên ảnh. Tab này **không phân
 tích**, không gọi `AnalysisService`, không ghi lịch sử hay database, và
 không kết luận điều gì về ảnh.
 
@@ -54,11 +55,21 @@ không kết luận điều gì về ảnh.
   Đây là bản xem, không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với
   file gốc." Nghĩa là ảnh tăng cường chỉ để xem; dấu hiệu forensics chỉ
   được gắn với file gốc, không phải với bản tăng cường.
+- **NAFNet (AI)**: không có tham số chỉnh trong tab; chọn nó sẽ hiện banner
+  cảnh báo AI riêng. Cần cài extra hiện có `pip install -e ".[lama]"`
+  (ONNX Runtime) và cung cấp riêng file
+  `models/deblurring_nafnet_2025may.onnx`. Ứng dụng kiểm tra kích thước
+  91.736.251 byte và SHA-256
+  `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`
+  trước khi nạp; thiếu/sai weight sẽ báo lỗi. Chạy CPU, xử lý trên canvas
+  có cạnh tối thiểu 512px và cạnh dài tối đa 1024px, rồi trả bản xem về
+  kích thước ban đầu. Đây không phải model phát hiện giả mạo.
 - **Thanh trộn**: 0 = ảnh gốc, 100 = ảnh tăng cường. Thanh chỉ đổi hiển thị
   (pixmap), không ghi pixel và không chạy lại operator.
 - **Xuất**: chọn đích PNG, hệ thống ghi thêm một file `.json` kế bên
   (cùng tên) ghi `parent_sha256`, `derived_sha256`, `method`, `params`,
-  `model_sha256` (null) và `created_utc`. File gốc không bao giờ bị ghi đè;
+  `model_sha256` (null với operator cổ điển, hash weight với NAFNet) và
+  `created_utc`. Hộp thoại thành công hiển thị cả PNG và JSON. File gốc không bao giờ bị ghi đè;
   đích trùng file gốc bị từ chối, đích đã tồn tại phải xác nhận ghi đè.
 - Tab này không khôi phục dấu vết camera và không phục hồi ảnh về trạng
   thái gốc.
