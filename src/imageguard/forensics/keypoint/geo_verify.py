@@ -55,7 +55,8 @@ def _ransac_affine(
         method=cv2.RANSAC,
         ransacReprojThreshold=eps,
     )
-    if model is None or inliers is None:
+    # A degenerate fit can report inliers even when its affine is unusable.
+    if model is None or inliers is None or not np.isfinite(model).all():
         return None, None
     return model, inliers.ravel().astype(bool)
 
