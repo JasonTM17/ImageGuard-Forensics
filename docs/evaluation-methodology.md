@@ -96,13 +96,51 @@ manifest, protocol, seed, ordered methods, approved criteria hash and each
 role's source/config hashes. A sealed consumption ledger next to the contract
 binds each manifest/protocol cohort to a single `event_id` across roles; an
 exclusive event-role receipt still prevents an ordinary repeat of that role.
-`compare` checks the paired reports against the
-preregistered criteria. Preserve interrupted events for review; do not change a
+`compare` checks the paired reports against the preregistered criteria. It
+reconciles macro/micro IoU and the pixel denominator with the per-image counts
+for scored forged rows. A scored row with no predicted mask still contributes
+zero IoU. The comparator rejects missing or inconsistent evidence before
+writing a comparison. Preserve interrupted events for review; do not change a
 candidate after seeing test outputs and rerun it as an unseen evaluation.
 
 These controls support reproducibility, not detector accuracy. Report observed
 false positives, misses, abstention and localization limits with sample counts;
 a successful study does not establish general real-photo performance.
+
+### Native CASIA paired study
+
+The research CLI also accepts the separately versioned `casia-cmfd-native-v1`
+manifest. Use `freeze-casia --cohort <sealed-selection-receipt.json> --root
+<native-cohort-root> --out <fresh-manifest.json>` before any inference. This
+path validates the approved cohort receipt and its intake/projection lineage,
+nested image paths, selected media hashes and native mask geometry. It keeps
+the existing CoMoFoD validation path and inventory unchanged.
+
+Raw author masks use red/green/blue classes. The versioned binary oracle is
+`blue == 0`, the red/green union in that palette. Derived masks must be strict
+0/255 PNGs with exactly the same foreground and native geometry. Raw RGB
+nonzero support is not a valid oracle. Raw assets stay unchanged. Author
+annotation correctness and limits of exact/dHash scene screening remain study
+assumptions; byte/geometry validation does not establish them independently.
+
+The approved CASIA event contains 103 original/edit pairs and holds 34 pairs
+aside. Each selected original ID contributes exactly one pair. Its pair lock
+additionally binds cohort identity, oracle policy and class/group population.
+The numerical criteria include that exact population and the frozen manifest
+row inventory. The lock also binds its digest. `compare` rejects a changed
+image-to-group/label/GT mapping even when totals and paired reports agree.
+It rejects any unscored row, missing pair, duplicate group or changed class
+denominator even if both roles share the same failure. All 103 forged rows
+remain in pixel aggregates; absent prediction masks contribute zero IoU. Every
+new helper is included in the protocol fingerprint. An event remains locked to
+one frozen baseline/candidate pair and cannot use the held-aside rows for
+replacement.
+
+This study compares baseline area `.01` with candidate `.007`, with identical
+detector source and other settings. Report image confusion counts and
+per-class abstention as well as macro/micro localization. Keep the dev result,
+formal study outcome and a released default configuration distinct. The
+source default is unchanged by running the study.
 
 ## Provenance
 

@@ -1,4 +1,4 @@
-"""Content-hashed CoMoFoD protocol; locked inference requires a frozen pair contract.
+"""Content-hashed detector studies; locked inference requires a frozen pair contract.
 
 This research CLI wraps the production runner without changing its metrics or
 detectors. All artifact paths are relative; official assets are never modified.
@@ -24,15 +24,17 @@ import numpy as np
 from PIL import ExifTags, Image, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from imageguard.core import limits as core_limits
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.evaluation.comofod import CoMoFoDAdapter
 from imageguard.evaluation.datasets import Sample, split_of
-from imageguard.evaluation.metrics import image_metrics, pixel_metrics
+from imageguard.evaluation.metrics import aggregate_pixel, image_metrics, pixel_metrics
 from imageguard.evaluation.runner import run_eval
 from imageguard.forensics.registry import load_method
+from scripts import casia_detector_protocol
 
 REPO = Path(__file__).resolve().parents[1]
 PROTOCOL = 2
@@ -41,6 +43,7 @@ _BASE = re.compile(r"^(\d{3})(?:[_-].*)?$")
 _SUFFIX = re.compile(r"^(.+)_(F|O|B|C|M)\.(png|jpg|jpeg|tif|bmp)$", re.IGNORECASE)
 _CRITERIA = {"fp_delta_max", "tp_delta_min", "authentic_inconclusive_delta_max",
              "forged_inconclusive_delta_max", "macro_iou_delta_min", "micro_iou_delta_min"}
+_PIXEL_REPORT_TOLERANCE = 1e-12
 _SCORED_STATUS = frozenset(v.value for v in (
     Verdict.SUSPICIOUS_INDICATION, Verdict.NO_INDICATION, Verdict.INCONCLUSIVE))
 _UNSCORED_STATUS = frozenset((Verdict.ERROR.value, Verdict.NOT_APPLICABLE.value,
@@ -344,6 +347,12 @@ def validate_manifest(manifest: dict, root: Path) -> None:
     payload = {k: v for k, v in manifest.items() if k != "sha256"}
     if manifest.get("protocol") != PROTOCOL or manifest.get("sha256") != digest(payload):
         raise ValueError("invalid manifest identity")
+    kind = manifest.get("dataset_kind")
+    if kind == casia_detector_protocol.DATASET_KIND:
+        casia_detector_protocol.validate_manifest(manifest, root)
+        return
+    if kind is not None:
+        raise ValueError("unknown dataset kind")
     if not EXPOSED.issubset(manifest["exposed_bases"]):
         raise ValueError("known exposure inventory was narrowed")
     _plain_path(root)
@@ -442,6 +451,7 @@ def runtime_identity() -> dict:
 
 def protocol_hash(repo: Path = REPO) -> str:
     paths = ["scripts/evaluate_detector_quality.py",
+             "scripts/casia_detector_protocol.py",
              *[f"src/imageguard/evaluation/{name}.py"
                for name in ("runner", "metrics", "comofod", "datasets")],
              "src/imageguard/core/io.py", "src/imageguard/core/config.py"]
@@ -482,6 +492,7 @@ class ManifestAdapter:
 
     def __init__(self, manifest: dict, root: Path, split: str):
         self.manifest, self.root, self.split = manifest, root, split
+        self.name = manifest.get("dataset_kind", "comofod_protocol")
         self.current = None
 
     def version(self):
@@ -506,7 +517,7 @@ class CaptureMethod:
 
     def analyze(self, doc, cfg):
         row = self.adapter.current
-        if (doc.file_name != row["image_path"]
+        if (doc.file_name != Path(row["image_path"]).name
                 or doc.sha256 != self.adapter.manifest["files"][row["image_path"]]):
             raise ValueError("runner document does not match the frozen row")
         record = {**row, "method": self.name, "status": "method_exception"}
@@ -598,6 +609,12 @@ def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, pro
     criteria_hash = contract.get("criteria_sha256")
     if not isinstance(criteria_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", criteria_hash):
         raise ValueError("locked event requires preregistered criteria hash")
+    if manifest.get("dataset_kind") == casia_detector_protocol.DATASET_KIND:
+        if (contract.get("cohort_proposal_sha256") != manifest["cohort_receipt"]["raw_sha256"]
+                or contract.get("oracle_policy") != manifest["oracle_policy"]
+                or contract.get("row_inventory_sha256") != digest(manifest["rows"])):
+            raise ValueError("CASIA lock requires the approved cohort and oracle")
+        _check_population_rows(manifest["rows"], contract.get("population"))
     event = contract.get("event_id", "")
     if not isinstance(event, str) or not re.fullmatch(r"[a-zA-Z0-9-]{1,80}", event):
         raise ValueError("invalid locked event ID")
@@ -668,10 +685,53 @@ def evaluate(manifest_path: Path, split: str, config: Path, methods: list,
     return result
 
 
+def _check_population_rows(rows, population):
+    """A fixed CASIA event cannot replace failures or narrow class/group N."""
+    if (not isinstance(population, dict)
+            or set(population) != {"authentic", "forged", "distinct_screened_originals"}
+            or any(type(n) is not int or n < 1 for n in population.values())
+            or len(set(population.values())) != 1):
+        raise ValueError("formal population requires equal positive class/group counts")
+    groups = {}
+    for label in ("authentic", "forged"):
+        selected = [row for row in rows if row["label"] == label]
+        groups[label] = {row["base_image_id"] for row in selected}
+        if (len(selected) != population[label]
+                or len(groups[label]) != population["distinct_screened_originals"]
+                or any(row["scene_id"] != row["base_image_id"] or row["split"] != "locked"
+                       for row in selected)):
+            raise ValueError("formal population or original-ID groups changed")
+    if (groups["authentic"] != groups["forged"] or len(rows) != sum(
+            population[label] for label in ("authentic", "forged"))):
+        raise ValueError("formal population needs exactly one complete pair per group")
+
+
+def _check_formal_population(report, criteria):
+    population = criteria.get("population")
+    if population is None:
+        return
+    for method in report["methods"]:
+        rows = [row for row in report["rows"] if row["method"] == method]
+        _check_population_rows(rows, population)
+        if any(row["status"] not in _SCORED_STATUS for row in rows):
+            raise ValueError("formal population requires every row scored with zero exclusions/errors")
+        inventory = criteria.get("row_inventory")
+        if not inventory or not isinstance(inventory, list):
+            raise ValueError("formal population requires preregistered row inventory")
+        _check_population_rows(inventory, population)
+        expected = {row["image_path"]: row for row in inventory}
+        if (len(expected) != len(inventory)
+                or {row["image_path"] for row in rows} != set(expected)
+                or any(any(row.get(key) != value for key, value in expected[row["image_path"]].items())
+                       for row in rows)):
+            raise ValueError("formal row inventory differs from preregistered image/group mapping")
+
+
 def _rates(report, method):
     metric = report["eval"]["per_method"][method]
     controls = metric["fp"] + metric["tn"]
     traces = [r for r in report["rows"] if r["method"] == method]
+    pixel = _pixel_summary(traces)
     return {"fp": metric["fp"], "tp": metric["tp"],
             "fpr": metric["fp"] / controls if controls else None,
             "recall": metric["recall"],
@@ -679,8 +739,37 @@ def _rates(report, method):
             **{f"{label}_inconclusive": sum(r["label"] == label and r["status"] ==
                                              Verdict.INCONCLUSIVE.value for r in traces)
                for label in ("authentic", "forged")},
-            "macro_iou": metric["pixel_macro"]["iou"],
-            "micro_iou": metric["pixel_micro"]["iou"]}
+            "macro_iou": pixel["macro"]["iou"],
+            "micro_iou": pixel["micro"]["iou"]}
+
+
+def _pixel_summary(rows):
+    pixel_rows = []
+    for row in rows:
+        if row["label"] != "forged" or row["status"] not in _SCORED_STATUS:
+            continue
+        if type(row.get("mask_present")) is not bool:
+            raise ValueError("scored forged row requires a boolean mask presence flag")
+        pixel = row.get("pixel")
+        if not isinstance(pixel, dict) or pixel.get("skipped") is not None:
+            raise ValueError("scored forged row is missing valid pixel evidence")
+        counts = [pixel.get(name) for name in ("tp", "fp", "fn")]
+        if any(type(count) is not int or count < 0 for count in counts):
+            raise ValueError("scored forged pixel counts must be nonnegative integers")
+        tp, fp, fn = counts
+        if tp + fn == 0:
+            raise ValueError("scored forged pixel evidence requires nonempty ground truth")
+        expected_iou = tp / (tp + fp + fn)
+        row_iou = pixel.get("iou")
+        if (type(row_iou) not in (int, float) or not 0 <= row_iou <= 1
+                or abs(row_iou - expected_iou) > _PIXEL_REPORT_TOLERANCE):
+            raise ValueError("scored forged row IoU disagrees with pixel counts")
+        if not row["mask_present"] and (tp != 0 or fp != 0):
+            raise ValueError("missing prediction must retain zero-IoU R2 pixel evidence")
+        pixel_rows.append({"skipped": None, "precision": None, "recall": None,
+                           "f1": None, "iou": expected_iou,
+                           "tp": tp, "fp": fp, "fn": fn})
+    return aggregate_pixel(pixel_rows)
 
 
 def _check_report(report):
@@ -710,8 +799,9 @@ def _check_report(report):
         expected = image_metrics([r["status"] == Verdict.SUSPICIOUS_INDICATION.value
                                   for r in scored], [r["label"] == "forged" for r in scored])
         aggregate = report["eval"]["per_method"][method]
-        if any(type(aggregate[k]) is not int or aggregate[k] != expected[k]
-               for k in ("tp", "fp", "tn", "fn", "n")):
+        if (not isinstance(aggregate, dict)
+                or any(type(aggregate[k]) is not int or aggregate[k] != expected[k]
+                       for k in ("tp", "fp", "tn", "fn", "n"))):
             raise ValueError("row/aggregate confusion counts disagree")
         expected_counts = {"n_scored": len(scored),
                            "n_excluded": histogram.get("method_exception", 0)
@@ -722,6 +812,23 @@ def _check_report(report):
         if any(type(aggregate.get(k)) is not int or aggregate[k] != count
                for k, count in expected_counts.items()):
             raise ValueError("row/aggregate status accounting mismatch")
+        expected_pixel = _pixel_summary(scored)
+        if (type(aggregate.get("pixel_n_images")) is not int
+                or aggregate["pixel_n_images"] != expected_pixel["n_images_scored"]):
+            raise ValueError("pixel_n_images disagrees with scored forged rows")
+        for field, expected_iou in (("pixel_macro", expected_pixel["macro"]["iou"]),
+                                    ("pixel_micro", expected_pixel["micro"]["iou"])):
+            pixel_aggregate = aggregate.get(field)
+            if not isinstance(pixel_aggregate, dict) or "iou" not in pixel_aggregate:
+                raise ValueError("pixel aggregate IoU is malformed")
+            reported_iou = pixel_aggregate["iou"]
+            if expected_iou is None:
+                if reported_iou is not None:
+                    raise ValueError("pixel aggregate IoU disagrees with scored forged rows")
+            elif (type(reported_iou) not in (int, float) or not 0 <= reported_iou <= 1
+                    or not math.isfinite(reported_iou)
+                    or abs(reported_iou - expected_iou) > _PIXEL_REPORT_TOLERANCE):
+                raise ValueError("pixel aggregate IoU disagrees with scored forged rows")
         coverage[method] = {label: {"eligible": sum(r["label"] == label for r in rows),
                                     "scored": sum(r["label"] == label for r in scored)}
                             for label in ("authentic", "forged")}
@@ -739,6 +846,8 @@ def compare(baseline_path: Path, candidate_path: Path, criteria_path: Path, out:
     baseline_coverage = _check_report(baseline)
     candidate_coverage = _check_report(candidate)
     criteria = json.loads(criteria_path.read_text(encoding="utf-8"))
+    _check_formal_population(baseline, criteria)
+    _check_formal_population(candidate, criteria)
     for field in ("protocol", "protocol_sha256", "manifest_sha256", "seed", "methods",
                   "runtime", "n_selected", "pair_sha256", "criteria_sha256"):
         if baseline[field] != candidate[field]:
@@ -832,6 +941,10 @@ def main(argv=None):
     p.add_argument("--exposed", nargs="*", default=[])
     p.add_argument("--prior-manifest", type=Path,
                    help="Preserve observed dev rows from a sealed protocol v1 manifest")
+    p = commands.add_parser("freeze-casia", help="Freeze the approved native CASIA cohort without inference")
+    p.add_argument("--cohort", type=Path, required=True)
+    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
     p = commands.add_parser("evaluate")
     p.add_argument("--manifest", type=Path, required=True)
     p.add_argument("--root", type=Path)
@@ -849,6 +962,9 @@ def main(argv=None):
         if args.command == "freeze":
             result = freeze(args.root, args.out, seed=args.seed, exposed=args.exposed,
                             prior_manifest=args.prior_manifest)
+        elif args.command == "freeze-casia":
+            result = casia_detector_protocol.build_manifest(args.cohort, args.root, repo=REPO)
+            _write(args.out, result)
         elif args.command == "evaluate":
             result = evaluate(args.manifest, args.split, args.config,
                               [load_method(name) for name in args.methods.split(",")], args.out,

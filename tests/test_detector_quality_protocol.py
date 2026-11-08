@@ -11,7 +11,141 @@ from PIL import Image, ImageOps
 
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult
+from imageguard.evaluation.metrics import aggregate_pixel
 from scripts import evaluate_detector_quality as protocol
+
+
+def _formal_rows():
+    return [{"image_path": f"{label}/Au_{i}.png", "label": label,
+             "base_image_id": f"Au_{i}", "scene_id": f"Au_{i}", "split": "locked",
+             "method": "copy_move_block", "status": "no_indication"}
+            for i in range(2) for label in ("authentic", "forged")]
+
+
+def _formal_population():
+    return {"authentic": 2, "forged": 2, "distinct_screened_originals": 2}
+
+
+def test_formal_population_accepts_complete_pairs():
+    protocol._check_formal_population(
+        {"methods": ["copy_move_block"], "rows": _formal_rows()},
+        {"population": _formal_population(), "row_inventory": _formal_rows()})
+
+
+def test_formal_population_binds_exact_image_to_group_mapping():
+    rows = _formal_rows()
+    for row in rows:
+        if row["label"] == "forged":
+            row["base_image_id"] = row["scene_id"] = (
+                "Au_1" if row["base_image_id"] == "Au_0" else "Au_0")
+    # Cardinalities and group sets still reconcile; the approved inventory must not.
+    protocol._check_population_rows(rows, _formal_population())
+    with pytest.raises(ValueError, match="row inventory"):
+        protocol._check_formal_population({"methods": ["copy_move_block"], "rows": rows},
+                                        {"population": _formal_population(),
+                                         "row_inventory": _formal_rows()})
+
+
+def test_formal_population_requires_preregistered_row_inventory():
+    with pytest.raises(ValueError, match="row inventory"):
+        protocol._check_formal_population({"methods": ["copy_move_block"], "rows": _formal_rows()},
+                                        {"population": _formal_population()})
+
+
+@pytest.mark.parametrize("change", ["missing", "duplicate", "wrong_group", "wrong_scene", "dev"])
+def test_formal_population_rejects_denominator_or_group_changes(change):
+    rows = _formal_rows()
+    if change == "missing":
+        rows.pop()
+    elif change == "duplicate":
+        rows.append(copy.deepcopy(rows[0]))
+    elif change == "wrong_group":
+        rows[0]["base_image_id"] = rows[0]["scene_id"] = "held-aside"
+    elif change == "wrong_scene":
+        rows[0]["scene_id"] = "alias"
+    else:
+        rows[0]["split"] = "dev"
+    with pytest.raises(ValueError, match="formal population"):
+        protocol._check_population_rows(rows, _formal_population())
+
+
+@pytest.mark.parametrize("status", ["method_exception", "input_excluded", "error", "not_applicable"])
+def test_formal_population_rejects_any_unscored_row_even_when_both_roles_share_it(status):
+    report = {"methods": ["copy_move_block"], "rows": _formal_rows()}
+    report["rows"][0]["status"] = status
+    for role in ("baseline", "candidate"):
+        with pytest.raises(ValueError, match="every row scored"):
+            protocol._check_formal_population({**report, "role": role},
+                                            {"population": _formal_population()})
+
+
+@pytest.mark.parametrize("population", [None, {}, {"authentic": True, "forged": 1,
+                                                 "distinct_screened_originals": 1},
+                                       {"authentic": 2, "forged": 2,
+                                        "distinct_screened_originals": 1}])
+def test_formal_population_rejects_malformed_contract(population):
+    with pytest.raises(ValueError, match="formal population"):
+        protocol._check_population_rows(_formal_rows(), population)
+
+
+@pytest.mark.parametrize("change", [None, "cohort", "oracle", "population", "row_inventory"])
+def test_casia_lock_binds_population_and_oracle_before_exclusive_receipt(tmp_path, change):
+    manifest = {"sha256": "b" * 64, "seed": 42,
+                "dataset_kind": protocol.casia_detector_protocol.DATASET_KIND,
+                "cohort_receipt": {"raw_sha256": "1" * 64}, "oracle_policy": "fixture-policy",
+                "rows": _formal_rows()}
+    identity = {"working_tree_clean": True, "source_sha256": "a" * 64}
+    contract = {"approved": True, "event_id": "casia-fixture", "manifest_sha256": "b" * 64,
+                "protocol_sha256": "c" * 64, "criteria_sha256": "d" * 64, "seed": 42,
+                "methods": ["copy_move_block"],
+                "baseline": {"source_sha256": "a" * 64, "config_sha256": "e" * 64},
+                "candidate": {"source_sha256": "a" * 64, "config_sha256": "f" * 64},
+                "cohort_proposal_sha256": "1" * 64, "oracle_policy": "fixture-policy",
+                "row_inventory_sha256": protocol.digest(manifest["rows"]),
+                "population": _formal_population()}
+    if change == "cohort":
+        contract["cohort_proposal_sha256"] = "2" * 64
+    elif change == "oracle":
+        contract["oracle_policy"] = "different"
+    elif change == "population":
+        contract["population"]["forged"] += 1
+    elif change == "row_inventory":
+        manifest["rows"][0]["image_path"] = "held-aside.png"
+    path = tmp_path / "pair.json"
+    path.write_text(json.dumps(contract), encoding="utf-8")
+    def lock():
+        return protocol._lock_pair(path, "baseline", identity, manifest, "e" * 64,
+                                   ["copy_move_block"], "c" * 64)
+    receipt = tmp_path / "event-casia-fixture/baseline.json"
+    if change is None:
+        lock()
+        assert receipt.is_file()
+    else:
+        with pytest.raises(ValueError):
+            lock()
+        assert not receipt.exists()
+
+
+def test_capture_accepts_nested_image_path_and_preserves_hash_and_full_row_identity(tmp_path):
+    from imageguard.core.io import safe_open
+
+    root = tmp_path / "assets"
+    (root / "original").mkdir(parents=True)
+    image = root / "original/Au_fixture.png"
+    Image.fromarray(np.zeros((64, 64, 3), np.uint8)).save(image)
+    row = {"image_path": "original/Au_fixture.png", "gt_mask_path": None,
+           "sample_id": "Au_fixture", "label": "authentic"}
+    adapter = protocol.ManifestAdapter({"files": {row["image_path"]: protocol.file_hash(image)}},
+                                       root, "locked")
+    adapter.current = row
+    records = []
+    method = protocol.CaptureMethod(FixtureMethod(), adapter, records, tmp_path / "out")
+    method.analyze(safe_open(image), protocol.load_thresholds(protocol.REPO / "configs/thresholds.yaml"))
+    assert records[0]["status"] == "inconclusive"
+    assert records[0]["image_path"] == row["image_path"]
+    adapter.manifest["files"][row["image_path"]] = "f" * 64
+    with pytest.raises(ValueError, match="frozen row"):
+        method.analyze(safe_open(image), protocol.load_thresholds())
 
 
 @pytest.fixture
@@ -479,12 +613,22 @@ def _coverage_reports(tmp_path, *, migrate_failure):
                 rows.append({"image_path": f"{label}-{index}.png", "base_image_id": str(index),
                              "scene_id": str(index) * 64,
                              "label": label, "method": method, "status": status})
+                if label == "forged" and status in protocol._SCORED_STATUS:
+                    # Missing predictions must remain visible as R2 zero-IoU
+                    # evidence for the nonempty ground-truth mask.
+                    row = rows[-1]
+                    row["mask_present"] = False
+                    row["pixel"] = protocol.pixel_metrics(None, np.ones((1, 1), dtype=np.uint8))
         scored = [r for r in rows if r["status"] != "method_exception"]
         metric = protocol.image_metrics([r["status"] == "suspicious_indication" for r in scored],
                                         [r["label"] == "forged" for r in scored])
+        pixel_rows = [r["pixel"] for r in rows
+                      if r["label"] == "forged" and r["status"] in protocol._SCORED_STATUS]
+        pixel = aggregate_pixel(pixel_rows)
         metric.update(n_scored=len(scored), n_excluded=len(rows) - len(scored), n_error=0,
-                      n_not_applicable=0, n_inconclusive=0, pixel_macro={"iou": 0.0},
-                      pixel_micro={"iou": 0.0})
+                      n_not_applicable=0, n_inconclusive=0,
+                      pixel_n_images=pixel["n_images_scored"],
+                      pixel_macro=pixel["macro"], pixel_micro=pixel["micro"])
         counts = {status: sum(r["status"] == status for r in rows)
                   for status in {r["status"] for r in rows}}
         reports[role] = {"protocol": protocol.PROTOCOL, "protocol_sha256": "a" * 64,
@@ -499,12 +643,131 @@ def _coverage_reports(tmp_path, *, migrate_failure):
 @pytest.mark.parametrize("migrate_failure", [True, False])
 def test_compare_rejects_new_row_failures_but_allows_recovery(tmp_path, migrate_failure):
     reports, criteria_path = _coverage_reports(tmp_path, migrate_failure=migrate_failure)
+    if not migrate_failure:
+        # A pixel payload on an unscored failure row is irrelevant to the
+        # forged-image localization denominator.
+        unscored = next(r for r in reports["baseline"]["rows"]
+                        if r["label"] == "forged" and r["status"] == "method_exception")
+        unscored["pixel"] = {"this": "must not be counted or validated"}
+        valid_r2 = next(r["pixel"] for r in reports["candidate"]["rows"]
+                        if r["label"] == "forged" and r["status"] in protocol._SCORED_STATUS)
+        assert valid_r2["rule"] == "R2" and valid_r2["iou"] == 0.0
     for role, report in reports.items():
         protocol._write(tmp_path / role / "report.json", protocol._sealed(report))
     result = protocol.compare(tmp_path / "baseline", tmp_path / "candidate", criteria_path,
                               tmp_path / "comparison.json")
     assert result["status"] == ("FAIL" if migrate_failure else "PASS")
     assert ("coverage:new_failed_rows" in result["methods"]["copy_move_keypoint"]["failed"]) is migrate_failure
+
+
+@pytest.mark.parametrize("change", ["macro", "micro", "undercount", "missing_trace",
+                                     "row_iou", "bad_count", "negative_count", "empty_gt",
+                                     "malformed_macro", "malformed_micro"])
+def test_compare_rejects_forged_pixel_accounting_drift(tmp_path, change):
+    reports, criteria_path = _coverage_reports(tmp_path, migrate_failure=False)
+    report = reports["candidate"]
+    metric = report["eval"]["per_method"]["copy_move_keypoint"]
+    row = next(r for r in report["rows"]
+               if r["label"] == "forged" and r["status"] in protocol._SCORED_STATUS)
+    if change == "macro":
+        metric["pixel_macro"]["iou"] = 0.5
+    elif change == "micro":
+        metric["pixel_micro"]["iou"] = 0.5
+    elif change == "undercount":
+        metric["pixel_n_images"] = 0
+    elif change == "missing_trace":
+        row.pop("pixel")
+    elif change == "row_iou":
+        row["pixel"]["iou"] = 0.5
+    elif change == "bad_count":
+        row["pixel"]["tp"] = True
+    elif change == "negative_count":
+        row["pixel"]["fn"] = -1
+    elif change == "empty_gt":
+        row["pixel"].update(fn=0, iou=None)
+    elif change == "malformed_macro":
+        metric["pixel_macro"] = []
+    else:
+        metric["pixel_micro"] = []
+    for role, saved in reports.items():
+        protocol._write(tmp_path / role / "report.json", protocol._sealed(saved))
+    out = tmp_path / "comparison.json"
+    with pytest.raises(ValueError, match="pixel"):
+        protocol.compare(tmp_path / "baseline", tmp_path / "candidate", criteria_path, out)
+    assert not out.exists()
+
+
+def test_report_allows_zero_scored_forged_pixel_rows_with_na_aggregates(tmp_path):
+    reports, _ = _coverage_reports(tmp_path, migrate_failure=False)
+    report = reports["baseline"]
+    method = "copy_move_keypoint"
+    for row in report["rows"]:
+        if row["label"] == "forged" and row["status"] in protocol._SCORED_STATUS:
+            row["status"] = "method_exception"
+    scored = [r for r in report["rows"] if r["status"] in protocol._SCORED_STATUS]
+    metric = report["eval"]["per_method"][method]
+    metric.update(protocol.image_metrics(
+        [r["status"] == "suspicious_indication" for r in scored],
+        [r["label"] == "forged" for r in scored]))
+    metric.update(n_scored=len(scored), n_excluded=len(report["rows"]) - len(scored),
+                  n_inconclusive=0, n_error=0, n_not_applicable=0,
+                  pixel_n_images=0, pixel_macro={"iou": None}, pixel_micro={"iou": None})
+    report["counts"][method] = {status: sum(r["status"] == status for r in report["rows"])
+                                 for status in {r["status"] for r in report["rows"]}}
+    assert protocol._check_report(report)[method]["forged"]["scored"] == 0
+
+
+@pytest.mark.parametrize("flag", [None, 0, "false", "missing"])
+def test_compare_rejects_missing_or_malformed_mask_presence(tmp_path, flag):
+    reports, criteria_path = _coverage_reports(tmp_path, migrate_failure=False)
+    row = next(r for r in reports["candidate"]["rows"]
+               if r["label"] == "forged" and r["status"] in protocol._SCORED_STATUS)
+    if flag == "missing":
+        row.pop("mask_present")
+    else:
+        row["mask_present"] = flag
+    for role, report in reports.items():
+        protocol._write(tmp_path / role / "report.json", protocol._sealed(report))
+    out = tmp_path / "comparison.json"
+    with pytest.raises(ValueError, match="mask"):
+        protocol.compare(tmp_path / "baseline", tmp_path / "candidate", criteria_path, out)
+    assert not out.exists()
+
+
+@pytest.mark.parametrize("offset_role", ["baseline", "candidate"])
+def test_compare_uses_recomputed_iou_at_zero_decision_tolerance(tmp_path, offset_role):
+    reports, criteria_path = _coverage_reports(tmp_path, migrate_failure=False)
+    method = "copy_move_keypoint"
+    criteria = json.loads(criteria_path.read_text())
+    criteria["tolerance"] = 0
+    criteria["methods"][method].update(macro_iou_delta_min=0, micro_iou_delta_min=0)
+    criteria_path.write_text(json.dumps(criteria))
+    gt = np.ones((2, 2), dtype=np.uint8)
+    prediction = np.array([[1, 1], [0, 0]], dtype=np.uint8)
+    for role, report in reports.items():
+        pixel_rows = []
+        for row in report["rows"]:
+            if row["label"] == "forged" and row["status"] in protocol._SCORED_STATUS:
+                row["mask_present"] = True
+                row["pixel"] = protocol.pixel_metrics(prediction, gt)
+                pixel_rows.append(row["pixel"])
+        pixel = aggregate_pixel(pixel_rows)
+        metric = report["eval"]["per_method"][method]
+        metric.update(pixel_macro=pixel["macro"], pixel_micro=pixel["micro"])
+        if role == offset_role:
+            for row in report["rows"]:
+                if row["label"] == "forged" and row["status"] in protocol._SCORED_STATUS:
+                    row["pixel"]["iou"] += 5e-13
+            metric["pixel_macro"]["iou"] += 5e-13
+            metric["pixel_micro"]["iou"] += 5e-13
+        report["criteria_sha256"] = protocol.file_hash(criteria_path)
+        protocol._write(tmp_path / role / "report.json", protocol._sealed(report))
+    result = protocol.compare(tmp_path / "baseline", tmp_path / "candidate", criteria_path,
+                              tmp_path / "comparison.json")
+    assert result["status"] == "PASS"
+    for role in ("baseline", "candidate"):
+        assert result["methods"][method][role]["macro_iou"] == .5
+        assert result["methods"][method][role]["micro_iou"] == .5
 
 
 def test_compare_rejects_legacy_locked_reports(tmp_path):
