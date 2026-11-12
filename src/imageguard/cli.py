@@ -102,6 +102,18 @@ def main() -> None:
                 )
                 raise SystemExit(2) from None
 
+        # run_eval accumulates results per method name, so a repeated name
+        # would double-count samples and metrics for that method.
+        duplicates = [name for name in dict.fromkeys(specs) if specs.count(name) > 1]
+        if duplicates:
+            names = ", ".join(repr(name) for name in duplicates)
+            print(
+                f"error: duplicate eval method(s): {names}; "
+                "each method may be named at most once",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from None
+
         cfg = load_thresholds()
         adapter = (SynthAdapter(args.root) if args.dataset == "synth"
                    else CoMoFoDAdapter(args.root))
