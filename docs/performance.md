@@ -65,6 +65,10 @@ Nguồn: file JSON tạm `imageguard_bench_methods_full.json` (không nằm tron
 3. **Pipeline mặc định:** `analysis_service` tại 2048 px `median_s` 51.22097900000517 s, cùng bậc với tổng ba method mặc định trong đó `keypoint` chiếm phần lớn ở size này.
 4. **Method phụ trợ** (`noise`, `noise_local`, `splicing`, `freq`): `median_s` tại 2048 px đều dưới 0.5 s trong lần đo này — nhỏ hơn `keypoint` và `block` tại cùng size.
 
+## Nguyên nhân (profiling một lần, cùng máy)
+
+Profiling bằng `cProfile` và `perf_counter` trên ảnh synth 2048 px cho thấy phần lớn thời gian của `keypoint` nằm ở `cv2.BFMatcher.knnMatch` trong `self_match` (so khớp brute-force từng descriptor với mọi descriptor khác), không nằm ở RANSAC hay dựng mask. Số keypoint SIFT tăng xấp xỉ theo diện tích ảnh (`nfeatures: 0`, không giới hạn) nên chi phí so khớp tăng nhanh hơn diện tích. Ảnh phẳng ít keypoint (dưới `k_min`) thoát sớm và rất nhanh; ảnh nhiều texture là trường hợp chậm nhất. Mọi cách giảm thời gian bằng hạ kích thước làm việc hoặc giới hạn số keypoint đều **đổi đầu ra của detector** và cần quyết định riêng; tài liệu này không đề xuất đổi ngưỡng.
+
 ## Hạn chế
 
 - Một máy, một phiên chạy; không đối chứng phần cứng khác.
