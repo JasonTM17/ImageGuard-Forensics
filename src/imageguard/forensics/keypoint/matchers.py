@@ -34,6 +34,16 @@ def self_match(
     cfg: ThresholdSet,
     norm: int = cv2.NORM_L2,
 ) -> MatchPairs:
+    """So khớp descriptor của ảnh với chính nó (copy-move: nguồn ≈ đích).
+
+    BFMatcher (Brute-Force): với mỗi descriptor query, tìm k hàng xóm gần nhất
+    trong cùng tập train=desc. Lowe ratio: chỉ giữ match nếu
+    ``distance(nearest) < ρ × distance(second)`` — tránh match mơ hồ.
+
+    Tham số: ``kps``, ``desc`` từ detector; ``norm`` khớp backend (L2/Hamming).
+    Trả ``MatchPairs``: ``pairs`` (N,2) index; ``stats`` đếm qua từng bước lọc.
+    Chủ đề môn: feature extraction + matching (không phải frequency/morphology).
+    """
     rho = float(cfg.value("keypoint", "ratio_rho"))
     min_dist = float(cfg.value("keypoint", "min_match_dist"))
     stats: dict[str, int] = {}

@@ -1,4 +1,8 @@
-"""Method registry — spec string → Method instance. Dùng chung CLI + service."""
+"""Method registry — spec string → Method instance. Dùng chung CLI + service.
+
+``METHOD_SPECS`` map tên ngắn (vd. ``keypoint``) sang ``module:Class`` để
+lazy-import — tránh load toàn bộ forensics khi chỉ chạy một method.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +22,7 @@ METHOD_SPECS = {
 
 
 def load_method(spec: str) -> Method:
+    """Trả instance ``Method`` theo ``spec``; ``KeyError`` nếu tên không đăng ký."""
     path = METHOD_SPECS.get(spec)
     if path is None:
         raise KeyError(f"method '{spec}' không có trong registry: {list(METHOD_SPECS)}")

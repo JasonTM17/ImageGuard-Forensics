@@ -32,6 +32,8 @@ SCORE_DEF = "số cặp keypoint match qua geometric verify (RANSAC affine inlie
 
 
 class KeypointCopyMove:
+    """Phương pháp copy-move conclusive: keypoint → verdict có mask/heatmap."""
+
     name = MethodName.COPY_MOVE_KEYPOINT.value
 
     def analyze(
@@ -40,6 +42,13 @@ class KeypointCopyMove:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """Luồng: preprocess → detect → self_match → geometric_verify → mask.
+
+        ``score`` = ``n_verified`` (số cặp inlier). Verdict đọc ``t_susp``,
+        ``t_clean`` từ config: ≥ t_susp → SUSPICIOUS; < t_clean → NO_INDICATION;
+        giữa hai ngưỡng → INCONCLUSIVE. Keypoint < k_min → INCONCLUSIVE (thiếu
+        texture). Mask phủ >50% ảnh → hạ xuống INCONCLUSIVE (limitation).
+        """
         t0 = time.perf_counter()
         limitations: list[str] = []
 
@@ -132,6 +141,7 @@ class KeypointCopyMove:
 
     def _result(self, verdict, score, t0, limitations, evidence=None, mask=None,
                 heatmap=None, params_hash=""):
+        """Gói ``AlgorithmResult`` đồng nhất (duration, score_definition, ...)."""
         return AlgorithmResult(
             method=MethodName.COPY_MOVE_KEYPOINT,
             verdict=verdict,

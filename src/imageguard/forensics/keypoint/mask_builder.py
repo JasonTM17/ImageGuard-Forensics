@@ -21,7 +21,11 @@ def build_mask(
     inlier_idx: np.ndarray,
     shape: tuple[int, int],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Trả (mask uint8 0/255, heatmap float32 [0,1]) kích thước `shape` (h,w)."""
+    """Trả (mask uint8 0/255, heatmap float32 [0,1]) kích thước ``shape`` (h,w).
+
+    Chủ đề môn: morphology (MORPH_CLOSE) trên mask nhị phân; blob Gaussian
+    tương đương lọc không gian cục bộ trên “điểm rời”.
+    """
     h, w = shape
     heat = np.zeros((h, w), np.float32)
     if len(inlier_idx):
@@ -42,6 +46,7 @@ def build_mask(
     if heat.max() > 0:
         heat /= heat.max()
     mask = np.zeros((h, w), np.uint8)
+    # Ngưỡng 0.25 trên heatmap chuẩn hóa — chỗ mật độ keypoint cao = nghi vấn.
     mask[heat > 0.25] = 255
     # Close nối các blob rời thành vùng liền (keypoint thưa → mask đứt gãy).
     k = max(5, min(h, w) // 40) | 1
@@ -50,7 +55,11 @@ def build_mask(
 
 
 def upscale_mask(mask: np.ndarray, scale: float, shape: tuple[int, int]) -> np.ndarray:
-    """Map mask từ working copy về kích thước ảnh gốc khi scale<1."""
+    """Map mask từ working copy về kích thước ảnh gốc khi scale<1.
+
+    INTER_NEAREST giữ nhãn 0/255; binarize lại sau resize tránh giá trị mờ.
+    Liên quan preprocessing/resize trong pipeline, không phải DCT/JPEG.
+    """
     if scale >= 1.0:
         return mask
     out = cv2.resize(mask, (shape[1], shape[0]), interpolation=cv2.INTER_NEAREST)

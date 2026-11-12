@@ -13,6 +13,11 @@ def draw_pairs(
     inlier_idx: np.ndarray,
     scale: float = 1.0,
 ) -> np.ndarray:
+    """Vẽ đoạn nối các cặp inlier lên ảnh BGR (báo cáo/debug).
+
+    Tọa độ keypoint chia ``scale`` nếu phân tích trên ảnh đã downscale.
+    Không ảnh hưởng verdict — chỉ artifact trong ``evidence['pairs_image']``.
+    """
     out = bgr.copy()
     for k in range(len(inlier_idx)):
         i, j = pairs[inlier_idx[k]]
@@ -30,6 +35,7 @@ def draw_pairs(
 
 
 def overlay_mask(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Pha mask đỏ mờ lên ảnh gốc (alpha blend) để người xem thấy vùng nghi vấn."""
     out = bgr.copy()
     out[mask > 0] = (0, 0, 255)
     return cv2.addWeighted(bgr, 0.6, out, 0.4, 0)

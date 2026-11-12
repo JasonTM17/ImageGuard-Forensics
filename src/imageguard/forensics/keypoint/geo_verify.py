@@ -25,6 +25,13 @@ from imageguard.core.config import ThresholdSet
 
 @dataclass(slots=True)
 class VerifyResult:
+    """Kết quả xác minh hình học sau self-match.
+
+    ``inlier_pairs``: chỉ số hàng trong ``pairs`` được RANSAC chấp nhận.
+    ``n_clusters``: số cụm transform (global pass + cụm displacement).
+    ``models``: ma trận affine 2×3 ước lượng cho từng cụm.
+    """
+
     inlier_pairs: np.ndarray  # (M, 2) index vào mảng pairs đầu vào
     n_clusters: int
     models: list[np.ndarray] = field(default_factory=list)  # affine 2×3 per cluster
@@ -34,7 +41,12 @@ def _ransac_affine(
     src: np.ndarray, dst: np.ndarray, eps: float
 ) -> tuple[np.ndarray | None, np.ndarray | None]:
     """Fit affine 2×3 (6 dof, cần ≥3 điểm không thẳng hàng) bằng RANSAC.
-    Trả (model, inlier_mask) hoặc (None, None) nếu không đủ điểm."""
+    Trả (model, inlier_mask) hoặc (None, None) nếu không đủ điểm.
+
+    OpenCV: ``estimateAffine2D(dst→src)`` — copy-move nghĩa là điểm đích
+    map về điểm nguồn bằng affine 2D (xoay, scale, dịch chuyển).
+    RANSAC loại outlier không cùng một transform.
+    """
     if len(src) < 3:
         return None, None
     model, inliers = cv2.estimateAffine2D(
@@ -53,6 +65,15 @@ def geometric_verify(
     kps: list,
     cfg: ThresholdSet,
 ) -> VerifyResult:
+    """Lọc cặp match bằng nhất quán hình học (spatial / geometric reasoning).
+
+    Pass 1: một affine global cho toàn ảnh (một vùng copy xoay/scale).
+    Pass 2: gom cụm theo vector dịch chuyển (dx,dy) gần nhau, RANSAC riêng
+    — nhiều vùng copy-translate độc lập.
+
+    Ngưỡng ``ransac_residual``, ``min_cluster`` từ config. Chủ đề: feature
+    extraction + không gian (không morphology trên ảnh ở bước này).
+    """
     if len(pairs) == 0:
         return VerifyResult(inlier_pairs=np.empty(0, np.int32), n_clusters=0)
 
@@ -76,6 +97,7 @@ def geometric_verify(
     # Pass 2: displacement clustering trên phần còn lại — nhiều vùng translate.
     if remaining.any():
         disp = dst_all - src_all  # (N,2)
+        # Bán kính greedy: cặp cùng cụm nếu displacement gần trung bình cụm.
         tol = max(eps * 3.0, 8.0)
         clusters: list[list[int]] = []
         for i in np.flatnonzero(remaining):

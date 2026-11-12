@@ -29,7 +29,15 @@ AUX_METHODS = {
 def combine(
     results: list[AlgorithmResult],
 ) -> tuple[Verdict, list[str], list[str]]:
-    """Trả (overall_verdict, signals, warnings)."""
+    """Kết hợp verdict nhiều method — không gộp điểm số.
+
+    Bỏ NOT_APPLICABLE; ERROR → warning, không fusion. **Chỉ cần một**
+    SUSPICIOUS_INDICATION trong ``usable`` → overall SUSPICIOUS (keypoint/block
+    có thể “kết tội”). Nếu mọi method usable đều NO_INDICATION → NO_INDICATION.
+    Còn lại INCONCLUSIVE; ≥2 aux INCONCLUSIVE → ghi ``aux_corroboration``.
+
+    Trả ``(verdict, signals, warnings)`` — ``signals`` liệt kê method đóng góp.
+    """
     signals: list[str] = []
     warnings: list[str] = []
     active = [r for r in results if r.verdict != Verdict.NOT_APPLICABLE]
