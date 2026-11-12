@@ -384,6 +384,9 @@ Registry method: `src/imageguard/forensics/registry.py`.
 $env:PYTHONPATH='src'
 python -m pytest tests/ -k ipkit -q -p no:cacheprovider
 
+# Demo slide chương C2–C7 (offline)
+python scripts/ipkit_demo.py
+
 # Mẫu nhỏ: ipkit + enhance + DCT forensics
 python -m pytest tests/test_ipkit_edges.py tests/test_enhance_ops.py tests/test_dct_course.py -q -p no:cacheprovider
 ```

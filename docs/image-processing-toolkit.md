@@ -361,6 +361,19 @@ assert pred.tolist() == [0, 1]
 
 ---
 
+## Demo trình bày chương C2–C7
+
+Script offline (không GUI, không verdict forensics):
+
+```powershell
+$env:PYTHONPATH='src'
+python scripts/ipkit_demo.py
+```
+
+Tests khóa hành vi: `tests/test_ipkit_demo.py`.
+
+---
+
 ## Kiểm thử
 
 Chạy từ thư mục gốc worktree (PowerShell):
