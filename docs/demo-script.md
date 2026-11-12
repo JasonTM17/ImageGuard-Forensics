@@ -75,7 +75,7 @@ Get-ChildItem .\synth
 ```text
 Wrote 1 samples to .\synth (manifest: .\synth\meta.json)
 
-easy_0000_F.png   # forged — dùng cho phân tích
+easy_0000_F.png   # ảnh chỉnh sửa tổng hợp — dùng cho phân tích
 easy_0000_O.png   # gốc
 easy_0000_M.png   # mask GT (255 = vùng copy-move)
 meta.json
@@ -111,7 +111,7 @@ print('wrote', out.name, 'bytes', out.stat().st_size, 'mask_pixels', int((mask>0
 
 ## Phần 3 — CLI `analyze` (≈2 phút)
 
-Phân tích file forged; in JSON `ForensicReport` ra stdout ([`docs/user-guide.md`](user-guide.md)).
+Phân tích file ảnh chỉnh sửa tổng hợp; in JSON `ForensicReport` ra stdout ([`docs/user-guide.md`](user-guide.md)).
 
 ```powershell
 cd <scratch>
@@ -209,7 +209,7 @@ Get-Content .\demo_report.md -TotalCount 15
 
 Theo [`docs/user-guide.md`](user-guide.md): operator **CLAHE**, **Unsharp mask**, **NLM** — chỉ **xem**, không gọi `AnalysisService`, không ghi verdict.
 
-1. Vẫn mở ảnh gốc forged (hoặc ảnh camera minh họa).
+1. Vẫn mở ảnh chỉnh sửa tổng hợp (hoặc ảnh camera minh họa).
 2. Tab **Tăng cường** → chọn **CLAHE** (histogram cục bộ — liên hệ môn học) → **Tăng cường**.
 3. Đọc banner cố định: bản xem, không phải bằng chứng.
 4. (Tùy chọn) Thanh trộn 0–100; **không** chạy lại Phân tích trên ảnh đã tăng cường.
