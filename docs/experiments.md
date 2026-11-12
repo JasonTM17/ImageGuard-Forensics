@@ -32,4 +32,9 @@ n_excluded. CẤM một con số headline gộp.
   Đây là bộ medium nhỏ, không phải benchmark công bố.
 - LaMa edits and clean controls: xem [modelforge.md](modelforge.md) để đọc kết quả, split sizes và giới hạn.
 - Classical enhancement, evaluation only: xem [enhancement-study.md](enhancement-study.md). PSNR/SSIM trên bộ synth đó không phải detection gain.
-- Không chạy locked test split; không có CoMoFoD dataset trong workspace.
+- Không chạy locked test split trên synthforge.
+- CoMoFoD: bản local gitignored tại `data/comofod_base` (200 base sets;
+  `provenance.json` ghi 199 strict-binary eligible, base `099` loại vì mask
+  không nhị phân thuần; `_B.png` binary GT, `_M.png` mask mềm, không có `_C` trong
+  bản này). Dev qualification trên CoMoFoD không thay thế sự kiện CASIA formal
+  (xem [`algorithms/comparison.md`](algorithms/comparison.md)).

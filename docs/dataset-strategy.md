@@ -12,12 +12,15 @@
 ## CoMoFoD (external)
 
 - Tralic et al., ELMAR-2013 — copy-move dataset có GT mask.
-- **Manual download** (điều khoản phát hành): đặt vào `data/comofod/`
-  (gitignored, không redistribute trong repo).
-- Naming: `NNN_F.png` forged, `NNN_O.png` original, `NNN_B.png` binary mask,
-  `NNN_C.png` color mask (một số bản `_M`).
+- **Manual download** (điều khoản phát hành): giải nén vào `data/comofod_base/`
+  (gitignored, không redistribute trong repo). Bản hiện có: 200 base sets;
+  `provenance.json` tại root — `strict_binary_eligible_sets`=199 (base `099`
+  excluded: mask có giá trị trung gian, chưa dùng cho strict-binary eval).
+- Naming trong `comofod_base`: `NNN_F.png` forged, `NNN_O.png` original,
+  `NNN_B.png` binary mask, `NNN_M.png` soft mask (không có `_C` trong bản đã
+  kiểm); adapter vẫn nhận `_C` nếu có ở bản khác.
 - **Verify gate bắt buộc** trước batch eval đầu:
-  1. `python -m imageguard eval --dataset comofod --root data/comofod` chỉ
+  1. `python -m imageguard eval --dataset comofod --root data/comofod_base` chỉ
      chạy sau khi `CoMoFoDAdapter.verify_masks()` (trong `src/imageguard/evaluation/comofod.py`)
      xác nhận: dims mask==image, giá trị mask đúng convention
      (`binary_white_is_forged`), manifest đếm đúng file thực.

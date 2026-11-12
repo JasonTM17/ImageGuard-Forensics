@@ -30,8 +30,8 @@ Các số dưới đây đo trên bộ mới, dùng ngưỡng hiện có mà kh�
 
 | Bộ | N | Seed | Kích thước | Model | config_hash | dataset_sha256 | git_sha |
 |---|---:|---:|---:|---|---|---|---|
-| Train | 12 | 2026 | 384×384 | LaMa ONNX SHA-256 `1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6` | `df80dcb9a6d32070` | `dcca513d7a4c63e52095a52f40a6d59ced91f52c3b441598ae26c9707616f70b` | `cf603c2` |
-| Holdout | 6 | 7777 | 512×512 | cùng SHA-256 | `df80dcb9a6d32070` | `ce69eb900bb5dfa65b2502bdcfa0dab018e6492d3cd464e56b629a85a888fe36` | `cf603c2` |
+| Train | 12 | 2026 | 384×384 | LaMa ONNX SHA-256 `1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6` | `df80dcb9a6d32070` | `46b367bc6fc6623edcc4d4a4eb790ca23896fceea17655511a0165835e46a7ea` | (bench JSON, xem dưới) |
+| Holdout | 6 | 7777 | 512×512 | cùng SHA-256 | `df80dcb9a6d32070` | `8198a6e80fe2135cf83922afc13fbc7f2a1fc84cfb0f869eb7cd779602fbe33d` | (bench JSON, xem dưới) |
 
 Lệnh sinh và bench (chạy với Python trong `.venv\Scripts\python.exe`):
 
@@ -56,11 +56,11 @@ IoU/bF1 là trung bình trên **tất cả mẫu** của mỗi loại; không c�
 |---|---|---|
 | Train erase (n=3) | 3 inconclusive; 0.000; 0.016 | 2 inconclusive; 0.335; 0.559 |
 | Train move (n=3) | 3 inconclusive; 0.000; 0.005 | 3 inconclusive; 0.368; 0.671 |
-| Train splice_keep (n=3) | 3 suspicious; 0.006; 0.139 | 3 no indication; 0.000; 0.000 |
-| Train splice_foreign (n=3) | 3 inconclusive; 0.005; 0.037 | 3 no indication; 0.000; 0.000 |
+| Train splice_keep (n=3) | 3 suspicious; 0.319; 0.598 | 3 no indication; 0.000; 0.000 |
+| Train splice_foreign (n=3) | 3 inconclusive; 0.001; 0.016 | 3 no indication; 0.000; 0.000 |
 | Holdout erase (n=2) | 2 inconclusive; 0.000; 0.005 | 2 inconclusive; 0.665; 0.888 |
 | Holdout move (n=2) | 2 suspicious; 0.042; 0.293 | 2 inconclusive; 0.376; 0.655 |
-| Holdout splice_keep (n=1) | 1 suspicious; 0.001; 0.066 | 1 inconclusive; 0.000; 0.000 |
+| Holdout splice_keep (n=1) | 1 suspicious; 0.319; 0.595 | 1 inconclusive; 0.000; 0.000 |
 | Holdout splice_foreign (n=1) | 1 no indication; 0.000; 0.000 | 1 no indication; 0.000; 0.000 |
 
 The keypoint `move` holdout rows show why verdict and localization must be read
@@ -76,8 +76,18 @@ returned no `SUSPICIOUS` verdict. This is not a real-photo false-positive rate.
 
 Block DCT had mean IoU 0 across all four edit types in these LaMa sets. It is
 not a suitable detector for edits that replace pixels instead of preserving a
-copy-move twin. SIFT detected all `splice_keep` samples here, but the sample
-counts are too small to establish general performance.
+copy-move twin. Keypoint marked all `splice_keep` samples `SUSPICIOUS` here with
+mean IoU 0.319 (train n=3) and 0.319 (holdout n=1); high verdict rate with
+moderate localization — đọc cùng IoU/bF1, không chỉ verdict. Sample counts remain
+too small for general claims.
+
+**Traceability (re-run 2026-11-12):** `python -m imageguard.evaluation.modelbench`
+on `data/modelforge_audit_train_fixed` và `data/modelforge_audit_holdout_fixed`,
+output ngoài repo. Bench JSON SHA-256: train
+`e70d58546d87e515c437563ff0c6b6253d33e47a4669ec2e7a3f7e712c6855ed`, holdout
+`33c56479c9743eb020a35144ae89a139c50aa802d942dc36ce62b40707354326`. Khớp báo
+cáo audit markdown cục bộ (gitignored, không commit). Các số splice_keep IoU/bF1
+cũ (0.006/0.139 train; 0.001/0.066 holdout) là sai so với artifact này.
 
 ## Legacy evidence and limits
 
@@ -98,21 +108,26 @@ definitions and empty-mask rules are in [`evaluation-methodology.md`](evaluation
 
 ## Reproduce
 
-Audit reports generated from these runs are committed at `reports/audit-261104-fixed-train.md`
-and `reports/audit-261104-fixed-holdout.md`. To reproduce or re-run:
+Markdown audit exports (`reports/audit-261104-fixed-train.md`,
+`reports/audit-261104-fixed-holdout.md`) are gitignored — không nằm trong git.
+Tái lập bằng modelbench trên các bộ `data/modelforge_audit_*_fixed` đã có sẵn
+(không cần sinh lại ảnh):
 
 ```powershell
-python -m imageguard.evaluation.modelforge --n 12 --seed 2026 `
-  --out data/modelforge_audit_train_fixed --backend lama --size 384
-python -m imageguard.evaluation.modelbench --set data/modelforge_audit_train_fixed `
+$py = .\.venv\Scripts\python.exe
+$trainBench = Join-Path $env:TEMP 'ig-modelbench-train'
+$holdBench = Join-Path $env:TEMP 'ig-modelbench-holdout'
+& $py -m imageguard.evaluation.modelbench --set data/modelforge_audit_train_fixed `
   --methods keypoint,block,noise,noise_local,freq,splicing,ela `
-  --out reports/modelbench_audit_train
-python -m imageguard.evaluation.modelforge --n 6 --seed 7777 `
-  --out data/modelforge_audit_holdout_fixed --backend lama --size 512
-python -m imageguard.evaluation.modelbench --set data/modelforge_audit_holdout_fixed `
+  --out $trainBench
+& $py -m imageguard.evaluation.modelbench --set data/modelforge_audit_holdout_fixed `
   --methods keypoint,block,noise,noise_local,freq,splicing,ela `
-  --out reports/modelbench_audit_holdout
+  --out $holdBench
 ```
+
+Để sinh lại ảnh từ đầu (ghi đè local dataset gitignored), thêm các lệnh
+`modelforge` với `--out` trỏ vào `data/modelforge_audit_*_fixed` như trên.
+Output bench: cặp `.md` + `.json` tại `$trainBench` / `$holdBench`.
 
 LaMa weights are local and are not committed. The current weight file's SHA-256
 is `1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6`.
