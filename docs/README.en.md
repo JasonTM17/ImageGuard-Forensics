@@ -64,7 +64,7 @@ given image is authentic or fake.
 | Method | On edited images (103) | On original images (103) |
 | --- | --- | --- |
 | **Keypoint** | 94 treated as suspicious (9 FN); 9 INCONCLUSIVE on edited images | 22 FP suspicious; **59 INCONCLUSIVE** (within the 81 "nonsuspicious" confusion rows) |
-| **Block** | 37 treated as suspicious (66 not suspicious); 2–3 INCONCLUSIVE | 0 FP suspicious; 0 INCONCLUSIVE |
+| **Block** | 37 treated as suspicious (66 not suspicious); 3 INCONCLUSIVE | 0 FP suspicious; 0 INCONCLUSIVE |
 
 - Block: original FPR **0/103** on this sample — this does *not* claim FPR is always zero
   for every image source.
