@@ -9,10 +9,45 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+from imageguard.core import limits
+
+_MANIFEST_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+_HASH_CHUNK = 65536
+
+
+def _validate_manifest_id(stem: str) -> None:
+    if not stem or not _MANIFEST_ID.fullmatch(stem):
+        raise ValueError(
+            f"manifest id invalid or unsafe: {stem!r} "
+            "(allowed: letters, digits, _, -, .; no path segments)"
+        )
+
+
+def _path_under_root(root: Path, *parts: str) -> Path:
+    root_resolved = root.resolve()
+    candidate = (root / Path(*parts)).resolve()
+    if candidate != root_resolved and root_resolved not in candidate.parents:
+        raise ValueError(f"path escapes dataset root: {candidate}")
+    return root.joinpath(*parts)
+
+
+def _digest_file_sha256(digest: hashlib._Hash, path: Path) -> None:
+    """Append the same bytes as whole-file read: file\\0 + len + content."""
+    digest.update(b"file\0")
+    size = path.stat().st_size
+    digest.update(int(size).to_bytes(8, "big"))
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(_HASH_CHUNK)
+            if not chunk:
+                break
+            digest.update(chunk)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,24 +84,42 @@ class SynthAdapter:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
         mf = self.root / "meta.json"
-        self.entries = json.loads(mf.read_text()) if mf.exists() else []
+        self.entries: list[dict] = []
+        if mf.exists():
+            try:
+                manifest_bytes = mf.stat().st_size
+            except OSError as exc:
+                raise ValueError(f"cannot stat manifest: {exc}") from exc
+            if manifest_bytes > limits.MAX_FILE_BYTES:
+                raise ValueError(
+                    f"meta.json too large: {manifest_bytes} bytes "
+                    f"(limit {limits.MAX_FILE_BYTES})"
+                )
+            self.entries = json.loads(mf.read_text(encoding="utf-8"))
+            if not isinstance(self.entries, list):
+                raise TypeError("meta.json must be a JSON array")
+            for entry in self.entries:
+                if not isinstance(entry, dict):
+                    raise TypeError("each manifest entry must be an object")
+                _validate_manifest_id(str(entry.get("id", "")))
 
     def version(self) -> str:
         mf = self.root / "meta.json"
         if not mf.exists():
             return "absent"
 
-        named_files = {mf.name: mf}
+        named_files: dict[str, Path] = {mf.name: mf}
         for entry in self.entries:
-            stem = entry["id"]
+            stem = str(entry["id"])
+            _validate_manifest_id(stem)
             ext = ".jpg" if entry.get("format") == "jpeg" else ".png"
-            original = self.root / f"{stem}_O.png"
+            original = _path_under_root(self.root, f"{stem}_O.png")
             if not original.is_file():
-                original = self.root / f"{stem}_O{ext}"
+                original = _path_under_root(self.root, f"{stem}_O{ext}")
             for path in (
                 original,
-                self.root / f"{stem}_F{ext}",
-                self.root / f"{stem}_M.png",
+                _path_under_root(self.root, f"{stem}_F{ext}"),
+                _path_under_root(self.root, f"{stem}_M.png"),
             ):
                 named_files[path.name] = path
 
@@ -76,10 +129,7 @@ class SynthAdapter:
             digest.update(filename.encode("utf-8"))
             digest.update(b"\0")
             if path.is_file():
-                content = path.read_bytes()
-                digest.update(b"file\0")
-                digest.update(len(content).to_bytes(8, "big"))
-                digest.update(content)
+                _digest_file_sha256(digest, path)
             else:
                 digest.update(b"<missing>")
             digest.update(b"\0")
@@ -87,7 +137,8 @@ class SynthAdapter:
 
     def samples(self, split: str = "dev") -> Iterable[Sample]:
         for e in self.entries:
-            stem = e["id"]
+            stem = str(e["id"])
+            _validate_manifest_id(stem)
             spec = e.get("spec") or {}
             # Hai schema manifest: synthforge {postproc, rotate_deg, ...} và
             # modelforge {kind, shape, rect, src/dst/foreign} — không KeyError.
@@ -97,11 +148,11 @@ class SynthAdapter:
             if split_of(base_id) != split:
                 continue
             ext = ".jpg" if e.get("format") == "jpeg" else ".png"
-            f = self.root / f"{stem}_F{ext}"
-            m = self.root / f"{stem}_M.png"
-            o = self.root / f"{stem}_O.png"
+            f = _path_under_root(self.root, f"{stem}_F{ext}")
+            m = _path_under_root(self.root, f"{stem}_M.png")
+            o = _path_under_root(self.root, f"{stem}_O.png")
             if not o.exists():
-                o = self.root / f"{stem}_O{ext}"
+                o = _path_under_root(self.root, f"{stem}_O{ext}")
             if f.exists() and m.exists():
                 yield Sample(f, m, "forged", cat, base_id)
             if o.exists():

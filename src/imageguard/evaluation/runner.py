@@ -18,11 +18,14 @@ import subprocess
 import time
 import uuid
 from dataclasses import dataclass, field
+from io import BytesIO
 from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image, UnidentifiedImageError
 
+from imageguard.core import limits
 from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import Verdict
 from imageguard.core.io import safe_open
@@ -211,10 +214,31 @@ def run_eval(
 def _load_mask(path, doc: ImageDocument) -> np.ndarray | None:
     if path is None:
         return None
+    p = Path(path)
     try:
-        data = Path(path).read_bytes()
+        file_size = p.stat().st_size
     except OSError:
         return None
+    if file_size > limits.MAX_FILE_BYTES:
+        return None
+    try:
+        data = p.read_bytes()
+    except OSError:
+        return None
+    if len(data) > limits.MAX_FILE_BYTES:
+        return None
+    try:
+        with Image.open(BytesIO(data)) as probe:
+            w, h = probe.size
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        return None
+    if w * h > limits.MAX_PIXELS or max(w, h) > limits.MAX_DECODE_SIDE:
+        return None
+    if w != doc.width or h != doc.height:
+        raise ValueError(
+            f"mask {p.name} dims ({h}, {w}) != image "
+            f"{doc.height}x{doc.width} — reject"
+        )
     try:
         m = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_GRAYSCALE)
     except cv2.error:
@@ -222,6 +246,6 @@ def _load_mask(path, doc: ImageDocument) -> np.ndarray | None:
     if m is None:
         return None
     if m.shape != (doc.height, doc.width):
-        raise ValueError(f"mask {path.name} dims {m.shape} != image "
+        raise ValueError(f"mask {p.name} dims {m.shape} != image "
                          f"{doc.height}x{doc.width} — reject")
     return m
