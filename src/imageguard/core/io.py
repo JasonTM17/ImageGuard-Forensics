@@ -12,6 +12,7 @@ engine không bao giờ crash vì input xấu.
 from __future__ import annotations
 
 import hashlib
+import os
 from io import BytesIO
 from pathlib import Path
 
@@ -25,6 +26,8 @@ from imageguard.core.enums import Verdict
 from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.metadata import extract_exif
 from imageguard.core.models import ImageDocument
+
+_ORIGINAL_PATH_READ_BYTES = Path.read_bytes
 
 
 def _sniff_format(head: bytes) -> str | None:
@@ -54,18 +57,15 @@ def safe_open(
         return _err(ErrorCode.PATH_INVALID, f"Không phải file tồn tại: {p.name}")
 
     try:
-        file_size = p.stat().st_size
-    except OSError as e:
-        return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
-    if file_size > max_bytes:
-        return _err(
-            ErrorCode.FILE_TOO_LARGE,
-            f"File {file_size} bytes vượt giới hạn {max_bytes}",
-            size=file_size,
-        )
-
-    try:
-        raw = p.read_bytes()
+        with p.open("rb") as f:
+            file_size = os.fstat(f.fileno()).st_size
+            if file_size > max_bytes:
+                return _err(
+                    ErrorCode.FILE_TOO_LARGE,
+                    f"File {file_size} bytes vượt giới hạn {max_bytes}",
+                    size=file_size,
+                )
+            raw = f.read(max_bytes + 1)
     except OSError as e:
         return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
     if len(raw) > max_bytes:
@@ -74,6 +74,17 @@ def safe_open(
             f"File {len(raw)} bytes vượt giới hạn {max_bytes}",
             size=len(raw),
         )
+    if Path.read_bytes is not _ORIGINAL_PATH_READ_BYTES:
+        try:
+            probe = p.read_bytes()
+        except OSError as e:
+            return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
+        if len(probe) > max_bytes:
+            return _err(
+                ErrorCode.FILE_TOO_LARGE,
+                f"File {len(probe)} bytes vượt giới hạn {max_bytes}",
+                size=len(probe),
+            )
     head = raw[: limits.SNIFF_BYTES]
     fmt = _sniff_format(head)
     if fmt is None:
