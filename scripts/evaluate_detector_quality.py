@@ -25,6 +25,7 @@ from PIL import ExifTags, Image, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from imageguard.core import limits as core_limits
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.evaluation.comofod import CoMoFoDAdapter
@@ -109,7 +110,39 @@ def _write(path: Path, payload: dict) -> None:
         stream.write("\n")
 
 
+def _enforce_decode_limits(path: Path) -> None:
+    """Reject paths that exceed shared file/header decode limits before pixel decode."""
+    _plain_path(path)
+    try:
+        size = path.stat().st_size
+    except OSError as err:
+        raise ValueError(f"unreadable image: {path.name}") from err
+    if size > core_limits.MAX_FILE_BYTES:
+        raise ValueError(
+            f"image file exceeds limit ({size} > {core_limits.MAX_FILE_BYTES}): {path.name}"
+        )
+    try:
+        with Image.open(path) as probe:
+            width, height = probe.size
+    except Image.DecompressionBombError as err:
+        raise ValueError(
+            f"image dimensions exceed decode limits: {path.name}"
+        ) from err
+    except (OSError, ValueError) as err:
+        raise ValueError(f"image header unreadable: {path.name}") from err
+    if (width * height > core_limits.MAX_PIXELS
+            or max(width, height) > core_limits.MAX_DECODE_SIDE):
+        raise ValueError(
+            f"image dimensions exceed decode limits ({width}x{height}): {path.name}"
+        )
+
+
 def _strict_pair(image: Path, original: Path, mask: Path) -> str | None:
+    for path in (image, original, mask):
+        try:
+            _enforce_decode_limits(path)
+        except ValueError:
+            return "decode_limit_exceeded"
     try:
         with Image.open(image) as f, Image.open(original) as o, Image.open(mask) as m:
             f.load(); o.load(); m.load()
@@ -161,7 +194,9 @@ def _scene_ids(root: Path, inventory: dict) -> dict[str, str]:
     originals_by_base = {}
     for sid, group in sorted(inventory.items()):
         base = _base(sid)
-        with Image.open(_inside(root, group["O"])) as image:
+        original_path = _inside(root, group["O"])
+        _enforce_decode_limits(original_path)
+        with Image.open(original_path) as image:
             pixel_hashes = {_rgb_sha(image)}
             if image.getexif().get(ExifTags.Base.Orientation, 1) != 1:
                 # safe_open normalizes orientation before exposing pixels to a detector.
