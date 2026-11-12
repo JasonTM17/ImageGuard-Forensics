@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSlider,
     QSpinBox,
     QSplitter,
@@ -54,20 +55,20 @@ _NLM = RESTORER_PARAMS["nlm"]
 # (name, nhãn, loại, min, max, bước, mặc định) — mặc định lấy từ RESTORER_PARAMS.
 _FIELD_SPECS = {
     "unsharp": (
-        ("ksize", "Kích thước kernel", "int", 1, 99, 2, _UNSHARP["ksize"]),
+        ("ksize", "Kích thước nhân (kernel)", "int", 1, 99, 2, _UNSHARP["ksize"]),
         ("sigma", "Sigma", "float", 0.1, 20.0, 0.1, _UNSHARP["sigma"]),
         ("amount", "Độ mạnh", "float", 0.0, 5.0, 0.1, _UNSHARP["amount"]),
     ),
     "clahe": (
-        ("clip_limit", "Clip limit", "float", 0.0, 10.0, 0.1,
+        ("clip_limit", "Giới hạn tương phản (clip limit)", "float", 0.0, 10.0, 0.1,
          _CLAHE["clip_limit"]),
         ("tile_x", "Tile ngang", "int", 1, 64, 1, _CLAHE["tile_grid_size"][0]),
         ("tile_y", "Tile dọc", "int", 1, 64, 1, _CLAHE["tile_grid_size"][1]),
     ),
     "nlm": (
         ("h", "h", "float", 0.0, 20.0, 0.1, _NLM["h"]),
-        ("hColor", "hColor", "float", 0.0, 20.0, 0.1, _NLM["hColor"]),
-        ("templateWindowSize", "Cửa sổ template", "int", 1, 99, 2,
+        ("hColor", "Lọc màu (hColor)", "float", 0.0, 20.0, 0.1, _NLM["hColor"]),
+        ("templateWindowSize", "Cửa sổ mẫu (template)", "int", 1, 99, 2,
          _NLM["templateWindowSize"]),
         ("searchWindowSize", "Cửa sổ tìm kiếm", "int", 1, 99, 2,
          _NLM["searchWindowSize"]),
@@ -157,6 +158,7 @@ class EnhanceScreen(QWidget):
         banner_lbl = QLabel(strings.ENHANCE_BANNER)
         banner_lbl.setWordWrap(True)
         banner_lay.addWidget(banner_lbl)
+        apply_a11y(self.banner, strings.ENHANCE_BANNER)
         rl.addWidget(self.banner)
 
         self.ai_banner = QFrame()
@@ -170,6 +172,7 @@ class EnhanceScreen(QWidget):
         ai_banner_lbl = QLabel(strings.ENHANCE_AI_BANNER)
         ai_banner_lbl.setWordWrap(True)
         ai_banner_lay.addWidget(ai_banner_lbl)
+        apply_a11y(self.ai_banner, strings.ENHANCE_AI_BANNER)
         self.ai_banner.hide()
         rl.addWidget(self.ai_banner)
 
@@ -209,6 +212,8 @@ class EnhanceScreen(QWidget):
                     w.setSingleStep(float(step))
                     w.setValue(float(default))
                 label = QLabel(text)
+                label.setBuddy(w)
+                apply_a11y(w, f"{strings.LBL_PARAMS_GROUP} — {text}")
                 form.addRow(label, w)
                 self._fields[(kind, name)] = (label, w)
         rl.addWidget(box)
@@ -257,7 +262,11 @@ class EnhanceScreen(QWidget):
         self.btn_export.hide()
         rl.addWidget(self.btn_export)
 
-        split.addWidget(right)
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setWidget(right)
+        split.addWidget(right_scroll)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
 
@@ -494,9 +503,16 @@ class EnhanceScreen(QWidget):
             return
         overwrite = False
         if dest.exists() or sidecar.exists():
+            if dest.exists() and sidecar.exists():
+                prompt = strings.MSG_EXPORT_OVERWRITE_BOTH.format(
+                    name=dest.name, sidecar=sidecar.name)
+            elif dest.exists():
+                prompt = strings.MSG_EXPORT_OVERWRITE_IMAGE.format(name=dest.name)
+            else:
+                prompt = strings.MSG_EXPORT_OVERWRITE_SIDECAR.format(
+                    name=sidecar.name)
             answer = QMessageBox.question(
-                self, "Ghi đè file?",
-                f"File đã tồn tại:\n{dest.name}\nGhi đè?")
+                self, "Ghi đè file?", prompt)
             if answer != QMessageBox.StandardButton.Yes:
                 return
             overwrite = True
