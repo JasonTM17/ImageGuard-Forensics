@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QDragMoveEvent,
     QDropEvent,
     QImage,
+    QKeyEvent,
     QPixmap,
     QWheelEvent,
 )
@@ -101,12 +102,59 @@ class ImageCanvas(QGraphicsView):
             self._overlay = self._scene.addPixmap(pixmap)
             self._overlay.setOpacity(alpha)
 
+    def _zoom_step(self, zoom_in: bool) -> None:
+        if self._base is None:
+            return
+        factor = 1.25 if zoom_in else 0.8
+        self.scale(factor, factor)
+
+    def _pan_step(self, dx: int, dy: int) -> None:
+        self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - dx)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().value() - dy)
+
+    def _reset_view(self) -> None:
+        if self._base is not None:
+            self.resetTransform()
+            self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
+
     def wheelEvent(self, event: QWheelEvent) -> None:
         if self._base is not None:
-            factor = 1.25 if event.angleDelta().y() > 0 else 0.8
-            self.scale(factor, factor)
+            self._zoom_step(event.angleDelta().y() > 0)
         else:
             super().wheelEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+            self._zoom_step(True)
+            event.accept()
+            return
+        if key == Qt.Key.Key_Minus:
+            self._zoom_step(False)
+            event.accept()
+            return
+        step = 48
+        if key == Qt.Key.Key_Left:
+            self._pan_step(step, 0)
+            event.accept()
+            return
+        if key == Qt.Key.Key_Right:
+            self._pan_step(-step, 0)
+            event.accept()
+            return
+        if key == Qt.Key.Key_Up:
+            self._pan_step(0, step)
+            event.accept()
+            return
+        if key == Qt.Key.Key_Down:
+            self._pan_step(0, -step)
+            event.accept()
+            return
+        if key == Qt.Key.Key_Home:
+            self._reset_view()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
