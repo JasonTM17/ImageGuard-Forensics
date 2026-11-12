@@ -27,20 +27,22 @@ Người dùng đã chấp nhận tường minh population **103** cặp, oracle
 
 ## Kết quả aggregate (baseline `.01` vs candidate `.007`, keypoint giống nhau ở cả hai role)
 
-Trên **103** ảnh chỉnh và **103** ảnh gốc; confusion đếm INCONCLUSIVE như nonsuspicious nhưng vẫn báo riêng.
+Trên **103** ảnh chỉnh và **103** ảnh gốc. Verdict có ba lớp; INCONCLUSIVE là abstain, **không** phải kết luận âm. Các cột "nonsuspicious" của bản ghi gộp NO_INDICATION và INCONCLUSIVE, nên bảng dưới tách chúng ra và **không** coi tỉ lệ ảnh gốc bị SUSPICIOUS là FPR thực tế ngoài cohort.
 
 | Metric | Block baseline `.01` | Block candidate `.007` | Keypoint (cả hai role) |
 | --- | ---: | ---: | ---: |
-| Edited suspicious /103, TP | 37 | 38 | 94 |
-| Edited nonsuspicious /103, FN | 66 | 65 | 9 |
-| Original suspicious /103, FP | 0 | 0 | 22 |
-| Original nonsuspicious /103, TN | 103 | 103 | 81 |
-| Edited recall | 35.92% | 36.89% | 91.26% |
-| Original FPR | 0/103 | 0/103 | 21.36% |
-| Original INCONCLUSIVE | 0 | 0 | 59 |
-| Edited INCONCLUSIVE | 3 | 2 | 9 |
+| Ảnh chỉnh → SUSPICIOUS /103 | 37 | 38 | 94 |
+| Ảnh chỉnh → INCONCLUSIVE | 3 | 2 | 9 |
+| Ảnh chỉnh → NO_INDICATION | 63 | 63 | 0 |
+| Ảnh gốc → SUSPICIOUS /103 | 0 | 0 | 22 |
+| Ảnh gốc → INCONCLUSIVE | 0 | 0 | 59 |
+| Ảnh gốc → NO_INDICATION | 103 | 103 | 22 |
+| Tỉ lệ ảnh chỉnh bị SUSPICIOUS | 35.92% | 36.89% | 91.26% |
+| Tỉ lệ ảnh gốc bị SUSPICIOUS | 0/103 | 0/103 | 21.36% |
 | Macro IoU, 103 hàng chỉnh | .2891367884 | .2891367884 | .4607202509 |
 | Micro IoU | .3017894382 | .3017894382 | .4378979955 |
+
+Ghi chú: các hàng NO_INDICATION được suy ra từ tổng 103 trừ hai hàng còn lại, khớp với số "nonsuspicious" và INCONCLUSIVE trong bản ghi. Candidate +1 SUSPICIOUS nhưng IoU macro bằng baseline, nên **không** có bằng chứng candidate cải thiện định vị mask.
 
 Một verdict đổi giữa baseline và candidate: nhóm `Au_ind_00041`, ảnh chỉnh liên quan — INCONCLUSIVE → SUSPICIOUS; IoU giữ `.5820336868`.
 
