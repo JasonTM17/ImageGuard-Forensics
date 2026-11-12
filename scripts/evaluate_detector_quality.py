@@ -552,11 +552,13 @@ def _cohort_ledger_claimed(recorded: dict, manifest_sha256: str,
         raise ValueError("locked cohort already consumed under a different event_id")
 
 
-def _claim_locked_cohort(receipts_root: Path, *, manifest_sha256: str,
+def _claim_locked_cohort(cohort_root: Path, *, manifest_sha256: str,
                          protocol_sha256: str, event_id: str) -> None:
     """Record one locked consumption per sealed manifest + protocol identity."""
-    _plain_path(receipts_root)
-    ledger_path = receipts_root / _COHORT_LEDGER
+    _plain_path(cohort_root)
+    if not cohort_root.is_dir():
+        raise ValueError("locked cohort root is missing or inaccessible")
+    ledger_path = cohort_root / _COHORT_LEDGER
     identity = {"manifest_sha256": manifest_sha256,
                 "protocol_sha256": protocol_sha256, "event_id": event_id}
     if ledger_path.is_file():
@@ -571,9 +573,12 @@ def _claim_locked_cohort(receipts_root: Path, *, manifest_sha256: str,
     except FileExistsError:
         recorded = _load_sealed(ledger_path)
         _cohort_ledger_claimed(recorded, manifest_sha256, protocol_sha256, event_id)
+    except OSError as err:
+        raise ValueError("locked cohort consumption ledger cannot be written") from err
 
 
-def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, protocol):
+def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, protocol,
+               cohort_root: Path):
     if contract_path is None or role not in {"baseline", "candidate"}:
         raise ValueError("locked inference requires --pair-contract and --role")
     contract = json.loads(contract_path.read_text(encoding="utf-8"))
@@ -596,7 +601,7 @@ def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, pro
     event = contract.get("event_id", "")
     if not isinstance(event, str) or not re.fullmatch(r"[a-zA-Z0-9-]{1,80}", event):
         raise ValueError("invalid locked event ID")
-    _claim_locked_cohort(contract_path.parent, manifest_sha256=manifest["sha256"],
+    _claim_locked_cohort(cohort_root, manifest_sha256=manifest["sha256"],
                          protocol_sha256=protocol, event_id=event)
     _write(contract_path.parent / f"event-{event}" / f"{role}.json",
            {"pair_sha256": file_hash(contract_path), "role": role})
@@ -623,7 +628,7 @@ def evaluate(manifest_path: Path, split: str, config: Path, methods: list,
     _plain_path(out)
     out.mkdir(parents=True, exist_ok=False)
     pair_sha, criteria_sha = (_lock_pair(pair_contract, role, identity, manifest,
-                                       config_sha, names, protocol)
+                                       config_sha, names, protocol, root)
                               if split == "locked" else (None, None))
     adapter, records = ManifestAdapter(manifest, root, split), []
     wrapped = [CaptureMethod(m, adapter, records, out) for m in methods]

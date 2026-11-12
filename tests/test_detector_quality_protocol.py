@@ -310,63 +310,116 @@ def _lock_pair_fixture(tmp_path, *, event_id="fixture"):
                 "methods": ["copy_move_keypoint"],
                 "baseline": {"source_sha256": "a" * 64, "config_sha256": "e" * 64},
                 "candidate": {"source_sha256": "f" * 64, "config_sha256": "e" * 64}}
-    path = tmp_path / "contract.json"
+    cohort_root = tmp_path / "cohort"
+    cohort_root.mkdir()
+    receipts_root = tmp_path / "receipts"
+    receipts_root.mkdir()
+    path = receipts_root / "contract.json"
     path.write_text(json.dumps(contract), encoding="utf-8")
-    args = (path, "baseline", identity, manifest, "e" * 64, ["copy_move_keypoint"], "c" * 64)
-    return path, identity, manifest, contract, args
+    args = (path, "baseline", identity, manifest, "e" * 64, ["copy_move_keypoint"], "c" * 64,
+            cohort_root)
+    return path, identity, manifest, contract, args, cohort_root, receipts_root
 
 
 def test_event_role_receipt_is_exclusive(tmp_path):
-    _, _, _, _, args = _lock_pair_fixture(tmp_path)
+    _, _, _, _, args, _, _ = _lock_pair_fixture(tmp_path)
     protocol._lock_pair(*args)
     with pytest.raises(FileExistsError):
         protocol._lock_pair(*args)
 
 
 def test_locked_cohort_rejects_consumption_under_different_event_id(tmp_path):
-    path, identity, manifest, contract, args = _lock_pair_fixture(tmp_path, event_id="event-a")
+    path, identity, manifest, contract, args, cohort_root, _ = _lock_pair_fixture(
+        tmp_path, event_id="event-a")
     protocol._lock_pair(*args)
     contract["event_id"] = "event-b"
     path.write_text(json.dumps(contract), encoding="utf-8")
     candidate_identity = {**identity, "source_sha256": "f" * 64}
     with pytest.raises(ValueError, match="different event_id"):
         protocol._lock_pair(path, "candidate", candidate_identity, manifest, "e" * 64,
-                            ["copy_move_keypoint"], "c" * 64)
-    assert not (tmp_path / "event-event-b").exists()
+                            ["copy_move_keypoint"], "c" * 64, cohort_root)
+    assert not (path.parent / "event-event-b").exists()
+
+
+def test_locked_cohort_rejects_contract_copied_to_new_directory_with_new_event_id(tmp_path):
+    path, identity, manifest, contract, args, cohort_root, receipts_root = _lock_pair_fixture(
+        tmp_path, event_id="event-a")
+    protocol._lock_pair(*args)
+    other_receipts = tmp_path / "other-receipts"
+    other_receipts.mkdir()
+    contract["event_id"] = "event-b"
+    copied = other_receipts / "pair.json"
+    copied.write_text(json.dumps(contract), encoding="utf-8")
+    candidate_identity = {**identity, "source_sha256": "f" * 64}
+    with pytest.raises(ValueError, match="different event_id"):
+        protocol._lock_pair(copied, "candidate", candidate_identity, manifest, "e" * 64,
+                            ["copy_move_keypoint"], "c" * 64, cohort_root)
+    assert not (other_receipts / "event-event-b").exists()
+    assert not (other_receipts / protocol._COHORT_LEDGER).exists()
+    assert (cohort_root / protocol._COHORT_LEDGER).is_file()
 
 
 def test_locked_cohort_same_event_id_allows_both_roles(tmp_path):
-    path, identity, manifest, _, _ = _lock_pair_fixture(tmp_path, event_id="shared-event")
+    path, identity, manifest, _, _, cohort_root, receipts_root = _lock_pair_fixture(
+        tmp_path, event_id="shared-event")
     protocol._lock_pair(path, "baseline", identity, manifest, "e" * 64,
-                        ["copy_move_keypoint"], "c" * 64)
+                        ["copy_move_keypoint"], "c" * 64, cohort_root)
     candidate_identity = {**identity, "source_sha256": "f" * 64}
     protocol._lock_pair(path, "candidate", candidate_identity, manifest, "e" * 64,
-                        ["copy_move_keypoint"], "c" * 64)
-    event_dir = tmp_path / "event-shared-event"
+                        ["copy_move_keypoint"], "c" * 64, cohort_root)
+    event_dir = receipts_root / "event-shared-event"
     assert (event_dir / "baseline.json").is_file()
     assert (event_dir / "candidate.json").is_file()
-    assert (tmp_path / protocol._COHORT_LEDGER).is_file()
+    assert (cohort_root / protocol._COHORT_LEDGER).is_file()
+    assert not (receipts_root / protocol._COHORT_LEDGER).exists()
+
+
+def test_locked_cohort_ledger_lives_in_cohort_root_not_contract_directory(tmp_path):
+    _, _, _, _, args, cohort_root, receipts_root = _lock_pair_fixture(tmp_path)
+    protocol._lock_pair(*args)
+    assert (cohort_root / protocol._COHORT_LEDGER).is_file()
+    assert not (receipts_root / protocol._COHORT_LEDGER).exists()
 
 
 def test_locked_cohort_ledger_creation_is_exclusive(tmp_path):
-    receipts_root = tmp_path / "receipts"
-    receipts_root.mkdir()
+    cohort_root = tmp_path / "cohort"
+    cohort_root.mkdir()
     identity = {"manifest_sha256": "b" * 64, "protocol_sha256": "c" * 64,
                 "event_id": "fixture", "sha256": "deadbeef"}
-    protocol._write(receipts_root / protocol._COHORT_LEDGER, identity)
+    protocol._write(cohort_root / protocol._COHORT_LEDGER, identity)
     with pytest.raises(FileExistsError):
-        protocol._write(receipts_root / protocol._COHORT_LEDGER,
+        protocol._write(cohort_root / protocol._COHORT_LEDGER,
                         {"manifest_sha256": "b" * 64, "protocol_sha256": "c" * 64,
                          "event_id": "fixture"})
 
 
 def test_locked_cohort_corrupt_ledger_fails_closed(tmp_path):
-    receipts_root = tmp_path / "receipts"
-    receipts_root.mkdir()
-    ledger = receipts_root / protocol._COHORT_LEDGER
+    cohort_root = tmp_path / "cohort"
+    cohort_root.mkdir()
+    ledger = cohort_root / protocol._COHORT_LEDGER
     ledger.write_text('{"manifest_sha256":"b",' + '"sha256":"not-a-digest"}', encoding="utf-8")
     with pytest.raises(ValueError, match="invalid or corrupt"):
-        protocol._claim_locked_cohort(receipts_root, manifest_sha256="b" * 64,
+        protocol._claim_locked_cohort(cohort_root, manifest_sha256="b" * 64,
+                                      protocol_sha256="c" * 64, event_id="fixture")
+
+
+def test_locked_cohort_claim_fails_when_cohort_root_missing(tmp_path):
+    missing = tmp_path / "no-such-cohort"
+    with pytest.raises(ValueError, match="missing or inaccessible"):
+        protocol._claim_locked_cohort(missing, manifest_sha256="b" * 64,
+                                      protocol_sha256="c" * 64, event_id="fixture")
+
+
+def test_locked_cohort_claim_fails_when_cohort_root_not_writable(tmp_path, monkeypatch):
+    cohort_root = tmp_path / "cohort"
+    cohort_root.mkdir()
+
+    def deny_write(path, payload):
+        raise PermissionError("read-only cohort root")
+
+    monkeypatch.setattr(protocol, "_write", deny_write)
+    with pytest.raises(ValueError, match="cannot be written"):
+        protocol._claim_locked_cohort(cohort_root, manifest_sha256="b" * 64,
                                       protocol_sha256="c" * 64, event_id="fixture")
 
 
