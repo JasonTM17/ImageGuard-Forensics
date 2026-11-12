@@ -380,6 +380,7 @@ class EnhanceScreen(QWidget):
             self.lbl_err.setText(error)
             return
         self.lbl_err.setText("")
+        self.lbl_status.setText("")
         self._clear_result()
         self._run_kind = kind
         self._run_params = params
@@ -398,8 +399,12 @@ class EnhanceScreen(QWidget):
             self.btn_cancel.setEnabled(False)
 
     def _on_finished(self) -> None:
+        cancelled = self._cancel_event.is_set()
         self._worker = None
         self._set_running(False)
+        if cancelled:
+            self.lbl_err.setText("")
+            self.lbl_status.setText(strings.STATUS_ENHANCE_CANCELLED)
 
     def _on_result(self, payload) -> None:
         if self._cancel_event.is_set():

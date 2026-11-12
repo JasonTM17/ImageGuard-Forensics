@@ -296,17 +296,20 @@ class AnalyzeScreen(QWidget):
         self.overlay_box.addItem(strings.OVERLAY_NONE, None)
         for m in out.methods:
             self.cards_layout.addWidget(MethodCard(m))
+            method_label = strings.METHOD_LABEL.get(
+                m.method.value, m.method.value
+            )
             if m.mask is not None:
                 self.overlay_box.addItem(
-                    strings.FMT_OVERLAY_MASK.format(method=m.method.value),
+                    strings.OVERLAY_MASK_FMT.format(label=method_label),
                     ("mask", m))
             if m.heatmap is not None:
                 self.overlay_box.addItem(
-                    strings.FMT_OVERLAY_HEATMAP.format(method=m.method.value),
+                    strings.OVERLAY_HEATMAP_FMT.format(label=method_label),
                     ("heat", m))
             if m.evidence.get("pairs_image") is not None:
                 self.overlay_box.addItem(
-                    strings.FMT_OVERLAY_TWIN.format(method=m.method.value),
+                    strings.OVERLAY_PAIRS_FMT.format(label=method_label),
                     ("pairs", m))
         self.cards_layout.addStretch(1)
         self.overlay_box.blockSignals(False)

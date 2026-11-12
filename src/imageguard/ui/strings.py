@@ -77,9 +77,15 @@ BTN_EXPORT_ENHANCED = "Xuất ảnh tăng cường (PNG)"
 BTN_REFRESH = "Làm mới"
 
 OVERLAY_NONE = "Không overlay"
-FMT_OVERLAY_MASK = "Mask — {method}"
-FMT_OVERLAY_HEATMAP = "Heatmap — {method}"
-FMT_OVERLAY_TWIN = "Cặp điểm nối (Twin pairs) — {method}"
+OVERLAY_MASK_FMT = "Lớp phủ vùng — {label}"
+OVERLAY_HEATMAP_FMT = "Bản đồ nhiệt — {label}"
+OVERLAY_PAIRS_FMT = "Cặp điểm nối — {label}"
+# Giữ tên cũ — trỏ sang format mới (placeholder {label}, không phải method id).
+FMT_OVERLAY_MASK = OVERLAY_MASK_FMT
+FMT_OVERLAY_HEATMAP = OVERLAY_HEATMAP_FMT
+FMT_OVERLAY_TWIN = OVERLAY_PAIRS_FMT
+
+STATUS_ENHANCE_CANCELLED = "Đã hủy tăng cường."
 
 HIST_COL_TIME = "Thời gian"
 HIST_COL_IMAGE = "Ảnh"
