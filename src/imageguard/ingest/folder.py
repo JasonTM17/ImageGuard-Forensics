@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import stat
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -10,9 +12,9 @@ from pathlib import Path
 
 from imageguard import __version__
 from imageguard.core.config import load_thresholds
-from imageguard.core.errors import ErrorResult
+from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.io import safe_open
-from imageguard.core.limits import MAGIC_TABLE, SNIFF_BYTES
+from imageguard.core.limits import MAGIC_TABLE, MAX_FILE_BYTES, SNIFF_BYTES
 from imageguard.enhancement.derive import derive, write_sibling
 from imageguard.ingest.config import IngestConfig
 from imageguard.ingest.custody import CustodyLog
@@ -62,9 +64,30 @@ class FolderIngestor:
             raise NotADirectoryError("ingest directory does not exist")
 
         self._pull_due(watch_dir)
+        summary = ScanSummary()
         candidates = []
         for path in sorted(watch_dir.iterdir(), key=lambda item: item.name.casefold()):
             if self._ignored(path):
+                continue
+            if _entry_is_link(path):
+                signature = _lstat_signature(path)
+                if signature is None or self._handled.get(path) == signature:
+                    continue
+                placeholder = _signature_placeholder(signature, "symlink")
+                key = (path.name, placeholder)
+                if self._latest_events.get(key) == "error":
+                    self._handled[path] = signature
+                    continue
+                self._append_event(
+                    "error",
+                    path,
+                    signature,
+                    placeholder,
+                    analysis_id=None,
+                    error_code=ErrorCode.PATH_INVALID.value,
+                )
+                self._handled[path] = signature
+                summary.errors += 1
                 continue
             try:
                 if not path.is_file():
@@ -77,6 +100,23 @@ class FolderIngestor:
                 continue
             if not _has_supported_magic(path):
                 self._handled[path] = signature
+                continue
+            if signature[0] > MAX_FILE_BYTES:
+                placeholder = _signature_placeholder(signature, "oversize")
+                key = (path.name, placeholder)
+                if self._latest_events.get(key) == "error":
+                    self._handled[path] = signature
+                    continue
+                self._append_event(
+                    "error",
+                    path,
+                    signature,
+                    placeholder,
+                    analysis_id=None,
+                    error_code=ErrorCode.FILE_TOO_LARGE.value,
+                )
+                self._handled[path] = signature
+                summary.errors += 1
                 continue
             try:
                 image_sha256 = _sha256_file(path)
@@ -97,7 +137,6 @@ class FolderIngestor:
                 item[0].name.casefold(),
             )
         )
-        summary = ScanSummary()
         submitted = 0
         for path, signature, image_sha256, key in candidates:
             if image_sha256 in self._seen_hashes:
@@ -140,15 +179,31 @@ class FolderIngestor:
                 )
                 summary.errors += 1
             else:
-                sibling_error: str | None = None
-                if self.config.enhance_sibling:
-                    sibling_error = self._try_enhance_sibling(path, image_sha256)
-                self._append_event(
-                    "analyzed", path, signature, image_sha256,
-                    analysis_id=result.report_id,
-                    error_code=sibling_error,
-                )
-                summary.analyzed += 1
+                report_sha = getattr(result, "image_sha256", None)
+                report_id = getattr(result, "report_id", None)
+                if isinstance(report_sha, str) and report_sha != image_sha256:
+                    self._append_event(
+                        "error", path, signature, image_sha256,
+                        analysis_id=None,
+                        error_code=ErrorCode.FILE_UNREADABLE.value,
+                    )
+                    summary.errors += 1
+                elif isinstance(report_sha, str) or isinstance(report_id, str):
+                    sibling_error: str | None = None
+                    if self.config.enhance_sibling:
+                        sibling_error = self._try_enhance_sibling(path, image_sha256)
+                    self._append_event(
+                        "analyzed", path, signature, image_sha256,
+                        analysis_id=report_id if isinstance(report_id, str) else None,
+                        error_code=sibling_error,
+                    )
+                    summary.analyzed += 1
+                else:
+                    self._append_event(
+                        "error", path, signature, image_sha256,
+                        analysis_id=None, error_code=ErrorCode.INTERNAL.value,
+                    )
+                    summary.errors += 1
             self._handled[path] = signature
 
         return summary
@@ -225,10 +280,43 @@ class FolderIngestor:
 
 def _file_signature(path: Path) -> tuple[int, int] | None:
     try:
-        stat = path.stat()
+        file_stat = path.stat()
     except OSError:
         return None
-    return stat.st_size, stat.st_mtime_ns
+    return file_stat.st_size, file_stat.st_mtime_ns
+
+
+def _lstat_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        file_stat = os.lstat(path)
+    except OSError:
+        return None
+    return file_stat.st_size, file_stat.st_mtime_ns
+
+
+_REPARSE_POINT = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+
+
+def _entry_is_link(path: Path) -> bool:
+    """True when the directory entry is a symlink or Windows reparse point."""
+    try:
+        file_stat = os.lstat(path)
+    except OSError:
+        return False
+    if stat.S_ISLNK(file_stat.st_mode):
+        return True
+    if os.name == "nt":
+        attrs = getattr(file_stat, "st_file_attributes", 0)
+        if attrs & _REPARSE_POINT:
+            return True
+        if hasattr(path, "is_junction") and path.is_junction():
+            return True
+    return False
+
+
+def _signature_placeholder(signature: tuple[int, int], reason: str) -> str:
+    payload = f"ingest-{reason}:{signature[0]}:{signature[1]}".encode()
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _has_supported_magic(path: Path) -> bool:
