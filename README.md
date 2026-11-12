@@ -61,6 +61,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/modelforge.md`](docs/modelforge.md) | Model-forge / ONNX (design) |
 | [`docs/ml-extension.md`](docs/ml-extension.md) | Hướng ML (design-only) |
 | [`docs/splicing-study.md`](docs/splicing-study.md) | Splicing cues (exploratory) |
+| [`docs/image-processing-toolkit.md`](docs/image-processing-toolkit.md) | Toán tử xử lý ảnh cơ bản (demo, không dùng cho verdict) |
 | [`docs/reading-list.md`](docs/reading-list.md) | Tài liệu tham khảo |
 | [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md) | Khung báo cáo đồ án |
 
