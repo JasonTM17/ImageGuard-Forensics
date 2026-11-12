@@ -1,4 +1,8 @@
-"""Binary/grayscale morphological operators (NumPy only)."""
+"""Toán tử hình thái học ảnh xám/nhị phân (chỉ NumPy).
+
+Chủ đề C4: phần tử cấu trúc (structuring element), co giãn (erosion/dilation),
+mở/đóng, gradient và top-hat — mỗi pixel là min/max trong cửa sổ se.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +16,14 @@ ShapeKind = Literal["rect", "cross", "ellipse"]
 
 
 def structuring_element(kind: ShapeKind, ksize: int) -> np.ndarray:
-    """Binary structuring element matching common OpenCV shapes."""
+    """Tạo phần tử cấu trúc nhị phân (0/1) hình chữ nhật, chữ thập hoặc elip.
+
+    Tham số: ``kind`` loại hình; ``ksize`` lẻ dương — kích thước ma trận.
+
+    Trả về: uint8, ô = 1 là vị trí tham gia phép hình thái.
+
+    Liên quan C4 — định hình cửa sổ cho erosion/dilation.
+    """
     if kind not in ("rect", "cross", "ellipse"):
         raise ValueError("kind must be 'rect', 'cross', or 'ellipse'")
     if isinstance(ksize, bool) or not isinstance(ksize, (int, np.integer)):
@@ -37,6 +48,10 @@ def structuring_element(kind: ShapeKind, ksize: int) -> np.ndarray:
 
 
 def _erode_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
+    """Co ảnh xám: tại mỗi pixel = min các mẫu dưới ``se`` (chỉ ô se=1).
+
+    Đệm 255 ở viền để erosion không bị kéo về 0 ở mép (giả lập nền sáng).
+    """
     h, w = channel.shape
     kh, kw = se.shape
     ph, pw = kh // 2, kw // 2
@@ -55,6 +70,7 @@ def _erode_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
 
 
 def _dilate_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
+    """Giãn ảnh xám: mỗi pixel = max trong cửa sổ ``se``; viền đệm 0."""
     h, w = channel.shape
     kh, kw = se.shape
     ph, pw = kh // 2, kw // 2
@@ -71,11 +87,13 @@ def _dilate_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
 
 
 def _check_se(se: np.ndarray) -> np.ndarray:
-    """Validate a binary structuring element and return uint8 0/1 data.
+    """Kiểm tra phần tử cấu trúc 2D lẻ, giá trị đúng 0 hoặc 1 (không làm tròn 0.3→active).
 
-    Only finite values exactly equal to 0 or 1 are accepted: negatives,
-    fractions, NaN and infinities are rejected instead of being treated as
-    active cells.
+    Chỉ giá trị hữu hạn và đúng 0/1 được chấp nhận; NaN hay phân số bị từ chối.
+
+    Trả về: ``se`` dạng uint8 0/1.
+
+    Liên quan C4 — định nghĩa miền cấu trúc trước min/max.
     """
     elem = np.asarray(se)
     if (
@@ -98,38 +116,58 @@ def _check_se(se: np.ndarray) -> np.ndarray:
 
 
 def erode(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Grayscale erosion (minimum under ``se``)."""
+    """Co (erosion): min trong cửa sổ ``se`` cho từng kênh uint8.
+
+    Liên quan C4 — làm co vật thể sáng, xóa nhiễu sáng nhỏ.
+    """
     source = require_uint8_image(img)
     elem = _check_se(se)
     return apply_per_channel(source, lambda ch: _erode_gray(ch, elem))
 
 
 def dilate(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Grayscale dilation (maximum under ``se``)."""
+    """Giãn (dilation): max trong cửa sổ ``se``.
+
+    Liên quan C4 — làm phình vật thể, lấp lỗ tối nhỏ.
+    """
     source = require_uint8_image(img)
     elem = _check_se(se)
     return apply_per_channel(source, lambda ch: _dilate_gray(ch, elem))
 
 
 def open_(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Opening: dilate(erode)."""
+    """Mở (opening): dilate(erode) — xóa chi tiết sáng hẹp hơn ``se``.
+
+    Liên quan C4 — khử nhiễu sáng mà không đổi kích thước vật thể lớn nhiều.
+    """
     return dilate(erode(img, se), se)
 
 
 def close_(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Closing: erode(dilate)."""
+    """Đóng (closing): erode(dilate) — lấp khe tối hẹp.
+
+    Liên quan C4 — nối đường viền bị đứt, giữ khối sáng lớn.
+    """
     return erode(dilate(img, se), se)
 
 
 def gradient(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Morphological gradient: dilate - erode (clipped uint8)."""
+    """Gradient hình thái: dilate − erode (kẹp uint8).
+
+    Nhấn mạnh biên vật thể theo độ dày ~ ``se``.
+
+    Liên quan C4; có thể liên hệ C2 khi so sánh biên gradient vs Sobel.
+    """
     d = dilate(img, se).astype(np.int16)
     e = erode(img, se).astype(np.int16)
     return np.clip(d - e, 0, 255).astype(np.uint8)
 
 
 def tophat(img: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """White top-hat: image - open(image)."""
+    """White top-hat: ảnh − open(ảnh) — trích chi tiết sáng nhỏ hơn ``se``.
+
+    Liên quan C4 — tăng cường đối tượng nhỏ trên nền tương đối đồng đều.
+    """
     base = require_uint8_image(img)
     opened = open_(base, se).astype(np.int16)
     return np.clip(base.astype(np.int16) - opened, 0, 255).astype(np.uint8)

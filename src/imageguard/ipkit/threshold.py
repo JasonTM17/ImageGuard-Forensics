@@ -1,4 +1,8 @@
-"""Global and adaptive thresholding (NumPy only)."""
+"""Ngưỡng hóa toàn cục và cục bộ (chỉ NumPy).
+
+Chủ đề C5 — phân đoạn: Otsu (phương sai liên lớp) và ngưỡng thích nghi theo mean
+cửa sổ qua bảng tổng tích (summed-area table).
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ from imageguard.ipkit._util import require_gray_uint8
 
 
 def _odd_block(block: int) -> int:
+    """Kích thước cửa sổ adaptive phải lẻ và ≥ 3 để có tâm rõ ràng."""
     if isinstance(block, bool) or not isinstance(block, (int, np.integer)):
         raise TypeError("block must be an integer")
     b = int(block)
@@ -17,7 +22,18 @@ def _odd_block(block: int) -> int:
 
 
 def otsu_threshold(gray: np.ndarray) -> int:
-    """Otsu optimal threshold for 8-bit gray; returns integer in [0, 255]."""
+    """Ngưỡng Otsu tối ưu cho ảnh xám 8 bit.
+
+    Ý tưởng: với ngưỡng t, chia pixel thành lớp nền (≤t) và đối tượng (>t).
+    Tối đa hóa phương sai *giữa hai lớp* σ²_b (công thức dùng xác suất ω, moment
+    tích lũy μ; mẫu ω(1−ω)). ``argmax`` trên 256 mức gray cho ngưỡng nguyên [0,255].
+
+    Tham số: ``gray`` xám uint8.
+
+    Trả về: ngưỡng t (int). Ảnh rỗng hoặc histogram suy biến có xử lý đặc biệt trong mã.
+
+    Liên quan C5 — phân đoạn histogram / ngưỡng tự động.
+    """
     img = require_gray_uint8(gray)
     hist = np.bincount(img.ravel(), minlength=256).astype(np.float64)
     total = float(img.size)
@@ -28,6 +44,7 @@ def otsu_threshold(gray: np.ndarray) -> int:
 
     probs = hist / total
     bins = np.arange(256, dtype=np.float64)
+    # ω(t): tích lũy xác suất lớp nền; μ(t): moment cường độ tích lũy
     omega = np.cumsum(probs)
     mu = np.cumsum(probs * bins)
     mu_t = mu[-1]
@@ -44,7 +61,17 @@ def otsu_threshold(gray: np.ndarray) -> int:
 
 
 def adaptive_mean_threshold(gray: np.ndarray, block: int, c: float) -> np.ndarray:
-    """Local mean threshold: pixel > (mean_block - c) -> 255 else 0."""
+    """Ngưỡng cục bộ: pixel > (mean_cửa_sổ − c) → 255, ngược lại 0.
+
+    Mean trong cửa sổ block×block tính bằng bảng tổng tích 2D (SAT): tổng
+    hình chữ nhật = tổng bốn góc, tránh lặp O(block²) từng pixel.
+
+    ``c`` hạ ngưỡng để tránh chia quá sáng (tương tự OpenCV adaptiveMean).
+
+    Trả về: ảnh nhị phân uint8.
+
+    Liên quan C5 — phân đoạn khi độ sáng nền thay đổi; C2 liên quan cửa sổ cục bộ.
+    """
     img = require_gray_uint8(gray)
     b = _odd_block(block)
     offset = float(c)
@@ -57,6 +84,7 @@ def adaptive_mean_threshold(gray: np.ndarray, block: int, c: float) -> np.ndarra
     padded = np.pad(src, r, mode="edge")
     area = float(b * b)
 
+    # Tích phân 2D: sat(y,x) = tổng vùng từ gốc đến (y-1,x-1) trên ảnh đệm
     sat = np.cumsum(np.cumsum(padded, axis=0), axis=1)
     sat = np.pad(sat, ((1, 0), (1, 0)), mode="constant", constant_values=0.0)
 
