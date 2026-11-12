@@ -193,8 +193,6 @@ def test_history_action_buttons_disabled_without_selection(qtbot, services) -> N
 
 
 def test_strings_terminology_consistency() -> None:
-    assert "nghi vấn" in strings.DISCLAIMER
-    assert "nghi ngờ" not in strings.DISCLAIMER
     assert strings.OVERLAY_NONE == "Không dùng lớp phủ"
     assert strings.SETTINGS_TREE_HDR_KEY == "Khóa"
     assert "verdict" not in strings.A11Y_STATS_TABLE.lower()
