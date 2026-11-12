@@ -23,6 +23,12 @@ EDITOR_HINTS = (
 
 def audit_exif(doc: ImageDocument, cfg: ThresholdSet | None = None,
                cancel: threading.Event | None = None) -> AlgorithmResult:
+    """Đọc EXIF đã parse: Software, Make/Model, DateTime vs Original.
+
+    Chủ đề: metadata forensics (không xử lý pixel). **Aux**: không
+    SUSPICIOUS — INCONCLUSIVE nếu có finding, NO_INDICATION nếu trống;
+    fusion chỉ ghi signal, không tự kết tội ảnh.
+    """
     t0 = time.perf_counter()
     present = doc.exif.get("present", {})
     missing = doc.exif.get("missing", [])

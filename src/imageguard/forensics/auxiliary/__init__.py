@@ -1,2 +1,6 @@
-"""Auxiliary signals — ELA, metadata audit. Luôn exploratory: bằng chứng
-khám phá, không bao giờ đủ sức kết luận một mình."""
+"""Tín hiệu phụ (ELA, noise, tần số, splicing, EXIF).
+
+Theo ``fusion.AUX_METHODS``: không method nào ở đây trả SUSPICIOUS;
+chỉ corroborate khi ≥2 aux cùng INCONCLUSIVE. Block copy-move nằm
+ngoài gói này và là detector conclusive.
+"""

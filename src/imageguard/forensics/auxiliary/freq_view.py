@@ -29,6 +29,13 @@ SCORE_DEF = "blockiness = chênh |∇| tại biên 8×8 trừ |∇| nền, chu�
 
 
 class FreqView:
+    """Cue tần số: FFT log-magnitude (artifact) + chỉ số JPEG blockiness.
+
+    Chủ đề: frequency (FFT), JPEG grid 8×8. **Aux**: không SUSPICIOUS;
+    JPEG → luôn NO_INDICATION (blockiness kỳ vọng); ảnh khác format có thể
+    INCONCLUSIVE nếu blockiness cao.
+    """
+
     name = MethodName.FREQUENCY_ANALYSIS.value
 
     def analyze(
@@ -37,6 +44,10 @@ class FreqView:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """fftshift(fft2) chuẩn hoá làm heatmap; blockiness = |∇| biên 8px − nội.
+
+        Verdict không đẩy fusion — exploratory cho người xem spectrum.
+        """
         t0 = time.perf_counter()
         lim = [
             "blockiness cao là bản chất nén JPEG — không phải dấu hiệu sửa",

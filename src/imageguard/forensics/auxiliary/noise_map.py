@@ -37,6 +37,12 @@ SCORE_DEF = "tỉ lệ block có σ residual là outlier MAD (|σ−median| > m�
 
 
 class NoiseMap:
+    """Bất nhất σ residual: outlier MAD trên lưới block (chủ đề: noise).
+
+    residual = ảnh − medianBlur (tách texture). **Aux**: chỉ INCONCLUSIVE
+    hoặc NO_INDICATION / NOT_APPLICABLE — không SUSPICIOUS.
+    """
+
     name = MethodName.NOISE_INCONSISTENCY.value
 
     def analyze(
@@ -45,6 +51,10 @@ class NoiseMap:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """σ từng block B×B; outlier khi |σ−median| > m·MAD toàn ảnh.
+
+        Verdict INCONCLUSIVE nếu tỉ lệ block outlier ≥ min_outlier_frac.
+        """
         t0 = time.perf_counter()
         lim = [
             ("σ residual cao có thể do texture/sắc cạnh tự nhiên — không đồng "

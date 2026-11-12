@@ -23,7 +23,20 @@ def match_pairs(
     min_block_dist: float,
     n_neighbors: int = 10,
 ) -> np.ndarray:
-    """Sort từ điển + so sánh k hàng xóm. Trả (M,2) index block pairs."""
+    """Ghép cặp block có feature gần nhau (lexicographic sort + láng giềng).
+
+    Sort theo từng chiều feature → block giống nhau đứng gần → chỉ so k
+    hàng xóm, tránh O(N²) (chủ đề: feature matching). Lọc thêm khoảng cách
+    không gian ≥ min_block_dist để bỏ cặp trùng vị trí.
+
+    Tham số:
+        feats, pos: từ extract_features; sim_thresh: ngưỡng L2 chuẩn hoá;
+        min_block_dist: khoảng cách pixel tối thiểu giữa hai block;
+        n_neighbors: số hàng xóm sau sort cần xét.
+
+    Trả về:
+        ndarray (M, 2) chỉ số vào feats/pos của từng cặp ứng viên.
+    """
     order = np.lexsort(feats.T[::-1])
     sfeats = feats[order].astype(np.float32)
     spos = pos[order]
@@ -58,7 +71,20 @@ def vote_mask(
     shape: tuple[int, int],
     min_votes: int,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
-    """Trả (mask uint8, heat float32 [0,1], stats dict)."""
+    """Bỏ phiếu vector dịch (dx, dy) và dựng mask vùng copy-move.
+
+    Copy trong cùng ảnh → nhiều cặp chia sẻ CÙNG shift → đếm phiếu;
+    giữ shift có ≥ min_votes (chủ đề: segmentation / morphology đóng-mở
+    làm mịn mask). Cặt nhiễu ngẫu nhiên → shift rải rác, không đủ phiếu.
+
+    Tham số:
+        pairs: chỉ số cặp; pos: tọa độ block; B: cạnh block;
+        shape: (H, W) ảnh làm việc; min_votes: phiếu tối thiểu mỗi shift.
+
+    Trả về:
+        mask uint8 0/255, heat float32 [0,1] mật độ vote, stats (số cặp,
+        số shift giữ, top vote).
+    """
     stats = {"n_pairs": len(pairs), "n_shifts_kept": 0}
     H, W = shape
     count = np.zeros((H, W), np.float32)

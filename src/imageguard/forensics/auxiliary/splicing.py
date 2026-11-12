@@ -31,6 +31,12 @@ SCORE_DEF = "tỉ lệ diện tích ELA-hot trùng noise-outlier (corroboration)
 
 
 class SplicingCues:
+    """Thí nghiệm ghép ảnh: giao mask noise-outlier × ELA-hot.
+
+    Khác copy-move (không tìm twin). **Aux**: tối đa INCONCLUSIVE khi
+    overlap_frac đủ lớn; thiếu mask ELA/noise → INCONCLUSIVE degraded.
+    """
+
     name = "splicing_cues"
 
     def analyze(
@@ -39,6 +45,10 @@ class SplicingCues:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """Gọi NoiseMap + ELA; overlap / diện tích ELA-hot là score.
+
+        Không sinh SUSPICIOUS — chỉ gợi ý corroboration cho reviewer.
+        """
         t0 = time.perf_counter()
         lim = [
             "signal thí nghiệm L2 — chưa benchmark trên splicing dataset",

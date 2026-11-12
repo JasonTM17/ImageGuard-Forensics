@@ -50,6 +50,12 @@ SCORE_DEF = ("tỉ lệ block có σ < q·median toàn ảnh sau lọc component
 
 
 class NoiseLocal:
+    """Vùng σ residual **thấp** bất thường (ứng viên inpaint/model-fill).
+
+    Hai tầng connected-components + ngưỡng q, q2 (chủ đề: noise /
+    segmentation). **Aux**: INCONCLUSIVE hoặc NO_INDICATION — không SUSPICIOUS.
+    """
+
     name = "noise_local"
 
     def analyze(
@@ -58,6 +64,10 @@ class NoiseLocal:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """Cờ block có σ < q·median; giữ component đủ lớn và mean σ < q2·median.
+
+        Score = tỉ lệ block trong vùng giữ; seam-ring z_hi chỉ evidence.
+        """
         t0 = time.perf_counter()
         lim = [
             (

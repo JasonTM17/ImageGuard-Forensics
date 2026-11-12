@@ -31,6 +31,13 @@ SCORE_DEF = "matched_area_fraction = diện tích mask / diện tích ảnh (shi
 
 
 class BlockCopyMove:
+    """Detector copy-move kiểu Fridrich–Popescu: DCT block + shift voting.
+
+    Method **conclusive**: có thể trả ``SUSPICIOUS_INDICATION`` khi
+    ``matched_area_fraction ≥ min_area_frac`` (fusion đếm như detector chính).
+    Không phát hiện xoay/scale — chỉ tịnh tiến trong cùng ảnh.
+    """
+
     name = MethodName.COPY_MOVE_BLOCK.value
 
     def analyze(
@@ -39,6 +46,12 @@ class BlockCopyMove:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """Chạy đủ bước: scale → DCT feature → match → vote → verdict.
+
+        Verdict (đúng như mã): INCONCLUSIVE nếu không đủ block texture;
+        SUSPICIOUS nếu diện tích mask đủ lớn; INCONCLUSIVE nếu mask yếu;
+        NO_INDICATION nếu không có shift nào vượt voting.
+        """
         t0 = time.perf_counter()
         limitations: list[str] = []
 

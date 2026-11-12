@@ -14,7 +14,17 @@ import numpy as np
 
 
 def dct_basis(B: int) -> np.ndarray:
-    """Ma trận DCT-II trực giao B×B: F = D @ block @ D.T."""
+    """Ma trận cơ sở DCT-II (loại 2) kích thước B×B, trực giao.
+
+    Mỗi hàng u là một cosin theo tọa độ không gian; nhân D @ block @ Dᵀ
+    tương đương biến đổi DCT 2D từng block (chủ đề khóa: DCT / JPEG).
+
+    Tham số:
+        B: cạnh block (px), thường 8 hoặc 16.
+
+    Trả về:
+        ndarray float (B, B) — ma trận D dùng trong F = D @ block @ D.T.
+    """
     n = np.arange(B)
     u = n[:, None]
     alpha = np.where(u == 0, np.sqrt(1.0 / B), np.sqrt(2.0 / B))
@@ -22,7 +32,17 @@ def dct_basis(B: int) -> np.ndarray:
 
 
 def zigzag_indices(B: int, k: int) -> np.ndarray:
-    """k chỉ số (u,v) đầu tiên theo thứ tự zigzag — giữ hệ số tần số thấp."""
+    """Chỉ số phẳng (u·B+v) của k hệ số DCT đầu theo quét zigzag.
+
+    Zigzag ưu tiên tần số thấp (góc trên-trái ma trận DCT) — cùng thứ tự
+    lượng tử trong JPEG (chủ đề: DCT / JPEG).
+
+    Tham số:
+        B: cạnh block; k: số hệ số giữ lại làm feature (≤ B²).
+
+    Trả về:
+        ndarray int độ dài k — chỉ số cột trong vector hoá B² chiều.
+    """
     order = sorted(
         ((u, v) for u in range(B) for v in range(B)),
         key=lambda p: (p[0] + p[1], -p[0] if (p[0] + p[1]) % 2 else p[0]),
@@ -31,9 +51,18 @@ def zigzag_indices(B: int, k: int) -> np.ndarray:
 
 
 def block_std_map(gray: np.ndarray, B: int) -> np.ndarray:
-    """Std mỗi block qua box filter: var = E[x²] − E[x]². Blocks phẳng
-    (std≈0) giống hệt nhau về mặt feature nhưng VÔ NGHĨA cho copy-move —
-    chúng là nguồn false-match lớn nhất của trường phái này."""
+    """Độ lệch chuẩn cục bộ mỗi vị trí top-left block B×B (stride 1).
+
+    Dùng lọc hộp (box filter) tính E[x] và E[x²] rồi var = E[x²]−E[x]²
+    (chủ đề: spatial filtering / thống kê cửa sổ). Block phẳng (std≈0)
+    bị loại sau vì DCT giống nhau nhưng không chứng minh copy-move.
+
+    Tham số:
+        gray: ảnh xám (H, W); B: kích thước block.
+
+    Trả về:
+        ndarray float (H−B+1, W−B+1) — σ mỗi cửa sổ trượt.
+    """
     import cv2
 
     g = gray.astype(np.float32)
@@ -49,12 +78,19 @@ def block_std_map(gray: np.ndarray, B: int) -> np.ndarray:
 def extract_features(
     gray: np.ndarray, B: int, n_coeffs: int = 24, flat_std_eps: float = 5.0
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Trả (features int32 (N,K), positions int32 (N,2) — top-left mỗi block).
-    Blocks có std < flat_std_eps bị loại (không texture nhận diện).
+    """Vector feature DCT đã lượng tử cho mọi block chồng lấn stride 1.
 
-    int32: F(0,0) có thể tới B·255 — vượt int16 khi block_size ≥ 128.
+    Pipeline: sliding window → DCT-II → lấy k hệ số zigzag → chia Q(u,v)
+    và làm tròn (chủ đề: feature extraction / DCT / lượng tử JPEG).
+    Chỉ giữ block có std ≥ flat_std_eps.
 
-    Chạy theo hàng để tránh materialize (H-B+1)(W-B+1)×B×B float trong RAM.
+    Tham số:
+        gray: ảnh xám; B: cạnh block; n_coeffs: k hệ số zigzag;
+        flat_std_eps: ngưỡng σ tối thiểu (loại vùng phẳng).
+
+    Trả về:
+        (feats, pos): feats int32 (N, k), pos int32 (N, 2) tọa độ (hàng, cột)
+        top-left từng block còn lại.
     """
     D = dct_basis(B).astype(np.float32)
     zz = zigzag_indices(B, n_coeffs)

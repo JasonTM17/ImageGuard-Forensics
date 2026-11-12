@@ -31,6 +31,13 @@ SCORE_DEF = "p99 của heatmap ELA (max qua sweep quality), scale [0,1] đã amp
 
 
 class ELA:
+    """Error Level Analysis — chỉ JPEG; re-save ở nhiều quality rồi lấy diff.
+
+    Chủ đề: JPEG / nén có mất (artifact). **Aux**: không bao giờ
+    ``SUSPICIOUS_INDICATION`` — tối đa INCONCLUSIVE khi p99 heat vượt ngưỡng;
+    non-JPEG → NOT_APPLICABLE.
+    """
+
     name = MethodName.ELA.value
 
     def analyze(
@@ -39,6 +46,12 @@ class ELA:
         cfg: ThresholdSet,
         cancel: threading.Event | None = None,
     ) -> AlgorithmResult:
+        """Sweeps quality: lưu JPEG q, đọc lại, diff trung bình kênh RGB.
+
+        Score = p99 heat (sau amplify). Verdict INCONCLUSIVE nếu p99 ≥
+        ``indication_p99``, ngược lại NO_INDICATION — không đẩy fusion lên
+        SUSPICIOUS một mình.
+        """
         t0 = time.perf_counter()
         base_lim = [
             ("ELA chỉ là bằng chứng khám phá — heatmap cao có thể do cạnh sắc/"
