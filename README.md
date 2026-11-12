@@ -70,6 +70,12 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md) | Khung báo cáo đồ án |
 | [`docs/report/capstone-draft.md`](docs/report/capstone-draft.md) | Bản nháp báo cáo đồ án chương 1–4 |
 | [`docs/report/figures.md`](docs/report/figures.md) | Hình minh họa synthetic cho báo cáo |
+| [`docs/report/slides-outline.md`](docs/report/slides-outline.md) | Dàn ý slide thuyết trình |
+| [`docs/demo-script.md`](docs/demo-script.md) | Kịch bản demo trực tiếp và Q&A hội đồng |
+| [`docs/glossary.md`](docs/glossary.md) | Thuật ngữ và vị trí trong mã nguồn |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Khắc phục sự cố trên Windows |
+| [`docs/fusion-offline-analysis.md`](docs/fusion-offline-analysis.md) | Đếm verdict gộp trên 103 cặp đã lưu (khám phá) |
+| [`docs/README.en.md`](docs/README.en.md) | English summary |
 
 ## Cấu trúc repo (rút gọn)
 
