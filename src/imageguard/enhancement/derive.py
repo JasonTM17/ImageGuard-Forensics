@@ -28,6 +28,15 @@ def derive(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict
     return restore_classical(source, kind, params)
 
 
+def _sha256_file(path: Path) -> str:
+    """Return the SHA-256 hex digest of file bytes (streamed reads)."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _same_as_source(path: Path, source: Path) -> bool:
     """True when ``path`` is the source file, including after a junction swap."""
     if path.resolve() == source.resolve():
@@ -71,6 +80,10 @@ def write_sibling(
         ):
             raise ValueError("destination must differ from the source image")
 
+    computed_parent = _sha256_file(source_path)
+    if parent_sha256 != computed_parent:
+        raise ValueError("parent_sha256 does not match source file")
+
     ok, encoded = cv2.imencode(".png", np.asarray(image))
     if not ok:
         raise ValueError("OpenCV could not encode the image as PNG")
@@ -90,7 +103,7 @@ def write_sibling(
 
     record = {
         "derived": True,
-        "parent_sha256": parent_sha256,
+        "parent_sha256": computed_parent,
         "derived_sha256": hashlib.sha256(payload).hexdigest(),
         "method": method,
         "params": _json_safe(params),

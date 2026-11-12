@@ -45,6 +45,8 @@ mag = gradient_magnitude(gray)
 | `otsu_threshold(gray)` | Tối đa hóa \(\sigma_B^2(t)\) trên histogram 256-bin; trả về `int` ngưỡng. |
 | `adaptive_mean_threshold(gray, block, c)` | Pixel \(>\) (trung bình cục bộ \(block×block\) \(- c\)) → 255, ngược lại 0. |
 
+Trên một phần nhỏ pixel, `adaptive_mean_threshold` có thể khác `cv2.adaptiveThreshold` (làm tròn / tie-break ở biên cửa sổ) vì đường mean cục bộ dùng `float64` thay vì đường integer của OpenCV. Test `test_adaptive_mean_vs_cv2_interior` (seed cố định) so khớp với tolerance tỷ lệ mismatch \(\le 0{,}001\).
+
 **Độ phức tạp (sau tối ưu):** `adaptive_mean_threshold` dùng ảnh tích phân (cumulative sum trên ảnh edge-padded) — thời gian \(O(HW)\), bộ nhớ \(O(HW)\). Erosion/dilation lặp theo từng ô active của phần tử cấu trúc \(k×k\) (tối đa \(k^2\) lần min/max trên view đã pad), không lặp từng pixel Python — \(O(HW \cdot |SE|)\) với \(|SE| \le k^2\).
 
 ```python
