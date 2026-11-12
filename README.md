@@ -75,6 +75,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/glossary.md`](docs/glossary.md) | Thuật ngữ và vị trí trong mã nguồn |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Khắc phục sự cố trên Windows |
 | [`docs/fusion-offline-analysis.md`](docs/fusion-offline-analysis.md) | Đếm verdict gộp trên 103 cặp đã lưu (khám phá) |
+| [`docs/casia-formal-evidence-summary.md`](docs/casia-formal-evidence-summary.md) | Tóm tắt redact sự kiện CASIA formal + SHA-256 artifact (ngoài repo) |
 | [`docs/README.en.md`](docs/README.en.md) | English summary |
 
 ## Cấu trúc repo (rút gọn)
@@ -86,7 +87,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 
 ## Giới hạn đã đo (không overclaim)
 
-Các số dưới đây đến từ **một sự kiện đánh giá chính thức** trên cohort **103 cặp** ảnh CASIA đã sàng lọc (oracle mask tác giả, **không** phải ảnh chụp camera tùy ý). Đó là đo *dấu hiệu suspicious* theo oracle dataset, không chứng minh authentic/giả cho ảnh bất kỳ.
+Các số dưới đây đến từ **một sự kiện đánh giá chính thức** trên cohort **103 cặp** ảnh CASIA đã sàng lọc (oracle mask tác giả, **không** phải ảnh chụp camera tùy ý). Đó là đo *dấu hiệu suspicious* theo oracle dataset, không chứng minh authentic/giả cho ảnh bất kỳ. Receipt aggregate redact và SHA-256 artifact: [`docs/casia-formal-evidence-summary.md`](docs/casia-formal-evidence-summary.md) (artifact đầy đủ giữ **ngoài** repo git).
 
 | Phương pháp | Trên ảnh đã chỉnh (103) | Trên ảnh gốc (103) |
 | --- | --- | --- |
@@ -99,7 +100,7 @@ Các số dưới đây đến từ **một sự kiện đánh giá chính thứ
 - **Verdict fusion trong app/UI** chưa được đánh giá trong sự kiện hai-method trên; người dùng GUI thấy kết quả tổng hợp khác pipeline đo từng method đơn lẻ.
 - Qualification trên CoMoFoD dev **không** được coi là bằng chứng chuyển giao sang cohort CASIA trên.
 
-Điều tra chất lượng detector và artifact JSON/CSV nằm ngoài repo công khai; khi viết báo cáo, trích số từ artifact đã lưu, không suy diễn thêm.
+Khi viết báo cáo, trích số từ [`docs/casia-formal-evidence-summary.md`](docs/casia-formal-evidence-summary.md) hoặc artifact đã lưu cục bộ, không suy diễn thêm.
 
 ## Giấy phép
 

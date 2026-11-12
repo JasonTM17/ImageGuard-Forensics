@@ -4,7 +4,16 @@ Tài liệu này tóm tắt **giới hạn đã ghi trong repo** — không thê
 
 ## Kết quả đo trên cohort CASIA đã sàng lọc (103 cặp)
 
-Nguồn số: bảng trong [`README.md`](../README.md) và ghi chép đánh giá ([`docs/evaluation-methodology.md`](evaluation-methodology.md), [`docs/experiments.md`](experiments.md)). Oracle mask tác giả; **không** chứng minh cho ảnh camera tùy ý.
+Nguồn số: bảng trong [`README.md`](../README.md), tóm tắt bằng chứng redact [`casia-formal-evidence-summary.md`](casia-formal-evidence-summary.md), và khung đánh giá ([`evaluation-methodology.md`](evaluation-methodology.md), [`experiments.md`](experiments.md)). Oracle mask tác giả; **không** chứng minh cho ảnh camera tùy ý.
+
+### Cách chọn cohort và giả định oracle (examiner-facing)
+
+Theo bản ghi sự kiện formal (chi tiết + SHA-256 trong [`casia-formal-evidence-summary.md`](casia-formal-evidence-summary.md)):
+
+- Intake cố định **144** cặp; **7** cặp quarantine (geometry hoặc alias RGB chính xác); **137** survivors.
+- Formal chọn **103** cặp (rank 1–103); **34** cặp rank 104–137 **held-aside** — không chạy detector trong sự kiện.
+- Oracle: chiếu mask tác giả **blue-complement** (đỏ/xanh lá = foreground, xanh dương = pristine), giữ geometry/orientation.
+- **Giả định đã chấp nhận, chưa được chứng minh độc lập:** annotate tác giả đúng vùng; các scene đủ tách biệt — screening crop/RGB/dHash **không** chứng minh độc lập viewpoint hoặc relatedness sau biến đổi.
 
 | Phương pháp | Trên ảnh đã chỉnh (103) | Trên ảnh gốc (103) |
 | --- | --- | --- |
@@ -41,7 +50,7 @@ Study cổ điển đã ghi trên cohort thiết kế; arm **NAFNet (E3)** trên
 ## Dataset và đánh giá
 
 - Metric R1–R5 và `INCONCLUSIVE` tách khỏi ma trận nhị phân — xem [`docs/evaluation-methodology.md`](evaluation-methodology.md).
-- Artifact đánh giá chi tiết có thể nằm ngoài repo công khai; khi trích số trong báo cáo đồ án, lấy từ artifact đã lưu, không suy diễn ([`README.md`](../README.md)).
+- Artifact đánh giá chi tiết nằm ngoài repo công khai; khi trích số trong báo cáo đồ án, lấy từ [`casia-formal-evidence-summary.md`](casia-formal-evidence-summary.md) hoặc artifact đã lưu cục bộ, không suy diễn ([`README.md`](../README.md)).
 
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 

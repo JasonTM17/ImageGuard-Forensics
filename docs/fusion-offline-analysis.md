@@ -38,7 +38,7 @@ Nguồn số: output của `scripts/fusion_offline_summary.py` với `--report` 
 | originals | 103 | 22 (0.145–0.302) | 59 (0.476–0.664) | 22 (0.145–0.302) |
 | edits | 103 | 95 (0.854–0.960) | 8 (0.040–0.146) | 0 (0.000–0.036) |
 
-Số trong ngoặc: khoảng Wilson 95% cho **tỉ lệ** verdict đó trong cohort (mỗi ảnh đếm một lần).
+Số trong ngoặc: khoảng **Wilson 95% kiểu binomial hàng** (mỗi ảnh một lần đếm) cho tỉ lệ verdict trong cohort — giả định **độc lập giữa 103 hàng chưa được chứng minh** (screening scene không đảm bảo tách biệt crop/viewpoint). **Không** ngoại suy sang dân số ảnh khác.
 
 Trên cohort này, fusion hai method detector khiến **một** ảnh chỉnh thêm vào nhóm suspicious so với keypoint đơn lẻ (94 → 95); originals không đổi so với keypoint đơn lẻ vì block không đẩy suspicious trên gốc trong artifact này.
 
@@ -52,7 +52,7 @@ Trên cohort này, fusion hai method detector khiến **một** ảnh chỉnh th
 
 - **Không** coi tỉ lệ suspicious trên ảnh gốc là “false positive rate” thực tế hay độ chính xác trên ảnh tùy ý.
 - **Không** coi tỉ lệ suspicious trên ảnh chỉnh là sensitivity toàn cục hay tỷ lệ “bắt được giả mạo”.
-- Khoảng Wilson chỉ mô tả **độ không chắc của tỉ lệ mẫu 103** trong cohort đã định nghĩa — không ngoại suy sang dân số ảnh khác.
+- Khoảng Wilson (ở trên) là interval **hàng-binomial** dưới giả định độc lập **chưa verify** — chỉ mô tả độ không chắc của tỉ lệ mẫu 103 trong cohort đã định nghĩa, không ngoại suy sang dân số ảnh khác.
 - So sánh fused vs từng method ở đây **không** chứng minh fusion “tốt hơn” ngoài cohort và protocol đã khóa.
 
 Tham chiếu bối cảnh: [`docs/limitations.md`](limitations.md), [`docs/evaluation-methodology.md`](evaluation-methodology.md).

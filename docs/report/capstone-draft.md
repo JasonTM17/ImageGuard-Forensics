@@ -58,10 +58,11 @@ phán quyết pháp y.
 - **Wording:** `SUSPICIOUS` = dấu hiệu nghi vấn; `NO_INDICATION` ≠ chứng minh
   authentic; `INCONCLUSIVE` = không đủ bằng chứng — báo riêng, không gộp vào
   “đúng/sai” đơn giản ([`docs/evaluation-methodology.md`](../evaluation-methodology.md)).
-- **Dataset ngoài:** CoMoFoD tải tay, không redistribute; CASIA chỉ mô tả
-  cohort **103+103 cặp** đã sàng lọc nội bộ với **oracle mask tác giả** — không
-  coi là ảnh camera tùy ý ([`docs/dataset-strategy.md`](../dataset-strategy.md),
-  [`README.md`](../../README.md)).
+- **Dataset ngoài:** CoMoFoD tải tay, không redistribute; CASIA formal:
+  **103** cặp chọn từ intake (**144** cố định, **7** quarantine, **137** survivors,
+  **34** held-aside), oracle blue-complement — annotate và scene independence
+  **chưa chứng minh**; không coi là ảnh camera tùy ý ([`docs/casia-formal-evidence-summary.md`](../casia-formal-evidence-summary.md),
+  [`docs/dataset-strategy.md`](../dataset-strategy.md), [`README.md`](../../README.md)).
 - **Ứng dụng học thuật:** kết quả không thay thế kiểm chứng độc lập; tab Enhance
   / NAFNet chỉ xem, không đưa vào verdict phân tích.
 
@@ -158,7 +159,7 @@ UI (PySide6) → Services → Forensics engine (Qt-free) → Core I/O
 ```
 
 - **Engine Qt-free:** `forensics/`, `core/`, `evaluation/` test headless bằng pytest.
-- **UI thread:** không chạy OpenCV; worker qua `QThreadPool` (max 1 thread).
+- **Luồng UI:** detector và enhancement chạy trong worker (`QThreadPool`, max 1 thread); **preview** ảnh khi mở file (`AnalyzeScreen`/`EnhanceScreen` → `safe_open`, gồm decode OpenCV) hiện chạy trên **UI thread**.
 - **Ngưỡng tập trung:** `configs/thresholds.yaml` (không chỉnh trong scope báo cáo).
 
 Sơ đồ đầy đủ: [`docs/architecture.md`](../architecture.md) (ASCII layer diagram).
@@ -249,7 +250,7 @@ không tạo `SUSPICIOUS` độc lập ([`docs/evaluation-methodology.md`](../ev
 | --- | --- | --- |
 | **synthforge** | Dev/regression nội bộ | PCG64 seed, tiers easy/medium/hard; không benchmark công bố ([`docs/dataset-strategy.md`](../dataset-strategy.md)) |
 | **CoMoFoD** | Diagnostic / dev ngoài | Tralic et al. ELMAR-2013; tải tay vào `data/comofod_base/`; verify mask trước eval ([`docs/dataset-strategy.md`](../dataset-strategy.md)) |
-| **CASIA (cohort formal)** | Sự kiện locked | **103 cặp** ảnh đã sàng lọc: 103 chỉnh + 103 gốc; oracle mask tác giả; **không** coi là cohort ảnh chụp tùy ý ([`README.md`](../../README.md)) |
+| **CASIA (cohort formal)** | Sự kiện locked | **103 cặp** chọn từ **137** survivors (intake **144**, **7** quarantine); **34** cặp held-aside không inference; oracle blue-complement; annotate/scene independence **chưa chứng minh** ([`casia-formal-evidence-summary.md`](../casia-formal-evidence-summary.md), [`README.md`](../../README.md)) |
 
 Split synth/CoMoFoD: theo `base_image_id` (`sha256 % 2`) — mọi biến thể cùng ảnh
 gốc cùng phía dev hoặc test; **không hiệu chỉnh ngưỡng trên split test khóa**.
@@ -289,20 +290,19 @@ git SHA ([`docs/user-guide.md`](../user-guide.md)).
 
 ### 4.5 Kết quả baseline formal (CASIA 103+103) — chỉ số đã công bố trong repo
 
-Theo [`README.md`](../../README.md) và [`docs/limitations.md`](../limitations.md)
-(từ một sự kiện đánh giá formal trên cohort đã nêu):
+Theo [`README.md`](../../README.md), [`docs/limitations.md`](../limitations.md) và receipt redact [`docs/casia-formal-evidence-summary.md`](../casia-formal-evidence-summary.md)
+(từ một sự kiện đánh giá formal trên cohort đã nêu; artifact đầy đủ ngoài repo):
 
 | Phương pháp | Trên ảnh chỉnh (n=103) | Trên ảnh gốc (n=103) |
 | --- | --- | --- |
 | Keypoint | 94 suspicious; 9 INCONCLUSIVE | 22 FP suspicious; 59 INCONCLUSIVE (trong nhóm nonsuspicious confusion) |
-| Block | **37** suspicious; 2–3 INCONCLUSIVE | **0** FP suspicious |
+| Block | **37** suspicious; **3** INCONCLUSIVE | **0** FP suspicious |
 
 - Keypoint edited recall ~**91,26%** trên cohort này; original FPR ~**21,36%** (22/103).
 - Macro IoU mask (103 chỉnh): keypoint ~**0,461**; block ~**0,289**.
 - **Fusion UI:** `NOT_EVALUATED` trong sự kiện hai-method trên.
 
-[SINH VIÊN BỔ SUNG: trích lại từ JSON sự kiện đã lưu khi nộp bản chính thức —
-README chỉ là tóm tắt định tính.]
+Số và SHA-256 artifact: [`docs/casia-formal-evidence-summary.md`](../casia-formal-evidence-summary.md).
 
 ### 4.6 Nghiên cứu candidate (block) — kết quả **FAIL**
 
@@ -318,7 +318,7 @@ giữ FPR gốc trong ngưỡng đã duyệt.
 **Kết luận sự kiện:** `compare` **rejected** — candidate **không được chấp nhận**;
 ngưỡng production **không** đổi theo kết quả này.
 
-[SINH VIÊN BỔ SUNG: dán `comparison.json` / receipt hash từ `evaluate_detector_quality.py compare`.]
+Receipt aggregate và comparison SHA-256: [`docs/casia-formal-evidence-summary.md`](../casia-formal-evidence-summary.md) (scientific gate **FAIL**, `tp_delta_min`).
 
 **Nguồn:** [`docs/evaluation-methodology.md`](../evaluation-methodology.md);
 [`scripts/evaluate_detector_quality.py`](../../scripts/evaluate_detector_quality.py);
@@ -381,7 +381,7 @@ oracle mask tác giả, **không** phải ảnh chụp camera tùy ý).
 
 Bảng dưới áp luật `fusion.combine` của app lên **hàng detector đã lưu** của sự kiện
 formal: không chạy lại detector, không chỉnh ngưỡng. Số trong ngoặc là khoảng
-Wilson 95% cho **tỉ lệ** verdict đó trong cohort (mỗi ảnh đếm một lần).
+Wilson 95% **hàng-binomial** (giả định độc lập 103 hàng **chưa verify**) cho tỉ lệ verdict trong cohort.
 
 **Bảng 5.2** — Đếm verdict đơn lẻ và verdict gộp trên 103 cặp.
 
@@ -409,8 +409,8 @@ không đẩy suspicious trên gốc trong artifact này
   cohort CASIA đã sàng lọc.
 - **Không** đọc tỉ lệ suspicious trên ảnh gốc là “FPR thực tế”, **không** đọc tỉ lệ
   trên ảnh chỉnh là “sensitivity toàn cục” hay “tỉ lệ bắt được giả mạo”.
-- Khoảng Wilson chỉ mô tả độ không chắc của **tỉ lệ mẫu 103** trong cohort đã định
-  nghĩa — không ngoại suy sang dân số ảnh khác.
+- Khoảng Wilson (trên) là interval hàng-binomial dưới giả định độc lập **chưa verify** —
+  chỉ mô tả độ không chắc của tỉ lệ mẫu 103, không ngoại suy sang dân số ảnh khác.
 - So sánh fused với từng method ở đây **không** chứng minh fusion tốt hơn ngoài
   cohort và protocol đã khóa.
 - Bảng này là mô phỏng luật trên hàng đã lưu, **không** phải đo verdict của GUI;
@@ -496,7 +496,7 @@ Bảng 5.1.]
 synth. Môi trường: Windows 11, AMD64, Python 3.14.2, OpenCV 5.0.0,
 `cv2.getNumThreads()` = 16 ([`docs/performance.md`](../performance.md)).
 
-**Bảng 5.6** — `median_s` theo cạnh ảnh (sao chép từ JSON bench đã lưu).
+**Bảng 5.6** — `median_s` theo cạnh ảnh (**một lần chạy**, JSON tạm chưa archive trong repo — xem [`docs/performance.md`](../performance.md)).
 
 | method | 256 | 512 | 1024 | 2048 |
 | --- | ---: | ---: | ---: | ---: |
@@ -507,10 +507,10 @@ synth. Môi trường: Windows 11, AMD64, Python 3.14.2, OpenCV 5.0.0,
 
 `analysis_service` = keypoint + block + ela + EXIF audit, không ghi DB/artifact.
 
-**Chi phí ở 2048 px và nguyên nhân.** Tại 2048 px, `keypoint` là method chậm nhất
-trong bảng: **47.603493499998876 s**, gấp nhiều lần `block`
-(**6.8929092999969725 s**); pipeline mặc định `analysis_service` là
-**51.22097900000517 s**. Tỉ lệ tăng của keypoint theo cạnh ảnh: 256 → 512 **×5.16**;
+**Chi phí ở 2048 px và nguyên nhân.** Tại 2048 px, trong các **method đơn lẻ**,
+`keypoint` chậm nhất: **47.603493499998876 s**, gấp nhiều lần `block`
+(**6.8929092999969725 s**). Hàng `analysis_service` (**51.22097900000517 s**) là
+**tổng hợp** pipeline (chậm hơn keypoint đơn lẻ ở cùng size). Tỉ lệ tăng của keypoint theo cạnh ảnh: 256 → 512 **×5.16**;
 512 → 1024 **×11.06**; 1024 → 2048 **×29.46** — tăng nhanh hơn khi ảnh lớn
 ([`docs/performance.md`](../performance.md)).
 
@@ -552,11 +552,11 @@ test CI chỉ kiểm cấu trúc JSON, **không** so sánh số giây
 ### 6.1 False cue của keypoint trên ảnh gốc
 
 Trên cohort formal, keypoint gọi `SUSPICIOUS` trên **22/103** ảnh gốc — tức false
-cue trên ảnh **không** bị chỉnh theo oracle, với khoảng Wilson 95% cho tỉ lệ mẫu là
-**0.145–0.302** ([`docs/fusion-offline-analysis.md`](../fusion-offline-analysis.md)).
-Đây là con số quan trọng hơn recall trong thảo luận về độ tin cậy: một công cụ gọi
-suspicious trên **22** ảnh gốc của cohort vẫn có ích như *chỉ dẫn điều tra*, nhưng
-không thể dùng như phán quyết.
+cue trên ảnh **không** bị chỉnh theo oracle, với khoảng Wilson 95% hàng-binomial
+(giả định độc lập **chưa verify**) **0.145–0.302** ([`docs/fusion-offline-analysis.md`](../fusion-offline-analysis.md)).
+Đây là con số quan trọng hơn recall trong thảo luận về độ tin cậy: **22** cue trên
+ảnh gốc có thể *gợi ý xem xét thêm* cho điều tra — **lợi ích thực tế cho điều tra
+viên chưa được đánh giá** trong sự kiện formal; không thể dùng như phán quyết.
 
 Cần đọc kèm hai điều:
 

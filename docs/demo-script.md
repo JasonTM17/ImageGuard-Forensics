@@ -20,7 +20,7 @@ Tài liệu cho **bảo vệ đồ án** môn Xử lý ảnh: người trình b�
 | Sinh ảnh synthforge (CLI hoặc Python) | **PASS** |
 | `imageguard analyze` (CLI) | **PASS** (≈2,2 s wall-clock ảnh 512×512 keypoint+block; xem [`docs/performance.md`](performance.md)) |
 | Xuất Markdown qua `ReportService` (tương đương nút GUI) | **PASS** |
-| Smoke GUI 4 s (process không thoát sớm) | **PASS** |
+| Smoke GUI 4 s (process không thoát sớm) | **PASS** — quan sát smoke **chưa lưu receipt** (một phiên tay; không archive trong repo) |
 | Demo `ipkit` (CLI) | **PASS** |
 | Thao tác GUI có màn hình (overlay, lịch sử, Tăng cường) | **NOT_RUN** trong phiên tự động — presenter chạy tay khi máy chiếu |
 
@@ -131,7 +131,7 @@ $img = (Resolve-Path .\synth\easy_0000_F.png).Path
 | `copy_move_block` | `suspicious_indication`, `has_mask`: true |
 | `exif_audit` | `inconclusive` (cue phụ; không tự kết luận) |
 
-Thời gian wall-clock một lần đo: **≈2,2 s** (cùng lệnh Phần 3); median `analysis_service` 512 px trong [`docs/performance.md`](performance.md) là **2.1750727000035113 s** (superset: thêm `ela` + EXIF so với chỉ keypoint+block).
+Thời gian wall-clock một lần đo: **≈2,2 s** (cùng lệnh Phần 3); median `analysis_service` 512 px trong [`docs/performance.md`](performance.md) là **2.1750727000035113 s** (superset: thêm **ELA** so với chỉ keypoint+block; **EXIF** có trong cả demo CLI và benchmark vì `AnalysisRequest.include_exif` mặc định bật).
 
 **Câu nói:** `suspicious_indication` = có cấu trúc giống copy-move trong pipeline, **không** đồng nghĩa “ảnh giả”. Exit code ≠ 0 chỉ khi lỗi đọc file (`ErrorResult`), không phải verdict.
 

@@ -179,7 +179,8 @@ Markdown để đối chiếu lại.
 
 **Bullets**
 
-- Sự kiện đánh giá chính thức trên **103 cặp** CASIA đã sàng lọc, dùng oracle mask của tác giả —
+- Sự kiện đánh giá chính thức trên **103 cặp** CASIA đã sàng lọc — receipt redact
+  `docs/casia-formal-evidence-summary.md`; oracle mask tác giả —
   không phải ảnh chụp camera tùy ý (`README.md`).
 - Keypoint: **94/103** ảnh đã chỉnh bị coi suspicious, **9** `INCONCLUSIVE`; trên ảnh gốc có
   **22/103** FP và **59/103** `INCONCLUSIVE` (`README.md`).
@@ -203,9 +204,10 @@ chứng minh ảnh thật/giả.
 **Bullets**
 
 - Đo median qua 3 lần lặp, ảnh synth 256/512/1024/2048 px, seed **424242**, trên một máy
+  — **một lần chạy**, JSON tạm **chưa archive** trong repo (`docs/performance.md`).
+- Tại 2048 px: keypoint **47.603493499998876 s** (chậm nhất trong **method đơn lẻ**),
+  block **6.8929092999969725 s**; `analysis_service` **51.22097900000517 s** (hàng **tổng hợp**)
   (`docs/performance.md`).
-- Tại 2048 px: keypoint **47.603493499998876 s**, block **6.8929092999969725 s**,
-  `analysis_service` **51.22097900000517 s** (`docs/performance.md`).
 - Tại 256 px: keypoint **0.028280600003199652 s**, `analysis_service`
   **0.5253770999988774 s** (`docs/performance.md`).
 - Đỉnh bộ nhớ: **NOT_RUN** — script cố ý bỏ qua vì `tracemalloc` không đại diện cho OpenCV

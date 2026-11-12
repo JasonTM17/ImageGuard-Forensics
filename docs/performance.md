@@ -28,9 +28,9 @@ python scripts/bench_methods.py --out $env:TEMP\imageguard_bench_methods_full.js
 | OpenCV | 5.0.0 |
 | `cv2.getNumThreads()` lúc đo | 16 |
 
-## Bảng `median_s` (giây) — sao chép từ JSON đầu ra
+## Bảng `median_s` (giây) — quan sát một lần chạy (chưa lưu archive)
 
-Nguồn: file JSON tạm `imageguard_bench_methods_full.json` (không nằm trong repo `data/`).
+Các số dưới đây là **một lần quan sát wall-clock** đã sao chép từ JSON tạm `imageguard_bench_methods_full.json` khi chạy lệnh ở trên. File JSON **không** nằm trong repo và **không** có digest SHA-256 được ghi trong repo tại thời điểm tài liệu này — tái lập bằng cùng lệnh/script; không coi bảng là artifact đã niêm phong.
 
 | method | 256 | 512 | 1024 | 2048 |
 | --- | --- | --- | --- | --- |
@@ -60,7 +60,7 @@ Nguồn: file JSON tạm `imageguard_bench_methods_full.json` (không nằm tron
 
 ## Nhận xét (chỉ từ bảng trên)
 
-1. **Chiếm thời gian ở ảnh lớn:** tại 2048 px, `median_s` của `keypoint` (47.603493499998876 s) lớn hơn mọi method khác trong bảng; `block` đứng thứ hai (6.8929092999969725 s).
+1. **Chiếm thời gian ở ảnh lớn:** tại 2048 px, trong các **method đơn lẻ**, `median_s` của `keypoint` (47.603493499998876 s) lớn nhất; `block` đứng thứ hai (6.8929092999969725 s). Hàng **`analysis_service`** (51.22097900000517 s) là **tổng hợp** keypoint + block + ela + EXIF — chậm hơn keypoint đơn lẻ ở cùng size.
 2. **Tỷ lệ theo kích thước (median_s, `keypoint`):** 256 → 512 ×5.16; 512 → 1024 ×11.06; 1024 → 2048 ×29.46 — tăng nhanh hơn khi cạnh ảnh lớn.
 3. **Pipeline mặc định:** `analysis_service` tại 2048 px `median_s` 51.22097900000517 s, cùng bậc với tổng ba method mặc định trong đó `keypoint` chiếm phần lớn ở size này.
 4. **Method phụ trợ** (`noise`, `noise_local`, `splicing`, `freq`): `median_s` tại 2048 px đều dưới 0.5 s trong lần đo này — nhỏ hơn `keypoint` và `block` tại cùng size.
