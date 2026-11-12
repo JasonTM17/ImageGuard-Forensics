@@ -9,7 +9,7 @@ Nguồn số: bảng trong [`README.md`](../README.md) và ghi chép đánh giá
 | Phương pháp | Trên ảnh đã chỉnh (103) | Trên ảnh gốc (103) |
 | --- | --- | --- |
 | **Keypoint** | 94 coi suspicious; 9 INCONCLUSIVE trên ảnh chỉnh | 22 FP suspicious; **59 INCONCLUSIVE** |
-| **Block** | 37 coi suspicious; 2–3 INCONCLUSIVE | **0** FP suspicious; **0** INCONCLUSIVE |
+| **Block** | 37 coi suspicious; 3 INCONCLUSIVE | **0** FP suspicious; **0** INCONCLUSIVE |
 
 Ý nghĩa:
 

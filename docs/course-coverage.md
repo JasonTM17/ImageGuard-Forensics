@@ -295,7 +295,7 @@ Registry method: `src/imageguard/forensics/registry.py`.
 2. Công cụ chỉ báo **dấu hiệu nghi vấn**, không khẳng định ảnh giả / nguyên bản (README, phần ranh giới khoa học).
 3. Số trên cohort **103 cặp CASIA đã sàng lọc** (README, *Giới hạn đã đo*):
    - **Keypoint:** ảnh chỉnh — 94 suspicious (9 FN); 9 INCONCLUSIVE trên ảnh chỉnh; ảnh gốc — 22 FP suspicious; **59 INCONCLUSIVE** (trong 81 hàng nonsuspicious theo confusion).
-   - **Block:** ảnh chỉnh — 37 suspicious (66 không suspicious); 2–3 INCONCLUSIVE; ảnh gốc — **0 FP suspicious**; 0 INCONCLUSIVE.
+   - **Block:** ảnh chỉnh — 37 suspicious (66 không suspicious); 3 INCONCLUSIVE; ảnh gốc — **0 FP suspicious**; 0 INCONCLUSIVE.
    - Macro IoU mask (103 ảnh chỉnh): keypoint ~0,461; block ~0,289 (baseline `.01` trong README).
    - **Verdict fusion trong app/UI chưa được đánh giá** trong sự kiện đo hai method trên.
 4. Không dùng số từ CoMoFoD dev để overclaim lên CASIA (README).
