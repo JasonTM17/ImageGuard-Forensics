@@ -71,12 +71,30 @@ def _dilate_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
 
 
 def _check_se(se: np.ndarray) -> np.ndarray:
+    """Validate a binary structuring element and return uint8 0/1 data.
+
+    Only finite values exactly equal to 0 or 1 are accepted: negatives,
+    fractions, NaN and infinities are rejected instead of being treated as
+    active cells.
+    """
     elem = np.asarray(se)
-    if elem.ndim != 2 or elem.size == 0 or elem.shape[0] % 2 == 0 or elem.shape[1] % 2 == 0:
+    if (
+        elem.ndim != 2
+        or elem.size == 0
+        or elem.shape[0] % 2 == 0
+        or elem.shape[1] % 2 == 0
+    ):
         raise ValueError("se must be a non-empty 2D structuring element with odd sizes")
-    if np.any(elem > 1):
-        raise ValueError("se must be binary (0/1)")
-    return (elem != 0).astype(np.uint8)
+    if elem.dtype.kind not in "biuf":
+        raise ValueError("se must be numeric or boolean")
+    if elem.dtype.kind == "b":
+        return elem.astype(np.uint8)
+    values = elem.astype(np.float64)
+    if not np.all(np.isfinite(values)):
+        raise ValueError("se must be binary (0/1); found non-finite values")
+    if not np.all((values == 0.0) | (values == 1.0)):
+        raise ValueError("se must be binary (0/1); values must be exactly 0 or 1")
+    return values.astype(np.uint8)
 
 
 def erode(img: np.ndarray, se: np.ndarray) -> np.ndarray:
