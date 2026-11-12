@@ -206,15 +206,6 @@ def test_reserved_device_names_pass_shape_guard_but_dot_space_forms_do_not(
             store.rel_path("aid", name)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "sanitizer regex uses $, which also matches before a trailing newline, "
-        "so 'aid\\n' and 'report.json\\n' pass the documented [a-z0-9_-] "
-        "allowlist instead of raising ValueError; put_bytes then fails with "
-        "OSError from the filesystem"
-    ),
-)
 @pytest.mark.parametrize(
     ("analysis_id", "filename"),
     [("aid\n", "report.json"), ("aid", "report.json\n")],
@@ -228,13 +219,6 @@ def test_sanitizer_rejects_trailing_newline(
         store.rel_path(analysis_id, filename)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "re.IGNORECASE folds non-ASCII lookalikes into [a-z], so KELVIN SIGN "
-        "and LONG S are accepted although the documented allowlist is ASCII"
-    ),
-)
 @pytest.mark.parametrize(
     ("analysis_id", "filename"),
     [("\u212a", "report.json"), ("\u017fon", "report.json"),
@@ -688,15 +672,30 @@ def test_assert_relative_accepts_safe_paths() -> None:
     _assert_relative("aid/mask.png")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "on Windows Path('/x').is_absolute() is False for drive-less rooted "
-        "paths, so _assert_relative stores them even though docs/database.md "
-        "promises absolute paths are blocked; ArtifactStore.abs_path cannot "
-        "resolve such a row"
-    ),
-)
+def test_ordinary_ascii_ids_and_relative_paths_still_work(
+    tmp_path: Path, sf: sessionmaker[Session],
+) -> None:
+    """Regression guard after ASCII-only sanitizer and rooted-path rejection."""
+    root = tmp_path / "art"
+    store = ArtifactStore(root)
+    rel = store.put_bytes("My_Aid-9", "ELA_MASK.PNG", b"\x89PNG")
+    assert rel == "My_Aid-9/ELA_MASK.PNG"
+    assert store.read(rel) == b"\x89PNG"
+    assert store.abs_path(rel) == (root / rel).resolve()
+
+    images = ImageRepository(sf)
+    analyses = AnalysisRepository(sf)
+    asset = _seed_image(images)
+    aid = "00000000-0000-4000-8000-000000000030"
+    analyses.save_report(aid, asset.id, _report(_method(evidence={})), "hash", 1)
+    db_rel = f"{aid}/report.json"
+    _assert_relative(db_rel)
+    analyses.add_artifact(aid, "report", "", db_rel)
+    got = analyses.get(aid)
+    assert got is not None
+    assert [a.rel_path for a in got.artifacts] == [db_rel]
+
+
 @pytest.mark.parametrize(
     "rel_path", ["/absolute.png", "\\absolute.png"],
     ids=["forward-slash", "backslash"],

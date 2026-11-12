@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -135,5 +136,13 @@ class ExperimentRepository:
 
 def _assert_relative(rel: str) -> None:
     p = Path(rel)
-    if p.is_absolute() or ".." in p.parts:
+    unsafe = (
+        ".." in p.parts
+        or os.path.isabs(rel)
+        or p.is_absolute()
+        or p.anchor
+        or p.drive
+        or rel.startswith(("\\\\", "//"))
+    )
+    if unsafe:
         raise ValueError(f"DB chỉ lưu relative path an toàn: {rel!r}")

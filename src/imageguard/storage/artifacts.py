@@ -18,18 +18,20 @@ from imageguard.core.paths import data_root
 
 DEFAULT_ROOT = data_root() / "artifacts"
 
-_SAFE = re.compile(r"^[a-z0-9_\-]+$", re.IGNORECASE)
-_SAFE_FILE = re.compile(r"^[a-z0-9_\-]+(\.[a-z0-9]{1,8})?$", re.IGNORECASE)
+_SAFE = re.compile(r"[a-z0-9_\-]+", re.IGNORECASE | re.ASCII)
+_SAFE_FILE = re.compile(
+    r"[a-z0-9_\-]+(\.[a-z0-9]{1,8})?", re.IGNORECASE | re.ASCII,
+)
 
 
 def _check_name(name: str) -> str:
-    if not _SAFE.match(name):
+    if _SAFE.fullmatch(name) is None:
         raise ValueError(f"artifact name không hợp lệ: {name!r}")
     return name
 
 
 def _check_filename(filename: str) -> str:
-    if not _SAFE_FILE.match(filename):
+    if _SAFE_FILE.fullmatch(filename) is None:
         raise ValueError(f"artifact filename không hợp lệ: {filename!r}")
     return filename
 
