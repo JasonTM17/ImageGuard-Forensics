@@ -19,7 +19,9 @@ class SettingsScreen(QWidget):
     def __init__(self, cfg: ThresholdSet, parent=None) -> None:
         super().__init__(parent)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(strings.SETTINGS_THRESHOLDS_INTRO))
+        intro_lbl = QLabel(strings.SETTINGS_THRESHOLDS_INTRO)
+        intro_lbl.setWordWrap(True)
+        lay.addWidget(intro_lbl)
         self.tree = QTreeWidget()
         apply_a11y(self.tree, strings.A11Y_SETTINGS_TREE)
         self.tree.setHeaderLabels([

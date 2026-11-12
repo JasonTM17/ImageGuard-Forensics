@@ -9,12 +9,14 @@ import numpy as np
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -67,13 +69,17 @@ class HistoryScreen(QWidget):
         btns = QHBoxLayout()
         self.btn_reopen = QPushButton(strings.BTN_REOPEN)
         apply_a11y(self.btn_reopen, strings.A11Y_HISTORY_REOPEN)
+        self.btn_reopen.setEnabled(False)
         self.btn_reopen.clicked.connect(self._reopen)
         self.btn_export = QPushButton(strings.BTN_EXPORT_REPORT_SHORT)
         apply_a11y(self.btn_export, strings.A11Y_HISTORY_EXPORT)
+        self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self._export)
         self.btn_delete = QPushButton(strings.BTN_DELETE)
         apply_a11y(self.btn_delete, strings.A11Y_HISTORY_DELETE)
+        self.btn_delete.setEnabled(False)
         self.btn_delete.clicked.connect(self._delete)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
         btns.addWidget(self.btn_reopen)
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_delete)
@@ -87,6 +93,16 @@ class HistoryScreen(QWidget):
         self.lbl_empty = QLabel(strings.EMPTY_HISTORY)
         lay.addWidget(self.lbl_empty)
         self.refresh()
+
+    def _on_selection_changed(self) -> None:
+        has_row = (
+            self.table.rowCount() > 0 and self.table.currentRow() >= 0
+        )
+        self.btn_reopen.setEnabled(has_row)
+        self.btn_export.setEnabled(has_row)
+        self.btn_delete.setEnabled(has_row)
+        if has_row:
+            self.lbl_status.setText("")
 
     def _need_selection(self) -> bool:
         if self._selected_id() is not None:
@@ -111,7 +127,7 @@ class HistoryScreen(QWidget):
             self.table.setItem(i, 2, _table_cell(verdict_text))
             self.table.setItem(i, 3, _table_cell(str(r["n_methods"])))
             self.table.setItem(i, 4, _table_cell(r["id"]))
-        self.table.resizeColumnsToContents()
+        self._on_selection_changed()
         self.lbl_empty.setVisible(not rows)
 
     def _selected_id(self) -> str | None:
@@ -199,27 +215,42 @@ class AnalysisDetailDialog(QDialog):
         lay = QVBoxLayout(self)
         v = detail["verdict"]
         top_h = QHBoxLayout()
-        top_h.addWidget(QLabel(
-            f"<b>{strings.VERDICT_LABEL.get(v, v)}</b> · "
-            f"{len(detail['methods'])} methods · {detail['duration_ms']} ms · "
-            f"config `{detail['config_hash']}`"), 1)
+        summary = strings.FMT_HIST_DETAIL_SUMMARY.format(
+            n=len(detail["methods"]),
+            ms=detail["duration_ms"],
+            cfg=detail["config_hash"],
+        )
+        top_h.addWidget(
+            QLabel(f"<b>{strings.VERDICT_LABEL.get(v, v)}</b> · {summary}"), 1)
         btn_exp = QPushButton(strings.BTN_EXPORT_REPORT_SHORT)
         btn_exp.clicked.connect(self._export)
         top_h.addWidget(btn_exp)
         lay.addLayout(top_h)
+        methods_host = QWidget()
+        methods_lay = QVBoxLayout(methods_host)
+        methods_lay.setContentsMargins(0, 0, 0, 0)
         for m in detail["methods"]:
             score = (f" — score {m['score']:.4g} ({m['score_definition']})"
                      if m["score"] is not None else "")
-            lbl = QLabel(f"• {m['method']}: "
+            method_title = strings.METHOD_LABEL.get(m["method"], m["method"])
+            lbl = QLabel(f"• {method_title}: "
                          f"{strings.VERDICT_LABEL.get(m['verdict'], m['verdict'])}"
                          f"{score}")
             lbl.setWordWrap(True)
-            lay.addWidget(lbl)
+            methods_lay.addWidget(lbl)
+        methods_scroll = QScrollArea()
+        methods_scroll.setWidgetResizable(True)
+        methods_scroll.setWidget(methods_host)
+        methods_scroll.setMaximumHeight(220)
+        lay.addWidget(methods_scroll)
         self.canvas = ImageCanvas()
         self.combo = QComboBox()
+        apply_a11y(self.combo, strings.A11Y_HIST_DETAIL_ARTIFACT)
         self.combo.addItem(strings.HIST_ARTIFACT_PLACEHOLDER, None)
         for a in self._arts:
-            self.combo.addItem(f"{a['kind']} — {a['method']}", a["rel_path"])
+            kind_lbl = strings.ARTIFACT_KIND_LABEL.get(a["kind"], a["kind"])
+            method_lbl = strings.METHOD_LABEL.get(a["method"], a["method"])
+            self.combo.addItem(f"{kind_lbl} — {method_lbl}", a["rel_path"])
         self.combo.currentIndexChanged.connect(self._show_art)
         self.lbl_art_err = QLabel("")
         self.lbl_art_err.setStyleSheet("color:#b91c1c;")
@@ -227,6 +258,12 @@ class AnalysisDetailDialog(QDialog):
         lay.addWidget(self.combo)
         lay.addWidget(self.lbl_art_err)
         lay.addWidget(self.canvas, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        close_btn = buttons.button(QDialogButtonBox.StandardButton.Close)
+        if close_btn is not None:
+            close_btn.setText(strings.BTN_CLOSE)
+        buttons.rejected.connect(self.reject)
+        lay.addWidget(buttons)
 
     def _show_art(self) -> None:
         rel = self.combo.currentData()
