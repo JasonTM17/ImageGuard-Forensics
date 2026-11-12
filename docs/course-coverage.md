@@ -20,11 +20,14 @@ Chi tiết contract fusion: module `src/imageguard/forensics/fusion.py` và [eva
 
 | Mục | Nội dung |
 | --- | --- |
-| **Module** | `src/imageguard/evaluation/enhance_ops.py` (`gaussian_kernel`, `degrade(..., kind="gaussian")`) |
-| **Triển khai** | Kernel: `cv2.getGaussianKernel` + tích ngoài NumPy; convolution: `cv2.filter2D` (không tự viết FFT conv ở đây). |
-| **Tests** | `tests/test_gaussian_kernel_course.py`, `tests/test_gauss_*_course.py`, `tests/test_enhance_ops.py` |
-| **Tài liệu** | [enhancement-study.md](enhancement-study.md), [image-processing-toolkit.md](image-processing-toolkit.md) (so sánh với ipkit) |
-| **Ví dụ** | `degrade(..., rng=...)` dùng tham số `rng`, không phải `seed`. |
+| **Module (học tập)** | `src/imageguard/ipkit/spatial.py` (`gaussian_kernel`, `gaussian_filter`) — NumPy + `convolve2d` |
+| **Module (enhance study)** | `src/imageguard/evaluation/enhance_ops.py` (`gaussian_kernel`, `degrade(..., kind="gaussian")`) |
+| **Triển khai enhance** | Kernel: `cv2.getGaussianKernel` + tích ngoài NumPy; convolution: `cv2.filter2D` (không tự viết FFT conv ở đây). |
+| **Tests ipkit** | `tests/test_ipkit_spatial.py` — so `cv2.GaussianBlur` (sai lệch ±1 mức xám có thể xảy ra) |
+| **Tests enhance** | `tests/test_gaussian_kernel_course.py`, `tests/test_gauss_*_course.py`, `tests/test_enhance_ops.py` |
+| **Tài liệu** | [enhancement-study.md](enhancement-study.md), [image-processing-toolkit.md](image-processing-toolkit.md) |
+| **Ví dụ ipkit** | `gaussian_filter(gray, size=5, sigma=1.0)` |
+| **Ví dụ enhance** | `degrade(..., rng=...)` dùng tham số `rng`, không phải `seed`. |
 
 ```powershell
 $env:PYTHONPATH='src'
@@ -41,7 +44,7 @@ python -c "import numpy as np; from imageguard.evaluation.enhance_ops import deg
 | **Tài liệu** | [algorithms.md](algorithms.md) (Noise inconsistency), [03-block.md](algorithms/03-block.md) (ngữ cảnh block) |
 | **Vai trò forensics** | Aux cue (`noise`, `noise_local`) — **không** đủ để verdict `SUSPICIOUS` một mình. |
 
-Không có API median độc lập trong `ipkit`; median xuất hiện như bước tiền xử lý trong pipeline nhiễu.
+**ipkit:** `spatial.median_filter` (NumPy thuần), test `tests/test_ipkit_spatial.py` so `cv2.medianBlur`. Median forensics vẫn nằm trong `noise_map` / `noise_local` như bảng trên.
 
 ### Unsharp mask
 
@@ -262,16 +265,87 @@ Blockiness JPEG (liên quan chương JPEG 8×8): `freq_view.py` (mục 2).
 
 ---
 
+## Bài giảng Chương 2–7 (slides dunghv) → `imageguard.ipkit`
+
+Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; PDF cùng thư mục trên repo chính). **ipkit không đổi verdict** — cột *OpenCV trong test* chỉ ghi oracle pytest, không phải triển khai `src/`.
+
+### Chương 2 — Image Enhancement in Spatial Domain
+
+| Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có trong ipkit |
+| --- | --- | --- | --- | --- | --- |
+| §2 | Biến đổi cường độ (negative, log, gamma, stretch, …) | `intensity.*` | `test_ipkit_intensity.py` | Một số LUT | Biến đổi hình học (scale/rotate/translate) |
+| §3 | Histogram, equalize, matching, local | `histogram.*` | `test_ipkit_histogram.py` | `cv2.equalizeHist` cho `equalize` | — |
+| §4–§6 | Lọc không gian, làm sắc | `spatial.*` (+ `edges.convolve2d`) | `test_ipkit_spatial.py` | blur, GaussianBlur, medianBlur | — |
+| (nhiễu demo) | Salt-pepper, speckle, Poisson | `noise.*` | `test_ipkit_noise.py` | Không | — |
+| (biên) | Sobel, Prewitt, Laplacian | `edges.*` | `test_ipkit_edges.py`, `test_ipkit_opencv_reference.py` | Sobel, Laplacian, filter2d | — |
+| (ngưỡng) | Otsu, adaptive mean | `threshold.*` | `test_ipkit_threshold.py` | Otsu, adaptiveThreshold | — |
+
+### Chương 3 — Frequency Domain
+
+| Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có |
+| --- | --- | --- | --- | --- | --- |
+| §2 | DFT, phổ | `frequency.dft2_centered`, `magnitude_spectrum` | `test_ipkit_frequency.py` | Không (NumPy FFT) | — |
+| §3–§4 | Low/high pass ideal, Butterworth, Gaussian; sharpen | `frequency.*_lowpass`, `*_highpass`, `apply_frequency_filter`, `sharpen_frequency` | `test_ipkit_frequency.py` | So lỏng `GaussianBlur` cho một case không gian | Demo “OpenCV in use” trên slide (không port vào ipkit) |
+
+### Chương 4 — Morphological Image Processing
+
+| Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có |
+| --- | --- | --- | --- | --- | --- |
+| §2–§3 | Erosion, dilation, open/close, gradient, tophat | `morphology.*` | `test_ipkit_morphology.py`, `test_ipkit_opencv_reference.py` | erode, dilate, morphologyEx | Ellipse SE lớn ≠ xấp xỉ OpenCV |
+| §4 | Hit-miss, boundary, fill, CCL, hull, thin, skeleton | `morph_algos.*` | `test_ipkit_morph_algos.py` | Một phần CCL/morph nhị phân | — |
+
+### Chương 5 — Segmentation
+
+| Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có / khác |
+| --- | --- | --- | --- | --- | --- |
+| §5.2 | Point/line/edge, Canny, Hough | `segmentation.detect_*`, `canny_edges`, `hough_lines` | `test_ipkit_segmentation.py` | `cv2.Canny` (IoU lỏng) | Canny/Hough không khớp từng pixel OpenCV |
+| §5.3 | Threshold lặp | `segmentation.iterative_global_threshold` + `threshold.otsu_threshold` | `test_ipkit_segmentation.py`, `test_ipkit_threshold.py` | Otsu trong threshold | — |
+| §5.4 | Region growing | `segmentation.region_growing` | `test_ipkit_segmentation.py` | Không | — |
+| §5.5 | k-means, watershed | `kmeans_segmentation`, `simple_watershed` | `test_ipkit_segmentation.py` | Không | Watershed hình thái đầy đủ trên slide |
+
+### Chương 6 — Feature Extraction
+
+| Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có |
+| --- | --- | --- | --- | --- | --- |
+| §2 | Moments, Hu | `features_basic.*` | `test_ipkit_features_basic.py` | Không | — |
+| §3 | Haar / SAT | `integral_image`, `haar_feature*` | `test_ipkit_features_basic.py` | Không | — |
+| §4 | PCA, LDA, LBPH | `features_projection.*`, `features_basic.lbph` | `test_ipkit_features_projection.py`, `test_ipkit_features_basic.py` | Không | — |
+| §5 | **SIFT, SURF** | — | — | — | **Không implement** (ý tưởng slide; forensics: `cv2.SIFT` trong keypoint) |
+| §6 | HOG | `features_hog.*` | `test_ipkit_features_hog.py` | `cv2.HOGDescriptor` khi cấu hình khớp | — |
+
+### Chương 7 — Pattern Recognition
+
+| Mục slide | Chủ đề | Module / API | Test | OpenCV trong test | Chưa có |
+| --- | --- | --- | --- | --- | --- |
+| §7.1 | Pattern classes, minimum distance | `minimum_distance_classifier`, `KNNClassifier` | `test_ipkit_classifiers.py` | Không | — |
+| §7.2 | Linear SVM | `LinearSVM`, `OneVsRestSVM` | `test_ipkit_classifiers.py` | Không | Kernel SVM phi tuyến đầy đủ |
+| §7.3 | MLP, back-prop | `MLPClassifier` | `test_ipkit_classifiers.py` | Không | — |
+| §7.4 | CNN | `conv2d_valid`, `relu`, `max_pool2d`, `flatten` | `test_ipkit_classifiers.py`, `test_ipkit_validation.py` | Không | **Huấn luyện CNN sâu / demo OpenCV DNN trên slide** |
+
+---
+
 ## Gói `imageguard.ipkit` (tổng hợp)
 
-| File | Chủ đề IP | NumPy thuần? | Verdict |
+| File | Chương slide | NumPy thuần trong `src/`? | Verdict |
 | --- | --- | --- | --- |
-| `ipkit/noise.py` | Salt-pepper, speckle, Poisson | Có | Không |
-| `ipkit/edges.py` | Sobel, Prewitt, Laplacian | Có | Không |
-| `ipkit/threshold.py` | Otsu, adaptive mean | Có | Không |
-| `ipkit/morphology.py` | Hình thái học gray | Có | Không |
+| `ipkit/intensity.py` | C2 §2 | Có | Không |
+| `ipkit/histogram.py` | C2 §3 | Có | Không |
+| `ipkit/spatial.py` | C2 §4–6 | Có | Không |
+| `ipkit/noise.py` | C2 (mô hình nhiễu) | Có | Không |
+| `ipkit/edges.py` | C2/C5 biên | Có | Không |
+| `ipkit/threshold.py` | C2/C5 ngưỡng | Có | Không |
+| `ipkit/frequency.py` | C3 | Có (`np.fft` OK) | Không |
+| `ipkit/morphology.py` | C4 §2–3 | Có | Không |
+| `ipkit/morph_algos.py` | C4 §4 | Có | Không |
+| `ipkit/segmentation.py` | C5 | Có | Không |
+| `ipkit/features_basic.py` | C6 §2–4 | Có | Không |
+| `ipkit/features_projection.py` | C6 §4 | Có | Không |
+| `ipkit/features_hog.py` | C6 §6 | Có | Không |
+| `ipkit/classifiers.py` | C7 | Có | Không |
 
 Điểm vào API: `src/imageguard/ipkit/__init__.py`. Mô tả đầy đủ: [image-processing-toolkit.md](image-processing-toolkit.md).
+
+Kiểm thử gói (một lần, đã đo): `python -m pytest tests/ -k ipkit -q -p no:cacheprovider` → **263 passed, 1 skipped** (~7,88 s).
 
 ---
 
@@ -306,8 +380,11 @@ Registry method: `src/imageguard/forensics/registry.py`.
 ## Lệnh kiểm tra nhanh cho sinh viên
 
 ```powershell
-# ipkit + metrics (không cần ảnh thật)
+# Toàn bộ ipkit (không cần ảnh thật)
 $env:PYTHONPATH='src'
+python -m pytest tests/ -k ipkit -q -p no:cacheprovider
+
+# Mẫu nhỏ: ipkit + enhance + DCT forensics
 python -m pytest tests/test_ipkit_edges.py tests/test_enhance_ops.py tests/test_dct_course.py -q -p no:cacheprovider
 ```
 
