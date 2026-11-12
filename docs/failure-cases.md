@@ -6,12 +6,13 @@ of origin and not a finding of malice. Outcomes are methodological bounds.
 
 ## 1. ELA on PNG is `NOT_APPLICABLE`
 
-Error Level Analysis assumes a prior JPEG save so residual recompression can be
-compared. Portable Network Graphics files have no such history, so the ELA stage
+Error Level Analysis compares re-encode residuals and assumes a JPEG
+quantization history. In this pipeline the stage is gated to JPEG: for a PNG it
 returns `NOT_APPLICABLE` and records that limitation.
 
 **Locked by:** `tests/test_ela.py` — `test_png_not_applicable` asserts
-`Verdict.NOT_APPLICABLE` and a limitation mentioning JPEG-only ELA.
+`Verdict.NOT_APPLICABLE` and a limitation stating that ELA analyzes JPEG
+compression artifacts.
 
 ## 2. Flat / low-texture images and copy-move (keypoint path)
 

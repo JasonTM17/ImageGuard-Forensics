@@ -35,8 +35,9 @@ Each JSONL line in `data/ingest/custody.jsonl` records `record_version`,
 `event_id`, UTC `event_time`, `event`, `image_sha256`, basename-only `basename`,
 `camera_label` with its `operator_supplied` trust label, `file_mtime` with its
 `filesystem_unverified` trust label, `analysis_id`, the threshold `config_hash`,
-and `tool_version`. A configured `consent_note` is copied as operator text, not
-as legal proof. Events are appended; earlier lines are not rewritten.
+`tool_version`, and an optional `error_code` (error events and
+`enhance_sibling_failed`). A configured `consent_note` is copied as operator
+text, not as legal proof. Events are appended; earlier lines are not rewritten.
 
 The custody log is not tamper-proof. The camera label is supplied by the
 operator, and the file modification time is filesystem-unverified. The log

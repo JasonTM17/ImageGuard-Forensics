@@ -29,14 +29,17 @@ SUSPICIOUS — tối đa INCONCLUSIVE.
 
 Checklist: Software (editor hints), DateTime vs DateTimeOriginal, thiếu
 Make/Model, tag_count=0 → `findings[]`. Metadata là dữ kiện khai báo —
-không verdict, không score.
+có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao giờ
+`SUSPICIOUS`, không score.
 
 ## Phương pháp bổ trợ L2 (P08)
 
 ### Noise inconsistency
 - Residual `r = I − median_k(I)` (k=5) — giữ high-frequency nhiễu.
-- Ước lượng σ nhiễu theo block (MAD estimator): `σ̂ = 1.4826·median|r|`.
-- Vùng chèn từ ảnh khác → σ nội bộ lệch median±m·MAD toàn ảnh → outlier map.
+- Ước lượng σ nhiễu theo block: `σ_b = std(r)` trong block; outlier khi
+  `|σ_b − median(σ)| > 3·MAD(σ)` với `MAD = median|σ − median(σ)|`.
+- Vùng chèn từ ảnh khác → σ nội bộ lệch median±m·MAD toàn ảnh (m=3.0)
+  → outlier map.
 - Điểm yếu đã biết: denoising/sharpening hợp pháp cũng tạo σ bất thường; aux signal tối đa INCONCLUSIVE.
 
 ### Local noise / model-fill (`noise_local`)
@@ -46,10 +49,11 @@ không verdict, không score.
 
 ### Frequency analysis
 - FFT2 magnitude spectrum (log-scale): JPEG grid artifacts → peaks định kỳ
-  ở tần số B; resampling → periodic peaks; clone → không dấu vết trực tiếp
-  nhưng vùng dán đôi khi đổi spectrum cục bộ.
+  ở tần số 1/8 chu kỳ/px (lưới 8×8); resampling → periodic peaks; clone →
+  không dấu vết trực tiếp nhưng vùng dán đôi khi đổi spectrum cục bộ.
 - Blockiness metric: chênh lệch gradient biên 8×8 trung bình so với nội block.
 
 ### Splicing cues
-- Corroboration giữa noise outlier và ELA difference: vùng có cả hai dấu hiệu
-  vượt ngưỡng `overlap_frac` (0.15) được đánh dấu là cue kết hợp.
+- Corroboration giữa noise outlier và ELA difference: tỉ lệ
+  `(noise_outlier ∩ ELA_hot)/ELA_hot ≥ overlap_frac` (0.15) → `INCONCLUSIVE`
+  (cue kết hợp); mask là phần giao hai vùng.

@@ -28,7 +28,7 @@ gray(≤2048px) → detect kps+desc (SIFT/ORB)
 
 ### Lowe ratio test (Lowe 2004)
 
-Với k=3 self-match `[self, d1, d2]` (bỏ self d≈0):
+Với k=3 self-match `[self, d1, d2]` (bỏ cặp self: `queryIdx == trainIdx`):
 
 ```
 match hợp lệ ⟺ ‖d1‖ / ‖d2‖ < ρ   (ρ=0.8)
@@ -40,8 +40,9 @@ Texture lặp → d2 gần d1 → ratio fail → tự loại nhiễu.
 ### RANSAC affine
 
 Model affine 2×3 (6 dof, cần ≥3 điểm không thẳng hàng): `x' = Ax + t`.
-Số vòng lặp lý thuyết: `N = log(1−p) / log(1−w^n)` với p=0.99 xác suất thành
-công, w = tỉ lệ inlier, n=3 điểm tối thiểu. Inlier: residual < ε=3px.
+Số vòng lặp lý thuyết (công thức tham khảo, không phải tham số code):
+`N = log(1−p) / log(1−w^n)` với p=0.99 xác suất thành công, w = tỉ lệ
+inlier, n=3 điểm tối thiểu. Inlier: residual < ε=3px.
 
 ## Chiến lược 2 pass (đánh đổi)
 
@@ -51,17 +52,17 @@ công, w = tỉ lệ inlier, n=3 điểm tối thiểu. Inlier: residual < ε=3p
    kiểu translate (mỗi vùng cùng một (dx,dy)); mỗi cluster → RANSAC riêng.
 
 Giới hạn: nhiều vùng copy với affine *khác nhau triệt để* chỉ bắt được một
-phần — ghi `limitations`.
+phần — giới hạn đã biết của chiến lược (result không tách riêng limitation này).
 
 ## Kết quả & thất bại điển hình
 
 | Tình huống | Kết quả | Lý do |
 |---|---|---|
-| Ảnh phẳng/mờ | INCONCLUSIVE | kps < k_min — insufficient texture, đúng hành vi |
+| Ảnh phẳng/mờ | INCONCLUSIVE | `n_keypoints < k_min` — insufficient texture, đúng hành vi |
 | Texture lặp tự nhiên (gạch, cửa sổ) | thường INCONCLUSIVE | coverage > 50% → hạ verdict |
-| Copy-move + JPEG nặng | suy giảm | descriptor trôi sau re-encode; blob texture sống tốt hơn nhiễu 1px |
-| Copy vùng rất nhỏ | INCONCLUSIVE | ít keypoint trong vùng → ít inlier |
-| Rotate/scale lớn | tùy mức | affine RANSAC chịu được; biến dạng phiếm diện thì không |
+| Copy-move + JPEG nặng | suy giảm | descriptor trôi sau re-encode; vùng nhỏ/mịn dễ mất keypoint |
+| Copy vùng rất nhỏ | thường NO_INDICATION | ít keypoint trong vùng → ít inlier; dưới `t_clean` thì NO_INDICATION, rơi giữa `t_clean`–`t_susp` thì INCONCLUSIVE |
+| Rotate/scale lớn | tùy mức | affine RANSAC chịu được; biến dạng phi tuyến thì không |
 
 `score` = số cặp verified (inliers), KHÔNG phải xác suất. Mask = union cả hai
 phía — keypoint không chứng minh được hướng copy.

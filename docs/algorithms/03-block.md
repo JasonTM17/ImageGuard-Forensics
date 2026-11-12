@@ -9,8 +9,8 @@ nội dung giống nhau → feature vector giống nhau → match. Khác keypoin
 ## Pipeline
 
 ```
-gray(≤768px) → mọi block B×B → DCT + lượng tử → feature K hệ số zigzag
-  → loại flat blocks (std < ε) → lexicographic sort → k hàng xóm match
+gray(≤768px) → mọi block B×B → DCT + lượng tử → feature K=24 hệ số zigzag
+  → loại flat blocks (std < ε) → lexicographic sort → 10 hàng xóm match
   → shift-vector histogram → giữ shift ≥ min_votes → rasterize mask
 ```
 
@@ -22,7 +22,7 @@ gray(≤768px) → mọi block B×B → DCT + lượng tử → feature K hệ s
   nhau sau JPEG/nhiễu nhẹ vẫn rơi cùng bin (robustness qua mất thông tin có
   chủ đích).
 - **Lexicographic sort**: `O(N_b log N_b)` thay vì `O(N_b²)` — block giống
-  nhau đứng cạnh nhau sau sort, chỉ duyệt k hàng xóm.
+  nhau đứng cạnh nhau sau sort, chỉ duyệt 10 hàng xóm.
 - **Shift voting**: cặp thật chia sẻ cùng (dx,dy); cặp nhiễu shift rải rác
   → histogram vote là bộ lọc hình học thô, miễn phí.
 
@@ -41,10 +41,10 @@ không có shift nào qua voting, kết quả vẫn là `NO_INDICATION`.
 | Tình huống | Kết quả | Lý do |
 |---|---|---|
 | Không còn block đủ texture sau lọc | INCONCLUSIVE | không đủ bằng chứng DCT để đối chiếu |
-| Copy + rotate/scale/flip | NO_INDICATION | hệ số DCT đổi hoàn toàn — không bất biến hình học |
+| Copy + rotate/scale/flip | thường NO_INDICATION | hệ số DCT đổi hoàn toàn — không bất biến hình học |
 | Copy + JPEG mạnh | suy giảm | lượng tử hoá giảm ảnh hưởng nhưng không miễn nhiễm |
-| Ảnh lớn | chậm | `N_b ≈ (H−B+1)(W−B+1)` — 512² → 247k blocks (~10s đo trên máy dev) |
-| Vùng copy < B | INCONCLUSIVE | vùng nhỏ không chứa trọn block |
+| Ảnh lớn | chậm | `N_b ≈ (H−B+1)(W−B+1)` — 512² → 247k blocks (~2,1 s median tại 512 px, [performance.md](../performance.md)) |
+| Vùng copy < B | thường NO_INDICATION | không có block chứa trọn vùng copy nên không hình thành shift; chỉ INCONCLUSIVE khi mask còn 0 < frac < `min_area_frac` |
 
 ## score
 

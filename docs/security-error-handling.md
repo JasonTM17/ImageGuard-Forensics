@@ -4,22 +4,22 @@
 
 | Threat | Mitigation |
 |---|---|
-| Decompression bomb (ảnh vài KB → hàng GP pixel) | `MAX_PIXELS=80MP` check qua header probe TRƯỚC decode; `Image.MAX_IMAGE_PIXELS` Pillow |
+| Decompression bomb (ảnh vài KB → hàng gigapixel) | `MAX_PIXELS=80MP` check qua header probe TRƯỚC decode; `MAX_DECODE_SIDE=16384` chặn cạnh đơn; `DecompressionBombError` của Pillow map về `TOO_MANY_PIXELS` |
 | File khổng lồ | `MAX_FILE_BYTES=100MB` reject sớm bằng stat |
-| Magic bytes giả (đuổi .png nhưng nội dung khác) | Sniff magic + Pillow header probe — format thật quyết định, không tin extension |
+| Magic bytes giả (đuôi .png nhưng nội dung khác) | Sniff magic + Pillow header probe — format thật quyết định, không tin extension |
 | Truncated/corrupt | Decode trong try → `ErrorResult` có mã, không crash |
-| Path traversal artifact | ArtifactStore: filename sanitize `[a-z0-9_-]`, `abs_path` resolve rồi kiểm tra còn trong root |
-| OOM trên ảnh lớn (aux methods) | `AUX_MAX_SIDE=4096` downscale working copy cho noise/freq (kernel đổi tỉ lệ thuận, mask/heat upscale về kích thước gốc, ghi `resolution_reduced` + limitation) — integral float64/FFT complex128 ~10-25 byte/px |
+| Path traversal artifact | ArtifactStore: `analysis_id`/filename sanitize `[a-z0-9_-]` (filename thêm `.ext`), `abs_path` resolve rồi kiểm tra còn trong root |
+| OOM trên ảnh lớn (aux methods) | `AUX_MAX_SIDE=4096` downscale working copy cho noise/freq (kernel đổi tỉ lệ thuận, mask/heat upscale về kích thước gốc, ghi `scale` trong evidence + limitation) — integral float64/FFT complex128 ~10-25 byte/px |
 | SQL injection | SQLAlchemy ORM parameterized — không raw SQL string concat |
 | Unicode path Windows | imencode+write_bytes (không cv2.imwrite trực tiếp) |
 | Qt worker crash | Worker không chạm QWidget; exception → `failed` signal, không chết thread pool |
 
 ## Error taxonomy
 
-`ErrorResult.code`: `PATH_INVALID` · `TOO_LARGE` · `TOO_MANY_PIXELS` ·
-`TOO_SMALL` · `FORMAT_UNSUPPORTED` · `DECODE_FAILED`. Mọi failure trả
-structured result — caller (CLI/UI) quyết định hiển thị, không raise qua
-tầng domain.
+`ErrorResult.code`: `PATH_INVALID` · `FILE_UNREADABLE` · `UNSUPPORTED_FORMAT` ·
+`FILE_TOO_LARGE` · `TOO_MANY_PIXELS` · `IMAGE_TOO_SMALL` · `DECODE_FAILED` ·
+`INTERNAL`. Failure mở/đọc ảnh trả structured result — caller (CLI/UI) quyết
+định hiển thị, không raise qua tầng domain.
 
 ## Không làm
 
