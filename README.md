@@ -100,3 +100,7 @@ Các số dưới đây đến từ **một sự kiện đánh giá chính thứ
 - Qualification trên CoMoFoD dev **không** được coi là bằng chứng chuyển giao sang cohort CASIA trên.
 
 Điều tra chất lượng detector và artifact JSON/CSV nằm ngoài repo công khai; khi viết báo cáo, trích số từ artifact đã lưu, không suy diễn thêm.
+
+## Giấy phép
+
+MIT — xem [`LICENSE`](LICENSE).
