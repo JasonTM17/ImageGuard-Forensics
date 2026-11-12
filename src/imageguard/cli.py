@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from imageguard import __version__
+from imageguard.forensics.registry import METHOD_SPECS
 from imageguard.forensics.registry import load_method as _load_method
 from imageguard.services.analysis_service import DEFAULT_METHODS
 
@@ -80,10 +81,22 @@ def main() -> None:
         from imageguard.evaluation.datasets import SynthAdapter
         from imageguard.evaluation.runner import run_eval
 
+        specs = [m.strip() for m in args.methods.split(",") if m.strip()]
+        methods = []
+        for spec in specs:
+            try:
+                methods.append(_load_method(spec))
+            except KeyError:
+                valid = ", ".join(sorted(METHOD_SPECS))
+                print(
+                    f"error: unknown eval method {spec!r}; valid: {valid}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2) from None
+
         cfg = load_thresholds()
         adapter = (SynthAdapter(args.root) if args.dataset == "synth"
                    else CoMoFoDAdapter(args.root))
-        methods = [_load_method(m.strip()) for m in args.methods.split(",")]
         report = run_eval(adapter, methods, cfg, args.split, args.seed)
         jp, cp = report.save(args.out)
         print(f"experiment_id: {report.experiment_id}")
