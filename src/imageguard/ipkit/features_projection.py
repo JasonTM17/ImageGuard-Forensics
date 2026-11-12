@@ -13,6 +13,7 @@ _LDA_RIDGE = 1e-6
 
 
 def _as_2d_float(X: np.ndarray, *, name: str = "X") -> np.ndarray:
+    # PCA/LDA làm việc trên ma trận mẫu×đặc trưng, cần float để SVD/đại số tuyến tính
     arr = np.asarray(X, dtype=np.float64)
     if arr.ndim != 2 or arr.size == 0:
         raise ValueError(f"{name} must be a non-empty 2D array")
@@ -27,6 +28,7 @@ def _validate_n_components_pca(
     ):
         raise TypeError("n_components must be an integer")
     k = int(n_components)
+    # SVD tối đa min(N, M) trục chính có phương sai khác 0
     upper = min(n_features, n_samples)
     if k < 1 or k > upper:
         raise ValueError(f"n_components must be in [1, {upper}]")
@@ -41,6 +43,10 @@ def pca_fit(
 
     Thay vì hiệp phương sai N×N (tốn khi N lớn), dùng SVD: X̃ = U Σ Vᵀ;
     vector riêng của hiệp phương sai mẫu nằm ở các hàng Vᵀ, phương sai giải thích ∝ σ²/(M−1).
+
+    Ví dụ 3 mẫu, 2 đặc trưng (minh họa ma trận đã tâm hóa)::
+
+        X̃ = [[−1, 0], [0, 0], [1, 0]]  → trục chính ≈ hướng (1,0), giảm chiều 2→1.
 
     Parameters
     ----------
@@ -84,6 +90,7 @@ def pca_fit(
     denom = max(n_samples - 1, 1)
     explained_variance = (singular**2) / denom
     total = float(explained_variance.sum())
+    # Dữ liệu suy biến (mọi điểm trùng nhau) → tỉ lệ 0, tránh chia 0
     if total <= 0:
         explained_ratio = np.zeros(k, dtype=np.float64)
     else:
@@ -91,6 +98,7 @@ def pca_fit(
 
     # Lấy K hàng đầu của Vᵀ làm trục chính (đã chuẩn hóa độ dài 1)
     components = vt[:k].copy()
+    # Chỉ trả về K thành phần đầu — phần còn lại của vt bị bỏ để giảm chiều
     return (
         mean,
         components,
@@ -131,11 +139,12 @@ def pca_transform(
     data = _as_2d_float(X)
     mu = np.asarray(mean, dtype=np.float64)
     w = np.asarray(components, dtype=np.float64)
+    # μ phải cùng số cột N với X để trừ đúng từng đặc trưng
     if mu.shape != (data.shape[1],):
         raise ValueError("mean shape must match number of features")
     if w.ndim != 2 or w.shape[1] != data.shape[1]:
         raise ValueError("components must have shape (k, n_features)")
-    # Chiếu: mỗi hàng nhân với Wᵀ
+    # Chiếu: mỗi hàng (x−μ) nhân Wᵀ → tọa độ trên K trục phương sai lớn nhất
     return (data - mu) @ w.T
 
 
@@ -168,15 +177,18 @@ def pca_inverse_transform(
     z = _as_2d_float(Z, name="Z")
     mu = np.asarray(mean, dtype=np.float64)
     w = np.asarray(components, dtype=np.float64)
+    # K cột của Z phải khớp K hàng của W (số thành phần đã giữ)
     if w.ndim != 2 or w.shape[0] != z.shape[1]:
         raise ValueError("components rows must match Z columns")
     if mu.shape != (w.shape[1],):
         raise ValueError("mean shape must match n_features")
+    # Tái dựng: quay ngược chiếu zW rồi cộng lại μ (mất thông tin nếu K < N)
     return z @ w + mu
 
 
 def _validate_labels(y: np.ndarray, n_samples: int) -> np.ndarray:
     labels = np.asarray(y)
+    # LDA cần đúng một nhãn lớp cho mỗi hàng của X (học có giám sát)
     if labels.ndim != 1 or labels.shape[0] != n_samples:
         raise ValueError("y must be 1D with one label per sample")
     return labels
@@ -194,6 +206,10 @@ def lda_fit(
 
     Sw = Σ_c Σ_{i∈c} (x_i − μ_c)(x_i − μ_c)ᵀ; Sb = Σ_c n_c (μ_c − μ)(μ_c − μ)ᵀ.
     Giải (Sw + λI)⁻¹ Sb w = λw với ridge λ nhỏ khi Sw suy biến (M << N).
+
+    Ví dụ 2 lớp trên đường thẳng 1D (minh họa ý tưởng)::
+
+        Lớp A: x≈0, Lớp B: x≈2 → một trục Fisher dọc theo hướng tách hai cụm.
 
     Parameters
     ----------
@@ -231,10 +247,12 @@ def lda_fit(
         raise TypeError("n_components must be an integer")
     k = int(n_components)
 
+    # Ánh xạ nhãn gốc → chỉ số lớp 0..C−1 để lặp vòng for theo lớp
     classes, inverse = np.unique(labels, return_inverse=True)
     n_classes = classes.size
     if n_classes < 2:
         raise ValueError("LDA requires at least 2 classes")
+    # Tối đa C−1 trục Fisher có nghĩa thống kê
     max_k = n_classes - 1
     if k < 1 or k > max_k:
         raise ValueError(f"n_components must be in [1, {max_k}]")
@@ -257,6 +275,7 @@ def lda_fit(
         # Cộng dồn scatter nội lớp (không chia n_c để khớp dạng tổng slide)
         sw += diff.T @ diff
         between = (mu_c - mean).reshape(-1, 1)
+        # Scatter giữa lớp: phạt khoảng cách tâm lớp so với μ, có trọng số n_c
         sb += n_c * (between @ between.T)
 
     # Ridge ổn định nghịch đảo Sw khi N >> M
@@ -270,6 +289,7 @@ def lda_fit(
             "within-class scatter matrix is singular even with ridge"
         ) from err
 
+    # Vector riêng của A là hướng tối đa hóa tỉ lệ Sb/Sw (Fisher)
     eig_vals, eig_vecs = np.linalg.eig(a_mat)
     order = np.argsort(np.real(eig_vals))[::-1]
     eig_vals = np.real(eig_vals[order])
@@ -278,6 +298,7 @@ def lda_fit(
     # Chuẩn hóa hàng thành vector Fisher đơn vị
     raw_w = eig_vecs[:, :k].T
     norms = np.linalg.norm(raw_w, axis=1, keepdims=True)
+    # Tránh chia 0 nếu vector riêng suy biến (giữ hướng, coi norm=1)
     norms = np.where(norms > 0, norms, 1.0)
     components = raw_w / norms
 
@@ -310,4 +331,5 @@ def lda_transform(
     >>> lda_transform(X, mu, W).shape
     (3, 1)
     """
+    # Cùng công thức chiếu tuyến tính (x−μ)Wᵀ; chỉ khác W được học từ Sw, Sb
     return pca_transform(X, mean, components)
