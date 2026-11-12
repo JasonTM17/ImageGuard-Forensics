@@ -19,7 +19,7 @@ _SRC = _REPO_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from imageguard.ipkit import (  # noqa: E402
+from imageguard.ipkit import (
     classifiers,
     features_basic,
     features_hog,
@@ -29,8 +29,8 @@ from imageguard.ipkit import (  # noqa: E402
     morph_algos,
     segmentation,
     spatial,
-    threshold,
     structuring_element,
+    threshold,
 )
 
 # Seed cố định để ảnh tổng hợp và C7 lặp lại được khi báo cáo.
