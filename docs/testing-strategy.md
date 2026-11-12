@@ -42,3 +42,11 @@ $env:QT_QPA_PLATFORM = 'offscreen'
 
 Gate mỗi phase: full suite xanh; `ruff check` sạch trên phạm vi thay đổi;
 chỉ merge/push sau khi gate pass trên nhánh feature tương ứng.
+
+## CI (GitHub Actions)
+
+Trên `pull_request` và `push` vào `main`, workflow `ci` chạy trên
+`windows-latest`: job bắt buộc tên `test` (Python 3.14) cài `ruff`, `pytest`,
+`pytest-qt`, cài editable package, rồi `ruff check src tests scripts` và
+`pytest -q` với `QT_QPA_PLATFORM=offscreen`. Job song song `test-py313` lặp
+cùng bước trên Python 3.13 (không thay job `test` làm required check).
