@@ -342,7 +342,7 @@ def test_locked_cohort_rejects_consumption_under_different_event_id(tmp_path):
 
 
 def test_locked_cohort_rejects_contract_copied_to_new_directory_with_new_event_id(tmp_path):
-    path, identity, manifest, contract, args, cohort_root, receipts_root = _lock_pair_fixture(
+    _path, identity, manifest, contract, args, cohort_root, _receipts_root = _lock_pair_fixture(
         tmp_path, event_id="event-a")
     protocol._lock_pair(*args)
     other_receipts = tmp_path / "other-receipts"
