@@ -89,11 +89,29 @@ def load_ingest_config(path: Path | str | None = None) -> IngestConfig:
     if (
         data_dir.is_absolute()
         or windows_data_dir.is_absolute()
-        or windows_data_dir.drive
         or ".." in windows_data_dir.parts
         or ".." in posix_data_dir.parts
     ):
         raise IngestConfigError("data_dir must stay relative to the working directory")
+    if windows_data_dir.drive and not windows_data_dir.is_absolute():
+        raise IngestConfigError("data_dir must stay relative to the working directory")
+    if windows_data_dir.root and not windows_data_dir.drive:
+        raise IngestConfigError("data_dir must stay relative to the working directory")
+    if (
+        posix_data_dir.root
+        and len(posix_data_dir.parts) > 0
+        and not data_dir.is_absolute()
+        and not windows_data_dir.is_absolute()
+    ):
+        raise IngestConfigError("data_dir must stay relative to the working directory")
+    cwd = Path.cwd().resolve()
+    try:
+        resolved_data_dir = (cwd / data_dir).resolve()
+        resolved_data_dir.relative_to(cwd)
+    except (OSError, ValueError):
+        raise IngestConfigError(
+            "data_dir must stay relative to the working directory"
+        ) from None
 
     consent_note = raw.get("consent_note")
     if consent_note is not None:
