@@ -25,8 +25,20 @@
 
 ## Chạy
 
-```bash
-QT_QPA_PLATFORM=offscreen .venv/Scripts/python -m pytest -x -q
+PowerShell (Windows, khuyến nghị — không cần activate venv):
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+$env:PYTHONPATH = '<repo>\src'
+& '<python>' -m pytest -x -q -p no:cacheprovider
 ```
 
-Gate mỗi phase: full suite xanh trước khi `ak plan check` + push.
+Ví dụ dùng venv trong repo:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+.\.venv\Scripts\python.exe -m pytest -x -q -p no:cacheprovider
+```
+
+Gate mỗi phase: full suite xanh; `ruff check` sạch trên phạm vi thay đổi;
+chỉ merge/push sau khi gate pass trên nhánh feature tương ứng.

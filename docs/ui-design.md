@@ -13,19 +13,20 @@
    (không kill thread — kill thread giữa native OpenCV call = crash).
 4. **QImage phải `.copy()`**: QImage giữ pointer vào buffer ndarray; ndarray
    bị GC → dangling pointer → crash ngẫu nhiên. Mọi bridge numpy→Qt đều copy.
-5. **Wording trung tính**: mọi text tập trung `ui/strings.py` —
+5. **Wording trung thựp**: mọi text tập trung `ui/strings.py` —
    "dấu hiệu" không "kết luận"; verdict không dùng đỏ/xanh tuyệt đối
    (đỏ = phán có tội, xanh = minh oan — cả hai overclaim). Test
    `test_strings_no_forbidden_wording` enforce.
 6. **Disclaimer cố định**: `DisclaimerBar` dưới cùng mọi màn hình, không
    ẩn được.
 
-## Cấu trúc
+## Cấu trúc shell — 5 tab
 
 ```
 ui/
   app.py           QApplication + build_services() wire DI
-  main_window.py   QTabWidget: Analyze / Enhance / History / Settings + DisclaimerBar
+  main_window.py   QTabWidget: Analyze | Enhance | History | Stats | Settings
+                   + DisclaimerBar (ngoài tab, luôn hiện)
   strings.py       toàn bộ text VN (integrity-tested)
   workers.py       WorkerSignals + AnalysisWorker; EnhanceSignals + EnhanceWorker
   widgets/
@@ -33,10 +34,15 @@ ui/
     verdict_panel.py   VerdictBanner + MethodCard + DisclaimerBar
   screens/
     analyze.py     open(drag-drop/picker) → preview+EXIF → methods → run/cancel
+                   → Markdown export sau khi có ForensicReport
     enhance.py     open → operator+params → run/cancel → blend slider → export PNG
-    history.py     bảng analyses từ SQLite → reopen/delete(confirm)
+    history.py     bảng analyses từ SQLite → reopen/delete/export Markdown
+    stats.py       tổng hợp thống kê phiên từ HistoryService
     settings.py    thresholds tree viewer (key|value|nguồn)
 ```
+
+Thứ tự tab (theo `main_window.py`): Phân tích → Tăng cường → Lịch sử →
+Thống kê → Cài đặt. Smoke test: `tests/test_ui_smoke.py` assert `tabs.count() == 5`.
 
 ## Data flow
 
@@ -49,6 +55,7 @@ AnalyzeScreen._run()
        ▼
   _on_result(): banner(verdict+signals) + MethodCard/method
                + overlay dropdown (mask đỏ blend / heatmap colormap)
+               + hiện nút Xuất báo cáo (Markdown) → ReportService
 ```
 
 - `ErrorResult` từ `safe_open` hiển thị trong `lbl_err` — KHÔNG dialog crash.
@@ -58,20 +65,25 @@ AnalyzeScreen._run()
 ## Enhance tab
 
 `EnhanceScreen` (`screens/enhance.py`) chỉ để xem: Unsharp mask / CLAHE /
-Non-local means. Không gọi `AnalysisService`, không ghi database, không kết
-luận. `EnhanceWorker` (`workers.py`) chạy trên `make_pool()`
+Non-local means (+ NAFNet tùy chọn). Không gọi `AnalysisService`, không ghi
+database, không kết luận. `EnhanceWorker` (`workers.py`) chạy trên `make_pool()`
 (maxThreadCount=1), gọi `imageguard.enhancement.derive.derive` (Qt-free,
 database-free) và check `threading.Event` trước khi emit `result`;
 `finished` luôn emit để UI dựng lại trạng thái kể cả khi cancel.
 
 - View: ảnh gốc là base pixmap, ảnh tăng cường là overlay; slider 0–100 chỉ
   đổi opacity của overlay — không ghi pixel, không chạy lại operator.
-- Banner `strings.ENHANCE_BANNER` cố định, luôn hiển thị: ảnh tăng cường là
+- Banner `strings.ENHANCE_BANNER` cố định, luôn hiện: ảnh tăng cường là
   bản xem, không phải bằng chứng; phân tích dấu hiệu chỉ gắn với file gốc.
 - Xuất: PNG + `.json` sibling (`derive.write_sibling`) ghi
-  `parent_sha256`/`derived_sha256`/`method`/`params`/`model_sha256`=null/
+  `parent_sha256`/`derived_sha256`/`method`/`params`/`model_sha256` (null hoặc hash ONNX)/
   `created_utc`; đích trùng file gốc bị từ chối, đích đã tồn tại phải xác
   nhận ghi đè.
+
+## Stats tab
+
+`StatsScreen` đọc aggregate từ `HistoryService` (số lần phân tích, verdict
+phân bố trong DB cục bộ) — không chạy detector, không thay verdict đã lưu.
 
 ## Overlay rendering
 
@@ -80,7 +92,7 @@ database-free) và check `threading.Event` trước khi emit `result`;
 
 ## Tests
 
-- `test_ui_smoke.py` — offscreen QPA: shell 3 tab, disclaimer hiện diện,
+- `test_ui_smoke.py` — offscreen QPA: shell **5 tab**, disclaimer hiện diện,
   open-preview thành công, file hỏng → lỗi thân thiện, history rỗng,
   wording integrity.
 - `test_worker_contract.py` — result/progress signals, cancel cooperative,

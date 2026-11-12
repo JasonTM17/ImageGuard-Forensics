@@ -2,17 +2,26 @@
 
 ## Chạy app
 
+**Khuyến nghị (source):**
+
 ```powershell
+.\run_app.bat
+# hoặc
 .\.venv\Scripts\python.exe -m imageguard        # GUI mặc định
 .\.venv\Scripts\python.exe -m imageguard gui    # tường minh
 ```
 
-Hoặc bản đóng gói: `dist/ImageGuard/ImageGuard.exe` (xem `docs/packaging.md`).
+**Bản đóng gói (`dist/ImageGuard/ImageGuard.exe`):** chỉ thử sau khi đọc
+[`docs/packaging.md`](packaging.md). Tài liệu đó ghi một lần QA: PyInstaller
+build thành công nhưng executable lỗi import `QtWidgets` (DLL); **chưa có**
+xác nhận bản `.exe` chạy trọn luồng phân tích. Đừng coi file exe là đường
+chạy chính cho demo đồ án trừ khi bạn tự verify lại trên máy mình.
 
 ## Phân tích qua CLI (báo cáo JSON)
 
-```bash
-python -m imageguard analyze <file> [--methods keypoint,block,ela] [--no-persist]
+```powershell
+.\.venv\Scripts\python.exe -m imageguard analyze <file> `
+  [--methods keypoint,block,ela] [--no-persist]
 ```
 
 Lệnh in ra stdout cùng cấu trúc JSON mà ứng dụng lưu khi phân tích (báo cáo dấu hiệu).
@@ -40,8 +49,12 @@ forensics trên ảnh.
    - Dropdown overlay: mask đỏ / heatmap trên ảnh gốc (zoom: lăn chuột,
      pan: kéo).
    - Thanh disclaimer cố định: kết quả là *dấu hiệu*, không phải kết luận.
+   - **Xuất Markdown:** sau khi có báo cáo, nút *Xuất báo cáo (Markdown)*
+     lưu file `.md` (qua `ReportService.export_markdown`): disclaimer, metadata
+     ảnh, hash ngưỡng, bảng từng method — không xác suất “ảnh giả”.
 6. **Lịch sử** — tab "Lịch sử" liệt kê phân tích đã lưu (SQLite); xóa sẽ
-   xóa cả artifacts. Tab "Thống kê" tổng hợp phiên làm việc.
+   xóa cả artifacts. Chọn một dòng → *Xuất báo cáo* (cùng định dạng Markdown).
+   Tab "Thống kê" tổng hợp phiên làm việc.
 
 ## Tab Tăng cường (xem, không phân tích)
 
@@ -56,8 +69,10 @@ không kết luận điều gì về ảnh.
   file gốc." Nghĩa là ảnh tăng cường chỉ để xem; dấu hiệu forensics chỉ
   được gắn với file gốc, không phải với bản tăng cường.
 - **NAFNet (AI)**: không có tham số chỉnh trong tab; chọn nó sẽ hiện banner
-  cảnh báo AI riêng. Cần cài extra hiện có `pip install -e ".[lama]"`
-  (ONNX Runtime) và cung cấp riêng file
+  cảnh báo AI riêng. Extra tùy chọn trong `pyproject.toml` tên **`lama`**
+  (dùng chung cho mọi suy luận ONNX model-forge, gồm NAFNet) — cài bằng
+  `pip install -e ".[lama]"` để kéo **onnxruntime**; không bắt buộc cho
+  copy-move/ELA. Cung cấp riêng file
   `models/deblurring_nafnet_2025may.onnx`. Ứng dụng kiểm tra kích thước
   91.736.251 byte và SHA-256
   `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`
