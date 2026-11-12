@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Scientific boundary & limitations
+    url: https://github.com/JasonTM17/ImageGuard-Forensics/blob/main/docs/limitations.md
+    about: Giới hạn đã đo và ranh giới không overclaim (đọc trước khi báo “detector sai”).
+  - name: Security vulnerability (private)
+    url: https://github.com/JasonTM17/ImageGuard-Forensics/security/advisories/new
+    about: Không báo lỗ hổng bảo mật qua issue công khai — dùng private vulnerability reporting.
