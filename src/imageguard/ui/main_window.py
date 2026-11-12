@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
 from imageguard.services.analysis_service import AnalysisService
 from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.screens.analyze import AnalyzeScreen
 from imageguard.ui.screens.enhance import EnhanceScreen
 from imageguard.ui.screens.history import HistoryScreen
@@ -37,8 +38,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.analyze, strings.TAB_ANALYZE)
         self.tabs.addTab(self.enhance, strings.TAB_ENHANCE)
         self.tabs.addTab(self.history, strings.TAB_HISTORY)
-        self.tabs.addTab(self.stats, "Thống kê")
+        self.tabs.addTab(self.stats, strings.TAB_STATS)
         self.tabs.addTab(self.settings, strings.TAB_SETTINGS)
+        apply_a11y(self.tabs, strings.A11Y_MAIN_TABS)
 
         def _refresh(i):
             cur = self.tabs.currentWidget()

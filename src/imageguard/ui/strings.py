@@ -63,3 +63,93 @@ ERR_TITLE = "Không mở được ảnh"
 FMT_HINT = "Định dạng hỗ trợ: JPEG, PNG, BMP, TIFF, WebP"
 CONFIRM_DELETE = "Xóa phân tích này khỏi lịch sử (kèm artifacts)?"
 EMPTY_HISTORY = "Chưa có phân tích nào."
+
+TAB_STATS = "Thống kê"
+
+LBL_METHODS = "Phương pháp:"
+LBL_ENHANCE_METHODS = "Phương pháp tăng cường:"
+LBL_PARAMS_GROUP = "Tham số"
+
+BTN_ENHANCE_RUN = "Tăng cường"
+BTN_EXPORT_REPORT = "Xuất báo cáo (Markdown)"
+BTN_EXPORT_REPORT_SHORT = "Xuất báo cáo"
+BTN_EXPORT_ENHANCED = "Xuất ảnh tăng cường (PNG)"
+BTN_REFRESH = "Làm mới"
+
+OVERLAY_NONE = "Không overlay"
+FMT_OVERLAY_MASK = "Mask — {method}"
+FMT_OVERLAY_HEATMAP = "Heatmap — {method}"
+FMT_OVERLAY_TWIN = "Cặp điểm nối (Twin pairs) — {method}"
+
+HIST_COL_TIME = "Thời gian"
+HIST_COL_IMAGE = "Ảnh"
+HIST_COL_VERDICT = "Verdict"
+HIST_COL_METHODS = "Methods"
+HIST_COL_ID = "ID"
+
+STATS_COL_VERDICT = "Verdict"
+STATS_COL_COUNT = "Số lượng"
+FMT_STATS_SUMMARY = "{n} phân tích · thời gian TB: {avg_ms:.0f} ms"
+
+VERDICT_SIGNALS_PREFIX = "Dấu hiệu: "
+
+LBL_BLEND_ORIGIN = "Gốc"
+LBL_BLEND_ENHANCED = "Tăng cường"
+FMT_BLEND_VALUE = "{value} %"
+
+CANVAS_PLACEHOLDER = (
+    "Kéo thả ảnh vào đây hoặc bấm 'Mở ảnh…' để bắt đầu"
+)
+
+MSG_HISTORY_NO_SELECTION = "Chọn một dòng trong bảng lịch sử trước."
+MSG_BUSY_CANNOT_OPEN = "Đang xử lý — chưa thể mở ảnh khác."
+
+ERR_SELECT_METHOD = "Vui lòng chọn ít nhất một phương pháp phân tích."
+
+SETTINGS_THRESHOLDS_INTRO = (
+    "Ngưỡng thuật toán (configs/thresholds.yaml) — mỗi giá trị kèm "
+    "nguồn; chỉnh sửa bằng cách sửa file yaml rồi khởi động lại."
+)
+SETTINGS_TREE_HDR_KEY = "Key"
+SETTINGS_TREE_HDR_VALUE = "Value"
+SETTINGS_TREE_HDR_SOURCE = "Nguồn"
+
+HIST_ARTIFACT_PLACEHOLDER = "Chọn artifact…"
+
+# --- Accessible names (screen readers) ---
+A11Y_CANVAS = "Khung xem ảnh"
+A11Y_CANVAS_DESC = "Thu phóng bằng con lăn; kéo để di chuyển; thả file ảnh để mở."
+
+A11Y_ANALYZE_OPEN = "Mở ảnh để phân tích"
+A11Y_ANALYZE_RUN = "Chạy phân tích dấu hiệu"
+A11Y_ANALYZE_CANCEL = "Hủy phân tích đang chạy"
+A11Y_ANALYZE_PROGRESS = "Tiến độ phân tích"
+A11Y_ANALYZE_OVERLAY = "Chọn lớp phủ xem trên ảnh"
+A11Y_ANALYZE_EXPORT = "Xuất báo cáo phân tích Markdown"
+A11Y_ANALYZE_METHODS = "Chọn phương pháp phân tích"
+A11Y_ANALYZE_CARDS = "Danh sách kết quả theo phương pháp"
+
+A11Y_ENHANCE_OPEN = "Mở ảnh để tăng cường"
+A11Y_ENHANCE_OPERATOR = "Chọn toán tử tăng cường"
+A11Y_ENHANCE_RUN = "Chạy tăng cường ảnh"
+A11Y_ENHANCE_CANCEL = "Hủy tăng cường đang chạy"
+A11Y_ENHANCE_PROGRESS = "Tiến độ tăng cường"
+A11Y_ENHANCE_BLEND = "Trộn ảnh gốc và ảnh tăng cường"
+A11Y_ENHANCE_BLEND_VALUE = "Mức trộn hiện tại"
+A11Y_ENHANCE_EXPORT = "Xuất ảnh tăng cường PNG"
+A11Y_ENHANCE_PARAMS = "Tham số toán tử tăng cường"
+
+A11Y_HISTORY_TABLE = "Bảng lịch sử phân tích"
+A11Y_HISTORY_REOPEN = "Mở lại phân tích đã chọn"
+A11Y_HISTORY_EXPORT = "Xuất báo cáo phân tích đã chọn"
+A11Y_HISTORY_DELETE = "Xóa phân tích đã chọn"
+A11Y_HISTORY_STATUS = "Trạng thái thao tác lịch sử"
+
+A11Y_STATS_TABLE = "Bảng thống kê theo verdict"
+A11Y_STATS_REFRESH = "Làm mới thống kê phiên"
+
+A11Y_SETTINGS_TREE = "Cây ngưỡng thuật toán"
+
+A11Y_VERDICT_BANNER = "Tóm tắt dấu hiệu tổng thể"
+
+A11Y_MAIN_TABS = "Điều hướng chức năng chính"

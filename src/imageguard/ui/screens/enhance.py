@@ -7,6 +7,7 @@ không bao giờ bị ghi đè.
 
 from __future__ import annotations
 
+import re
 import threading
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
 from imageguard.core.errors import ErrorResult
 from imageguard.evaluation.enhance_study import RESTORER_PARAMS
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.widgets.image_canvas import ImageCanvas, ndarray_to_qpixmap
 from imageguard.ui.workers import EnhanceWorker, make_pool
 
@@ -71,6 +73,18 @@ _FIELD_SPECS = {
          _NLM["searchWindowSize"]),
     ),
 }
+
+
+def _sanitize_exception_text(exc: BaseException) -> str:
+    """Rút gọn thông báo lỗi — không lộ đường dẫn host, chỉ tên file nếu có."""
+    raw = str(exc)
+
+    def _to_basename(match: re.Match[str]) -> str:
+        segment = match.group(0).replace("\\", "/")
+        return Path(segment).name
+
+    sanitized = re.sub(r"(?:[A-Za-z]:)?(?:[\\/])[^\s\"']+", _to_basename, raw)
+    return f"{type(exc).__name__}: {sanitized}"
 
 
 class EnhanceScreen(QWidget):
@@ -127,6 +141,7 @@ class EnhanceScreen(QWidget):
         rl.addWidget(self.ai_banner)
 
         self.btn_open = QPushButton(strings.BTN_OPEN)
+        apply_a11y(self.btn_open, strings.A11Y_ENHANCE_OPEN)
         self.btn_open.clicked.connect(self._pick_file)
         rl.addWidget(self.btn_open)
         self.lbl_file = QLabel(strings.FMT_HINT)
@@ -136,14 +151,16 @@ class EnhanceScreen(QWidget):
         self.lbl_meta.setWordWrap(True)
         rl.addWidget(self.lbl_meta)
 
-        rl.addWidget(QLabel("Phương pháp tăng cường:"))
+        rl.addWidget(QLabel(strings.LBL_ENHANCE_METHODS))
         self.combo_op = QComboBox()
+        apply_a11y(self.combo_op, strings.A11Y_ENHANCE_OPERATOR)
         for kind, label in _OPERATORS:
             self.combo_op.addItem(label, kind)
         self.combo_op.currentIndexChanged.connect(self._on_operator_changed)
         rl.addWidget(self.combo_op)
 
-        box = QGroupBox("Tham số")
+        box = QGroupBox(strings.LBL_PARAMS_GROUP)
+        apply_a11y(box, strings.A11Y_ENHANCE_PARAMS)
         self.params_box = box
         form = QFormLayout(box)
         for kind, specs in _FIELD_SPECS.items():
@@ -163,34 +180,46 @@ class EnhanceScreen(QWidget):
                 self._fields[(kind, name)] = (label, w)
         rl.addWidget(box)
 
-        self.btn_run = QPushButton("Tăng cường")
+        self.btn_run = QPushButton(strings.BTN_ENHANCE_RUN)
+        apply_a11y(self.btn_run, strings.A11Y_ENHANCE_RUN)
         self.btn_run.setEnabled(False)
         self.btn_run.clicked.connect(self._run)
         self.btn_cancel = QPushButton(strings.BTN_CANCEL)
+        apply_a11y(self.btn_cancel, strings.A11Y_ENHANCE_CANCEL)
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
         rl.addWidget(self.btn_run)
         rl.addWidget(self.btn_cancel)
         self.progress = QProgressBar()
+        apply_a11y(self.progress, strings.A11Y_ENHANCE_PROGRESS)
         self.progress.setRange(0, 100)
         rl.addWidget(self.progress)
         self.lbl_err = QLabel("")
         self.lbl_err.setStyleSheet("color:#b91c1c;")
         self.lbl_err.setWordWrap(True)
         rl.addWidget(self.lbl_err)
+        self.lbl_status = QLabel("")
+        self.lbl_status.setWordWrap(True)
+        self.lbl_status.setStyleSheet("color:#4b5563;")
+        rl.addWidget(self.lbl_status)
 
         blend_row = QHBoxLayout()
-        blend_row.addWidget(QLabel("Gốc"))
+        blend_row.addWidget(QLabel(strings.LBL_BLEND_ORIGIN))
         self.slider_blend = QSlider(Qt.Orientation.Horizontal)
+        apply_a11y(self.slider_blend, strings.A11Y_ENHANCE_BLEND)
         self.slider_blend.setRange(0, 100)
         self.slider_blend.setValue(100)
         self.slider_blend.setEnabled(False)
         self.slider_blend.valueChanged.connect(self._on_blend_changed)
         blend_row.addWidget(self.slider_blend, 1)
-        blend_row.addWidget(QLabel("Tăng cường"))
+        self.lbl_blend_value = QLabel(strings.FMT_BLEND_VALUE.format(value=100))
+        apply_a11y(self.lbl_blend_value, strings.A11Y_ENHANCE_BLEND_VALUE)
+        blend_row.addWidget(self.lbl_blend_value)
+        blend_row.addWidget(QLabel(strings.LBL_BLEND_ENHANCED))
         rl.addLayout(blend_row)
 
-        self.btn_export = QPushButton("Xuất ảnh tăng cường (PNG)")
+        self.btn_export = QPushButton(strings.BTN_EXPORT_ENHANCED)
+        apply_a11y(self.btn_export, strings.A11Y_ENHANCE_EXPORT)
         self.btn_export.clicked.connect(self._export)
         self.btn_export.hide()
         rl.addWidget(self.btn_export)
@@ -202,9 +231,16 @@ class EnhanceScreen(QWidget):
         self.setAcceptDrops(True)
         self._on_operator_changed()
 
+    def _show_busy_open(self) -> None:
+        self.lbl_status.setText(strings.MSG_BUSY_CANNOT_OPEN)
+
+    def _set_blend_readout(self, value: int) -> None:
+        self.lbl_blend_value.setText(strings.FMT_BLEND_VALUE.format(value=value))
+
     # --- file ---
     def _pick_file(self) -> None:
         if self._worker is not None:
+            self._show_busy_open()
             return  # không mở file mới khi đang chạy
         f, _ = QFileDialog.getOpenFileName(
             self, strings.BTN_OPEN, "",
@@ -218,16 +254,22 @@ class EnhanceScreen(QWidget):
 
     def dropEvent(self, e) -> None:
         if self._worker is not None:
+            self._show_busy_open()
             return
         urls = e.mimeData().urls()
         if urls:
-            self.load_path(Path(urls[0].toLocalFile()))
+            path = Path(urls[0].toLocalFile())
+            if path.is_file():
+                e.acceptProposedAction()
+                self.load_path(path)
 
     def load_path(self, path: Path) -> None:
         if self._worker is not None:  # đang chạy: bỏ qua, tránh lệch ảnh/kết quả
+            self._show_busy_open()
             return
         self._clear_result()
         self.lbl_err.setText("")
+        self.lbl_status.setText("")
         self.lbl_file.setText(path.name)
         self.lbl_meta.setText("")
         # safe_open: header probe + decode đã chặn bomb; ảnh hỏng trả ErrorResult.
@@ -311,6 +353,7 @@ class EnhanceScreen(QWidget):
         self.slider_blend.blockSignals(True)
         self.slider_blend.setValue(100)
         self.slider_blend.blockSignals(False)
+        self._set_blend_readout(100)
         self.slider_blend.setEnabled(False)
         self.btn_export.hide()
 
@@ -369,6 +412,7 @@ class EnhanceScreen(QWidget):
         self.slider_blend.blockSignals(True)
         self.slider_blend.setValue(100)
         self.slider_blend.blockSignals(False)
+        self._set_blend_readout(100)
         self.slider_blend.setEnabled(True)
         self.btn_export.show()
 
@@ -378,6 +422,7 @@ class EnhanceScreen(QWidget):
         self.lbl_err.setText(msg)
 
     def _on_blend_changed(self, value: int) -> None:
+        self._set_blend_readout(value)
         # Chỉ đổi pixmap hiển thị — không ghi pixel, không chạy lại operator.
         if self._derived_pixmap is None:
             self.canvas.set_overlay(None)
@@ -423,10 +468,10 @@ class EnhanceScreen(QWidget):
                 self._run_kind, self._run_params, self._doc.sha256,
                 overwrite=overwrite,
                 model_sha256=(self._run_meta or {}).get("model_sha256"))
-        except Exception:  # noqa: BLE001 - ranh giới UI: báo lỗi, không crash
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi, không crash
             QMessageBox.warning(
                 self, "Xuất thất bại",
-                "Không xuất được ảnh.")
+                f"Không xuất được ảnh:\n{_sanitize_exception_text(e)}")
             return
         QMessageBox.information(
             self, "Thành công",

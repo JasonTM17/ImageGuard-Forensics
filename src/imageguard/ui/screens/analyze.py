@@ -26,6 +26,7 @@ from imageguard.core.errors import ErrorResult
 from imageguard.core.models import ForensicReport
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.widgets.image_canvas import (
     ImageCanvas,
     heat_to_qpixmap,
@@ -58,6 +59,7 @@ class AnalyzeScreen(QWidget):
         right = QWidget()
         rl = QVBoxLayout(right)
         self.btn_open = QPushButton(strings.BTN_OPEN)
+        apply_a11y(self.btn_open, strings.A11Y_ANALYZE_OPEN)
         self.btn_open.clicked.connect(self._pick_file)
         rl.addWidget(self.btn_open)
         self.lbl_file = QLabel(strings.FMT_HINT)
@@ -67,7 +69,7 @@ class AnalyzeScreen(QWidget):
         self.lbl_meta.setWordWrap(True)
         rl.addWidget(self.lbl_meta)
 
-        rl.addWidget(QLabel("Phương pháp:"))
+        rl.addWidget(QLabel(strings.LBL_METHODS))
         self.chk_kp = QCheckBox(strings.METHOD_LABEL["copy_move_keypoint"])
         self.chk_kp.setChecked(True)
         self.chk_bl = QCheckBox(strings.METHOD_LABEL["copy_move_block"])
@@ -79,38 +81,49 @@ class AnalyzeScreen(QWidget):
         self.chk_spl = QCheckBox(strings.METHOD_LABEL["splicing_cues"])
         for c in (self.chk_kp, self.chk_bl, self.chk_ela,
                   self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
+            apply_a11y(c, strings.A11Y_ANALYZE_METHODS)
             rl.addWidget(c)
 
         self.btn_run = QPushButton(strings.BTN_RUN)
+        apply_a11y(self.btn_run, strings.A11Y_ANALYZE_RUN)
         self.btn_run.setEnabled(False)
         self.btn_run.clicked.connect(self._run)
         self.btn_cancel = QPushButton(strings.BTN_CANCEL)
+        apply_a11y(self.btn_cancel, strings.A11Y_ANALYZE_CANCEL)
         self.btn_cancel.setEnabled(False)
         self.btn_cancel.clicked.connect(self._cancel)
         rl.addWidget(self.btn_run)
         rl.addWidget(self.btn_cancel)
         self.progress = QProgressBar()
+        apply_a11y(self.progress, strings.A11Y_ANALYZE_PROGRESS)
         self.progress.setRange(0, 100)
         rl.addWidget(self.progress)
         self.lbl_err = QLabel("")
         self.lbl_err.setStyleSheet("color:#b91c1c;")
         self.lbl_err.setWordWrap(True)
         rl.addWidget(self.lbl_err)
+        self.lbl_status = QLabel("")
+        self.lbl_status.setWordWrap(True)
+        self.lbl_status.setStyleSheet("color:#4b5563;")
+        rl.addWidget(self.lbl_status)
 
         self.banner = VerdictBanner()
         self.banner.hide()
         rl.addWidget(self.banner)
         self.overlay_box = QComboBox()
-        self.overlay_box.addItem("Không overlay", None)
+        apply_a11y(self.overlay_box, strings.A11Y_ANALYZE_OVERLAY)
+        self.overlay_box.addItem(strings.OVERLAY_NONE, None)
         self.overlay_box.currentIndexChanged.connect(self._apply_overlay)
         self.overlay_box.hide()
         rl.addWidget(self.overlay_box)
-        self.btn_export = QPushButton("Xuất báo cáo (Markdown)")
+        self.btn_export = QPushButton(strings.BTN_EXPORT_REPORT)
+        apply_a11y(self.btn_export, strings.A11Y_ANALYZE_EXPORT)
         self.btn_export.clicked.connect(self._export_report)
         self.btn_export.hide()
         rl.addWidget(self.btn_export)
 
         self.cards_area = QScrollArea()
+        apply_a11y(self.cards_area, strings.A11Y_ANALYZE_CARDS)
         self.cards_area.setWidgetResizable(True)
         self.cards_inner = QWidget()
         self.cards_layout = QVBoxLayout(self.cards_inner)
@@ -122,9 +135,13 @@ class AnalyzeScreen(QWidget):
 
         self.setAcceptDrops(True)
 
+    def _show_busy_open(self) -> None:
+        self.lbl_status.setText(strings.MSG_BUSY_CANNOT_OPEN)
+
     # --- file ---
     def _pick_file(self) -> None:
         if self._worker is not None:
+            self._show_busy_open()
             return  # không mở file mới khi analysis đang chạy
         f, _ = QFileDialog.getOpenFileName(
             self, strings.BTN_OPEN, "",
@@ -138,10 +155,14 @@ class AnalyzeScreen(QWidget):
 
     def dropEvent(self, e) -> None:
         if self._worker is not None:
+            self._show_busy_open()
             return  # không mở file mới khi analysis đang chạy
         urls = e.mimeData().urls()
         if urls:
-            self.load_path(Path(urls[0].toLocalFile()))
+            path = Path(urls[0].toLocalFile())
+            if path.is_file():
+                e.acceptProposedAction()
+                self.load_path(path)
 
     def _clear_results(self) -> None:
         """Xoá toàn bộ UI kết quả cũ — banner/cards/overlay/export/report."""
@@ -149,7 +170,7 @@ class AnalyzeScreen(QWidget):
         self.banner.hide()
         self.overlay_box.blockSignals(True)
         self.overlay_box.clear()
-        self.overlay_box.addItem("Không overlay", None)
+        self.overlay_box.addItem(strings.OVERLAY_NONE, None)
         self.overlay_box.blockSignals(False)
         self.overlay_box.hide()
         self.btn_export.hide()
@@ -173,9 +194,11 @@ class AnalyzeScreen(QWidget):
 
     def load_path(self, path: Path) -> None:
         if self._worker is not None:  # đang phân tích: bỏ qua, tránh lệch ảnh/kết quả
+            self._show_busy_open()
             return
         self._clear_results()
         self.lbl_err.setText("")
+        self.lbl_status.setText("")
         self.lbl_file.setText(path.name)
         self.lbl_meta.setText("")
         # Preview nhanh qua safe_open (header probe + decode đã chặn bomb).
@@ -224,7 +247,7 @@ class AnalyzeScreen(QWidget):
             return
         methods = self._methods()
         if not methods:
-            self.lbl_err.setText("Vui lòng chọn ít nhất một phương pháp phân tích.")
+            self.lbl_err.setText(strings.ERR_SELECT_METHOD)
             return
         self._clear_results()  # ẩn banner/export/cards cũ trước khi run mới
         self.lbl_err.setText("")
@@ -270,18 +293,21 @@ class AnalyzeScreen(QWidget):
         self.banner.show()
         self.overlay_box.blockSignals(True)
         self.overlay_box.clear()
-        self.overlay_box.addItem("Không overlay", None)
+        self.overlay_box.addItem(strings.OVERLAY_NONE, None)
         for m in out.methods:
             self.cards_layout.addWidget(MethodCard(m))
             if m.mask is not None:
-                self.overlay_box.addItem(f"Mask — {m.method.value}",
-                                       ("mask", m))
+                self.overlay_box.addItem(
+                    strings.FMT_OVERLAY_MASK.format(method=m.method.value),
+                    ("mask", m))
             if m.heatmap is not None:
-                self.overlay_box.addItem(f"Heatmap — {m.method.value}",
-                                       ("heat", m))
+                self.overlay_box.addItem(
+                    strings.FMT_OVERLAY_HEATMAP.format(method=m.method.value),
+                    ("heat", m))
             if m.evidence.get("pairs_image") is not None:
-                self.overlay_box.addItem(f"Cặp điểm nối (Twin pairs) — {m.method.value}",
-                                       ("pairs", m))
+                self.overlay_box.addItem(
+                    strings.FMT_OVERLAY_TWIN.format(method=m.method.value),
+                    ("pairs", m))
         self.cards_layout.addStretch(1)
         self.overlay_box.blockSignals(False)
         self.overlay_box.show()

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.widgets.image_canvas import ImageCanvas
 
 
@@ -31,27 +32,48 @@ class HistoryScreen(QWidget):
         self._svc = history
         lay = QVBoxLayout(self)
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(
-            ["Thời gian", "Ảnh", "Verdict", "Methods", "ID"])
+        apply_a11y(self.table, strings.A11Y_HISTORY_TABLE)
+        self.table.setHorizontalHeaderLabels([
+            strings.HIST_COL_TIME,
+            strings.HIST_COL_IMAGE,
+            strings.HIST_COL_VERDICT,
+            strings.HIST_COL_METHODS,
+            strings.HIST_COL_ID,
+        ])
         self.table.setColumnHidden(4, True)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         lay.addWidget(self.table)
         btns = QHBoxLayout()
         self.btn_reopen = QPushButton(strings.BTN_REOPEN)
+        apply_a11y(self.btn_reopen, strings.A11Y_HISTORY_REOPEN)
         self.btn_reopen.clicked.connect(self._reopen)
-        self.btn_export = QPushButton("Xuất báo cáo")
+        self.btn_export = QPushButton(strings.BTN_EXPORT_REPORT_SHORT)
+        apply_a11y(self.btn_export, strings.A11Y_HISTORY_EXPORT)
         self.btn_export.clicked.connect(self._export)
         self.btn_delete = QPushButton(strings.BTN_DELETE)
+        apply_a11y(self.btn_delete, strings.A11Y_HISTORY_DELETE)
         self.btn_delete.clicked.connect(self._delete)
         btns.addWidget(self.btn_reopen)
         btns.addWidget(self.btn_export)
         btns.addWidget(self.btn_delete)
         btns.addStretch(1)
         lay.addLayout(btns)
+        self.lbl_status = QLabel("")
+        self.lbl_status.setWordWrap(True)
+        self.lbl_status.setStyleSheet("color:#4b5563;")
+        apply_a11y(self.lbl_status, strings.A11Y_HISTORY_STATUS)
+        lay.addWidget(self.lbl_status)
         self.lbl_empty = QLabel(strings.EMPTY_HISTORY)
         lay.addWidget(self.lbl_empty)
         self.refresh()
+
+    def _need_selection(self) -> bool:
+        if self._selected_id() is not None:
+            self.lbl_status.setText("")
+            return True
+        self.lbl_status.setText(strings.MSG_HISTORY_NO_SELECTION)
+        return False
 
     def refresh(self) -> None:
         try:
@@ -79,9 +101,10 @@ class HistoryScreen(QWidget):
         return item.text() if item else None
 
     def _delete(self) -> None:
-        aid = self._selected_id()
-        if not aid:
+        if not self._need_selection():
             return
+        aid = self._selected_id()
+        assert aid is not None
         if QMessageBox.question(self, strings.BTN_DELETE,
                                 strings.CONFIRM_DELETE) == QMessageBox.StandardButton.Yes:
             try:
@@ -98,9 +121,10 @@ class HistoryScreen(QWidget):
             self.refresh()
 
     def _reopen(self) -> None:
-        aid = self._selected_id()
-        if not aid:
+        if not self._need_selection():
             return
+        aid = self._selected_id()
+        assert aid is not None
         try:
             d = self._svc.get(aid)
         except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi cho người dùng, không crash
@@ -114,9 +138,10 @@ class HistoryScreen(QWidget):
         dlg.exec()
 
     def _export(self) -> None:
-        aid = self._selected_id()
-        if not aid:
+        if not self._need_selection():
             return
+        aid = self._selected_id()
+        assert aid is not None
         from imageguard.services.report_service import ReportService
         default_name = f"report_{aid[:8]}.md"
         save_path, _ = QFileDialog.getSaveFileName(
@@ -157,7 +182,7 @@ class AnalysisDetailDialog(QDialog):
             f"<b>{strings.VERDICT_LABEL.get(v, v)}</b> · "
             f"{len(detail['methods'])} methods · {detail['duration_ms']} ms · "
             f"config `{detail['config_hash']}`"), 1)
-        btn_exp = QPushButton("Xuất báo cáo")
+        btn_exp = QPushButton(strings.BTN_EXPORT_REPORT_SHORT)
         btn_exp.clicked.connect(self._export)
         top_h.addWidget(btn_exp)
         lay.addLayout(top_h)
@@ -171,7 +196,7 @@ class AnalysisDetailDialog(QDialog):
             lay.addWidget(lbl)
         self.canvas = ImageCanvas()
         self.combo = QComboBox()
-        self.combo.addItem("Chọn artifact…", None)
+        self.combo.addItem(strings.HIST_ARTIFACT_PLACEHOLDER, None)
         for a in self._arts:
             self.combo.addItem(f"{a['kind']} — {a['method']}", a["rel_path"])
         self.combo.currentIndexChanged.connect(self._show_art)

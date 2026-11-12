@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 
 
 class StatsScreen(QWidget):
@@ -28,10 +29,15 @@ class StatsScreen(QWidget):
         self.lbl_label.setStyleSheet("color:#666;")
         lay.addWidget(self.lbl_label)
         self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Verdict", "Số lượng"])
+        apply_a11y(self.table, strings.A11Y_STATS_TABLE)
+        self.table.setHorizontalHeaderLabels([
+            strings.STATS_COL_VERDICT,
+            strings.STATS_COL_COUNT,
+        ])
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         lay.addWidget(self.table)
-        self.btn = QPushButton("Làm mới")
+        self.btn = QPushButton(strings.BTN_REFRESH)
+        apply_a11y(self.btn, strings.A11Y_STATS_REFRESH)
         self.btn.clicked.connect(self.refresh)
         lay.addWidget(self.btn)
         self.refresh()
@@ -44,9 +50,10 @@ class StatsScreen(QWidget):
                 self, "Lỗi cơ sở dữ liệu",
                 f"Không đọc được thống kê phiên: {type(e).__name__}: {e}")
             return
-        self.lbl_head.setText(
-            f"{s['n_analyses']} phân tích · "
-            f"avg duration: {s['avg_duration_ms'] or 0:.0f} ms")
+        self.lbl_head.setText(strings.FMT_STATS_SUMMARY.format(
+            n=s["n_analyses"],
+            avg_ms=s["avg_duration_ms"] or 0,
+        ))
         self.lbl_label.setText(s.get("label", ""))
         rows = s.get("by_verdict", {})
         self.table.setRowCount(len(rows))

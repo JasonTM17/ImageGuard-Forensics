@@ -11,25 +11,30 @@ from PySide6.QtWidgets import (
 )
 
 from imageguard.core.config import ThresholdSet
+from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 
 
 class SettingsScreen(QWidget):
     def __init__(self, cfg: ThresholdSet, parent=None) -> None:
         super().__init__(parent)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(
-            "Ngưỡng thuật toán (configs/thresholds.yaml) — mỗi giá trị kèm "
-            "nguồn; chỉnh sửa bằng cách sửa file yaml rồi khởi động lại."))
-        tree = QTreeWidget()
-        tree.setHeaderLabels(["Key", "Value", "Nguồn"])
-        lay.addWidget(tree)
+        lay.addWidget(QLabel(strings.SETTINGS_THRESHOLDS_INTRO))
+        self.tree = QTreeWidget()
+        apply_a11y(self.tree, strings.A11Y_SETTINGS_TREE)
+        self.tree.setHeaderLabels([
+            strings.SETTINGS_TREE_HDR_KEY,
+            strings.SETTINGS_TREE_HDR_VALUE,
+            strings.SETTINGS_TREE_HDR_SOURCE,
+        ])
+        lay.addWidget(self.tree)
         for section, entries in cfg.raw.items():
             if not isinstance(entries, dict):
                 continue
             snode = QTreeWidgetItem([section])
-            tree.addTopLevelItem(snode)
+            self.tree.addTopLevelItem(snode)
             for k, v in entries.items():
                 if isinstance(v, dict) and "value" in v:
                     snode.addChild(QTreeWidgetItem(
                         [k, str(v["value"]), str(v.get("source", "—"))]))
-        tree.expandAll()
+        self.tree.expandAll()

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult
 from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
 
 
 class DisclaimerBar(QFrame):
@@ -42,6 +43,7 @@ class VerdictBanner(QFrame):
         self._sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._sub.setWordWrap(True)
         lay.addWidget(self._sub)
+        apply_a11y(self, strings.A11Y_VERDICT_BANNER)
 
     def set_verdict(self, verdict: Verdict, signals: list[str]) -> None:
         v = verdict.value
@@ -52,7 +54,7 @@ class VerdictBanner(QFrame):
         self._label.setStyleSheet(
             f"font-size:20px; font-weight:bold; color:{color};")
         self._sub.setText(
-            "Signals: " + ", ".join(signals) if signals else "")
+            strings.VERDICT_SIGNALS_PREFIX + ", ".join(signals) if signals else "")
 
 
 class MethodCard(QFrame):

@@ -25,6 +25,9 @@ from PySide6.QtWidgets import (
     QGraphicsView,
 )
 
+from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
+
 
 def ndarray_to_qpixmap(bgr: np.ndarray) -> QPixmap:
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
@@ -54,15 +57,15 @@ class ImageCanvas(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setAcceptDrops(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        apply_a11y(self, strings.A11Y_CANVAS, strings.A11Y_CANVAS_DESC)
         self._show_placeholder()
 
     def _show_placeholder(self) -> None:
         self._scene.clear()
         self._base = None
         self._overlay = None
-        text_item = self._scene.addText(
-            "Kéo thả ảnh vào đây hoặc bấm 'Mở ảnh…' để bắt đầu",
-        )
+        text_item = self._scene.addText(strings.CANVAS_PLACEHOLDER)
         text_item.setDefaultTextColor(Qt.GlobalColor.darkGray)
         font = text_item.font()
         font.setPointSize(11)
