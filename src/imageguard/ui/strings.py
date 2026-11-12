@@ -7,11 +7,6 @@ Nguyên tắc wording: nói "dấu hiệu", không nói "kết luận"; KHÔNG d
 
 APP_TITLE = "ImageGuard Forensics"
 
-DISCLAIMER = (
-    "Công cụ phát hiện dấu hiệu nghi ngờ — không kết luận ảnh bị can thiệp; "
-    "ELA/EXIF/noise chỉ là bằng chứng khám phá."
-)
-
 ENHANCE_BANNER = (
     "Ảnh đã tăng cường bằng thuật toán hoặc mô hình AI. Đây là bản xem, "
     "không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với file gốc."

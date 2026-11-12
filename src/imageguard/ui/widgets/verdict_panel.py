@@ -1,11 +1,10 @@
-"""Verdict banner + disclaimer bar + per-method evidence cards."""
+"""Verdict banner + per-method evidence cards."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
     QVBoxLayout,
 )
@@ -14,20 +13,6 @@ from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
-
-
-class DisclaimerBar(QFrame):
-    """Disclaimer cố định — luôn hiển thị, không bao giờ ẩn được."""
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("background:#fef3c7; color:#713f12; padding:4px;")
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 4, 8, 4)
-        lbl = QLabel(strings.DISCLAIMER)
-        lbl.setWordWrap(True)
-        lay.addWidget(lbl)
 
 
 class VerdictBanner(QFrame):

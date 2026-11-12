@@ -1,4 +1,4 @@
-"""MainWindow — tabs Analyze / Enhance / History / Settings + disclaimer cố định."""
+"""MainWindow — tabs Analyze / Enhance / History / Settings."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from imageguard.ui.screens.enhance import EnhanceScreen
 from imageguard.ui.screens.history import HistoryScreen
 from imageguard.ui.screens.settings import SettingsScreen
 from imageguard.ui.screens.stats import StatsScreen
-from imageguard.ui.widgets.verdict_panel import DisclaimerBar
 
 
 class MainWindow(QMainWindow):
@@ -51,7 +50,6 @@ class MainWindow(QMainWindow):
 
         self.tabs.currentChanged.connect(_refresh)
         lay.addWidget(self.tabs, 1)
-        lay.addWidget(DisclaimerBar())  # cố định dưới cùng — không bao giờ ẩn
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():

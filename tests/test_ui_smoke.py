@@ -12,6 +12,14 @@ pytest.importorskip("PySide6")
 
 from imageguard.ui import strings
 
+_REMOVED_MAIN_DISCLAIMER_SNIPPET = "Công cụ phát hiện dấu hiệu nghi ngờ"
+
+
+def _main_window_label_texts(window) -> list[str]:
+    from PySide6.QtWidgets import QLabel
+
+    return [lbl.text() for lbl in window.findChildren(QLabel)]
+
 
 @pytest.fixture()
 def services(tmp_path):
@@ -36,13 +44,13 @@ def test_app_shell(qtbot, services):
         "Thống kê",
         strings.TAB_SETTINGS,
     ]
-    # Disclaimer cố định luôn hiển thị
-    found = w.findChildren(type(w.centralWidget().layout().itemAt(1).widget()))
-    assert any(strings.DISCLAIMER[:20] in d.findChildren(
-        __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel)[0].text()
-        for d in found if d.findChildren(
-        __import__("PySide6.QtWidgets", fromlist=["QLabel"]).QLabel))
-
+    # Không còn thanh disclaimer cố định ngoài tab
+    central_lay = w.centralWidget().layout()
+    assert central_lay.count() == 1
+    assert w.tabs is central_lay.itemAt(0).widget()
+    assert not any(
+        _REMOVED_MAIN_DISCLAIMER_SNIPPET in t for t in _main_window_label_texts(w)
+    )
 
 def test_analyze_open_preview(qtbot, services, valid_png):
     from imageguard.ui.main_window import MainWindow
