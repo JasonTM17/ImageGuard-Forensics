@@ -82,6 +82,14 @@ def main() -> None:
         from imageguard.evaluation.runner import run_eval
 
         specs = [m.strip() for m in args.methods.split(",") if m.strip()]
+        if not specs:
+            valid = ", ".join(sorted(METHOD_SPECS))
+            print(
+                "error: --methods must name at least one method; valid: "
+                f"{valid}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from None
         methods = []
         for spec in specs:
             try:

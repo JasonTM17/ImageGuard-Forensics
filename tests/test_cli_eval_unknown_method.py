@@ -1,4 +1,4 @@
-"""Regression: eval rejects unknown --methods without a traceback."""
+"""Regression: eval rejects bad --methods without a traceback."""
 
 from __future__ import annotations
 
@@ -58,6 +58,69 @@ def test_eval_unknown_method_skips_run_eval(monkeypatch, tmp_path) -> None:
 
     def fail_run_eval(*_args, **_kwargs):
         raise AssertionError("run_eval must not run for unknown methods")
+
+    monkeypatch.setattr(runner_mod, "run_eval", fail_run_eval)
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("methods_arg", ["", " ", ",", " , "])
+def test_eval_empty_methods_exits_2_one_line_stderr(
+    monkeypatch, capsys, tmp_path, methods_arg: str,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "imageguard",
+            "eval",
+            "--dataset",
+            "synth",
+            "--root",
+            str(tmp_path),
+            "--methods",
+            methods_arg,
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert "must name at least one method" in captured.err
+    for name in METHOD_SPECS:
+        assert name in captured.err
+
+
+@pytest.mark.parametrize("methods_arg", ["", " ", ",", " , "])
+def test_eval_empty_methods_skips_run_eval(
+    monkeypatch, tmp_path, methods_arg: str,
+) -> None:
+    import imageguard.evaluation.runner as runner_mod
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "imageguard",
+            "eval",
+            "--dataset",
+            "synth",
+            "--root",
+            str(tmp_path),
+            "--methods",
+            methods_arg,
+        ],
+    )
+
+    def fail_run_eval(*_args, **_kwargs):
+        raise AssertionError("run_eval must not run when --methods is empty")
 
     monkeypatch.setattr(runner_mod, "run_eval", fail_run_eval)
 
