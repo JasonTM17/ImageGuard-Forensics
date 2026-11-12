@@ -107,7 +107,7 @@ def test_analyze_persist_creates_db_in_cwd(tmp_path: Path) -> None:
     assert ok
     p.write_bytes(buf.tobytes())
 
-    forensics_db = Path("D:/ImageGuard Forensics/data/imageguard.db")
+    forensics_db = _REPO_SRC.parent / "data" / "imageguard.db"
     had_forensics_db = forensics_db.is_file()
     env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
     res = _run_analyze(

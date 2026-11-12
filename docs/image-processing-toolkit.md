@@ -77,11 +77,10 @@ clean = open_(gray, se)
 
 ## Kiểm thử
 
-Chạy trong worktree (ví dụ):
+Chạy từ thư mục gốc repo (PowerShell không mở rộng ký tự `*`, nên chọn test bằng `-k`):
 
 ```powershell
-$env:PYTHONPATH='D:\ig-wt-k1\src'
-& 'D:\ImageGuard Forensics\.venv\Scripts\python.exe' -m pytest tests/test_ipkit_*.py -q -p no:cacheprovider
+python -m pytest tests/ -k ipkit -q -p no:cacheprovider
 ```
 
-Lần chạy gần nhất (worktree `ig-wt-k1`, chỉ `test_ipkit_*.py`): **18 passed** (khoảng 0,5s, pytest `-q -p no:cacheprovider`).
+Lần chạy gần nhất (lệnh trên, bản clone sạch): **18 passed**.

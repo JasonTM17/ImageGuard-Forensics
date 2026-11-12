@@ -103,9 +103,9 @@ không kết luận điều gì về ảnh.
 ```bash
 python -m imageguard eval --dataset synth --root data/synth_eval \
     --split dev --methods keypoint,block
+```
 
 Tên method không có trong registry (ví dụ gõ nhầm) in một dòng lỗi ra stderr và thoát mã `2` — không in traceback.
-```
 
 Report JSON/CSV vào `reports/` kèm experiment_id, seed, config hash.
 
