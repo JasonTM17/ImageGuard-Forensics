@@ -199,13 +199,6 @@ def test_kernel_restorers_convert_uint16_and_float_input_to_uint8() -> None:
     assert wiener.dtype == np.uint8
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "REPORT D-1: clahe and nlm pass non-uint8 BGR arrays to OpenCV and "
-        "leak cv2.error instead of raising ValueError for an unsupported dtype"
-    ),
-)
 @pytest.mark.parametrize(("kind", "params"), _RESTORES[1:3])
 @pytest.mark.parametrize("dtype", [np.uint16, np.float32], ids=["uint16", "float32"])
 def test_channel_operators_reject_unsupported_dtype_with_value_error(
@@ -214,8 +207,45 @@ def test_channel_operators_reject_unsupported_dtype_with_value_error(
     """Unsupported-but-well-shaped input should fail through ValueError."""
     image = np.full((6, 6, 3), 100, dtype=dtype)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="expects a uint8 image"):
         restore(image, kind, params)
+
+
+def test_channel_operators_match_the_documented_opencv_reference() -> None:
+    """Valid uint8 BGR output is byte-identical to the direct OpenCV calls.
+
+    ``docs/course-coverage.md`` records CLAHE as ``cv2.createCLAHE`` on the L
+    channel of a BGR->LAB conversion and NLM as
+    ``cv2.fastNlMeansDenoisingColored``; ``docs/enhancement-study.md`` records
+    the operator parameters.
+    """
+    image = np.arange(12 * 13 * 3, dtype=np.uint8).reshape(12, 13, 3)
+    clip_limit, tile = 2.0, (4, 5)
+
+    clahe_output, _metadata = restore(
+        image, "clahe", {"clip_limit": clip_limit, "tile_grid_size": list(tile)}
+    )
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    lightness, a_channel, b_channel = cv2.split(lab)
+    adjusted = cv2.createCLAHE(
+        clipLimit=clip_limit, tileGridSize=tile
+    ).apply(lightness)
+    clahe_reference = cv2.cvtColor(
+        cv2.merge((adjusted, a_channel, b_channel)), cv2.COLOR_LAB2BGR
+    )
+
+    nlm_output, _metadata = restore(image, "nlm", dict(_SMALL_NLM))
+    nlm_reference = cv2.fastNlMeansDenoisingColored(
+        image,
+        None,
+        h=_SMALL_NLM["h"],
+        hColor=_SMALL_NLM["hColor"],
+        templateWindowSize=_SMALL_NLM["templateWindowSize"],
+        searchWindowSize=_SMALL_NLM["searchWindowSize"],
+    )
+
+    np.testing.assert_array_equal(clahe_output, clahe_reference)
+    np.testing.assert_array_equal(nlm_output, nlm_reference)
 
 
 def test_kernels_larger_than_the_image_keep_the_image_shape() -> None:
@@ -572,14 +602,6 @@ def test_write_sibling_never_mutates_the_written_array(tmp_path: Path) -> None:
     np.testing.assert_array_equal(base[:, ::2], before)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "REPORT D-2: when dest ends in .json the PNG and its provenance "
-        "sibling share one path; write_sibling overwrites the encoded PNG "
-        "with the JSON record instead of raising ValueError"
-    ),
-)
 def test_write_sibling_rejects_destination_whose_sidecar_is_itself(
     tmp_path: Path,
 ) -> None:
@@ -588,7 +610,8 @@ def test_write_sibling_rejects_destination_whose_sidecar_is_itself(
     dest = source.with_suffix(".json")
     original_source = source.read_bytes()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="sidecar would overwrite"):
         write_sibling(source, dest, image, "unsharp", dict(_UNSHARP), digest)
 
+    assert not dest.exists()
     assert source.read_bytes() == original_source

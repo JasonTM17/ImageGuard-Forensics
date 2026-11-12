@@ -69,6 +69,11 @@ def write_sibling(
     source_path = Path(source)
     dest = Path(dest_png)
     json_path = dest.with_suffix(".json")
+    if json_path == dest:
+        raise ValueError(
+            "destination must not be a .json path: the provenance sidecar "
+            "would overwrite the encoded PNG"
+        )
     if _same_as_source(dest, source_path) or _same_as_source(json_path, source_path):
         raise ValueError("destination must differ from the source image")
     if dest.exists() or json_path.exists():

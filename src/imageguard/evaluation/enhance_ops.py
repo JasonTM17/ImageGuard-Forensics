@@ -39,6 +39,15 @@ def _uint8(image: np.ndarray) -> np.ndarray:
     return np.clip(np.rint(image), 0, 255).astype(np.uint8)
 
 
+def _bgr_uint8(image: np.ndarray, kind: str) -> np.ndarray:
+    """Validate the three-channel uint8 BGR input the colour operators need."""
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError(f"{kind} expects a three-channel BGR image")
+    if image.dtype != np.uint8:
+        raise ValueError(f"{kind} expects a uint8 image, got {image.dtype}")
+    return image
+
+
 def _normalized_kernel(kernel: np.ndarray) -> np.ndarray:
     result = np.asarray(kernel, dtype=np.float32)
     if result.ndim != 2 or result.size == 0:
@@ -270,8 +279,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         )
 
     if kind == "clahe":
-        if source.ndim != 3 or source.shape[2] != 3:
-            raise ValueError("clahe expects a three-channel BGR image")
+        _bgr_uint8(source, "clahe")
         clip_limit = _real(params["clip_limit"], "clip_limit", minimum=0.0)
         tile_value = params["tile_grid_size"]
         if len(tile_value) != 2:
@@ -292,8 +300,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         )
 
     if kind == "nlm":
-        if source.ndim != 3 or source.shape[2] != 3:
-            raise ValueError("nlm expects a three-channel BGR image")
+        _bgr_uint8(source, "nlm")
         h = _real(params["h"], "h", minimum=0.0)
         h_color = _real(params["hColor"], "hColor", minimum=0.0)
         template_size = _integer(params["templateWindowSize"], "templateWindowSize")
