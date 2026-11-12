@@ -47,6 +47,7 @@ METHOD_LABEL = {
 BTN_OPEN = "Mở ảnh…"
 BTN_RUN = "Phân tích"
 BTN_CANCEL = "Hủy"
+BTN_CLOSE = "Đóng"
 BTN_DELETE = "Xóa"
 BTN_REOPEN = "Mở lại"
 TAB_ANALYZE = "Phân tích"
@@ -71,7 +72,10 @@ BTN_EXPORT_REPORT_SHORT = "Xuất báo cáo"
 BTN_EXPORT_ENHANCED = "Xuất ảnh tăng cường (PNG)"
 BTN_REFRESH = "Làm mới"
 
-OVERLAY_NONE = "Không overlay"
+OVERLAY_NONE = "Không dùng lớp phủ"
+FMT_OVERLAY_SKIP_DIMS = (
+    "Bỏ qua lớp phủ: kích thước {kind} {dims} không khớp kích thước ảnh {shape}"
+)
 OVERLAY_MASK_FMT = "Lớp phủ vùng — {label}"
 OVERLAY_HEATMAP_FMT = "Bản đồ nhiệt — {label}"
 OVERLAY_PAIRS_FMT = "Cặp điểm nối — {label}"
@@ -81,6 +85,8 @@ FMT_OVERLAY_HEATMAP = OVERLAY_HEATMAP_FMT
 FMT_OVERLAY_TWIN = OVERLAY_PAIRS_FMT
 
 STATUS_ENHANCE_CANCELLED = "Đã hủy tăng cường."
+STATUS_ANALYZE_CANCELLING = "Đang dừng phân tích…"
+STATUS_ANALYZE_CANCELLED = "Đã hủy phân tích."
 
 HIST_COL_TIME = "Thời gian"
 HIST_COL_IMAGE = "Ảnh"
@@ -111,15 +117,34 @@ SETTINGS_THRESHOLDS_INTRO = (
     "Ngưỡng thuật toán (configs/thresholds.yaml) — mỗi giá trị kèm "
     "nguồn; chỉnh sửa bằng cách sửa file yaml rồi khởi động lại."
 )
-SETTINGS_TREE_HDR_KEY = "Key"
-SETTINGS_TREE_HDR_VALUE = "Value"
+SETTINGS_TREE_HDR_KEY = "Khóa"
+SETTINGS_TREE_HDR_VALUE = "Giá trị"
 SETTINGS_TREE_HDR_SOURCE = "Nguồn"
 
 HIST_ARTIFACT_PLACEHOLDER = "Chọn artifact…"
+ARTIFACT_KIND_LABEL = {
+    "mask": "Lớp phủ vùng",
+    "heatmap": "Bản đồ nhiệt",
+    "pairs": "Cặp điểm nối",
+}
+FMT_HIST_DETAIL_SUMMARY = (
+    "{n} phương pháp · {ms} ms · cấu hình `{cfg}`"
+)
+MSG_EXPORT_OVERWRITE_IMAGE = "Ảnh đích đã tồn tại:\n{name}\nGhi đè?"
+MSG_EXPORT_OVERWRITE_SIDECAR = (
+    "Tệp siêu dữ liệu đi kèm đã tồn tại:\n{name}\nBạn có muốn ghi đè không?"
+)
+MSG_EXPORT_OVERWRITE_BOTH = (
+    "Ảnh và tệp siêu dữ liệu đã tồn tại:\n{name}\n{sidecar}\nGhi đè?"
+)
+EMPTY_STATS = "Chưa có dữ liệu phân tích trong phiên này."
 
 # --- Accessible names (screen readers) ---
 A11Y_CANVAS = "Khung xem ảnh"
-A11Y_CANVAS_DESC = "Thu phóng bằng con lăn; kéo để di chuyển; thả file ảnh để mở."
+A11Y_CANVAS_DESC = (
+    "Thu phóng bằng con lăn hoặc phím +/−; mũi tên để di chuyển; "
+    "Home đặt lại khung nhìn; kéo để di chuyển; thả file ảnh để mở."
+)
 
 A11Y_ANALYZE_OPEN = "Mở ảnh để phân tích"
 A11Y_ANALYZE_RUN = "Chạy phân tích dấu hiệu"
@@ -149,7 +174,9 @@ A11Y_HISTORY_EXPORT = "Xuất báo cáo phân tích đã chọn"
 A11Y_HISTORY_DELETE = "Xóa phân tích đã chọn"
 A11Y_HISTORY_STATUS = "Trạng thái thao tác lịch sử"
 
-A11Y_STATS_TABLE = "Bảng thống kê theo verdict"
+A11Y_STATS_TABLE = "Bảng thống kê theo dấu hiệu"
+FMT_A11Y_METHOD_CARD = "Kết quả chi tiết phương pháp {title}"
+A11Y_HIST_DETAIL_ARTIFACT = "Chọn artifact xem lại"
 A11Y_STATS_REFRESH = "Làm mới thống kê phiên"
 
 A11Y_SETTINGS_TREE = "Cây ngưỡng thuật toán"
