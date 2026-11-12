@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import shutil
 from pathlib import Path
 
@@ -54,17 +55,45 @@ class ArtifactStore:
 
     def put_bytes(self, analysis_id: str, filename: str, data: bytes) -> str:
         rel = self.rel_path(analysis_id, filename)
-        dst = self.root / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+        root = self.root.resolve()
+        dst = (root / rel).resolve()
+        if not _contained(root, dst):
+            raise ValueError(f"rel_path thoát khỏi artifact root: {rel!r}")
+        (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+        dst = (root / rel).resolve()
+        if not _contained(root, dst):
+            raise ValueError(f"rel_path thoát khỏi artifact root: {rel!r}")
+        tmp_path: Path | None = None
+        fd = -1
         try:
-            tmp.write_bytes(data)
-            os.replace(tmp, dst)  # atomic rename trong cùng filesystem
+            for _ in range(64):
+                candidate = dst.parent / f".{secrets.token_hex(16)}.tmp"
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                try:
+                    fd = os.open(candidate, flags, 0o600)
+                    tmp_path = candidate
+                    break
+                except FileExistsError:
+                    continue
+            else:
+                raise OSError("could not allocate temporary artifact file")
+            with os.fdopen(fd, "wb") as stream:
+                fd = -1
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(tmp_path, dst)
+            tmp_path = None
         except BaseException:
-            try:
-                tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
+            if fd >= 0:
+                os.close(fd)
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
             raise
         return rel
 

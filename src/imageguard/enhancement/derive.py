@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,6 +37,61 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _guard_destination_for_publish(
+    path: Path, source: Path, *, overwrite: bool
+) -> None:
+    """Refuse publishing when the target is missing, taken, or the source file."""
+    if _same_as_source(path, source):
+        raise ValueError("destination must differ from the source image")
+    if path.exists() and not overwrite:
+        raise ValueError(f"destination already exists: {path.name}")
+
+
+def _write_exclusive_atomic(
+    dest: Path,
+    data: bytes,
+    source: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    """Write bytes via an exclusive temp file and atomic replace."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    _guard_destination_for_publish(dest, source, overwrite=overwrite)
+    tmp_path: Path | None = None
+    fd = -1
+    try:
+        for _ in range(64):
+            candidate = dest.parent / f".{secrets.token_hex(16)}.tmp"
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            try:
+                fd = os.open(candidate, flags, 0o600)
+                tmp_path = candidate
+                break
+            except FileExistsError:
+                continue
+        else:
+            raise OSError("could not allocate temporary file for destination")
+        with os.fdopen(fd, "wb") as stream:
+            fd = -1
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _guard_destination_for_publish(dest, source, overwrite=overwrite)
+        os.replace(tmp_path, dest)
+        tmp_path = None
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
 
 def _same_as_source(path: Path, source: Path) -> bool:
@@ -95,17 +152,6 @@ def write_sibling(
     payload = encoded.tobytes()
     if _same_as_source(dest, source_path) or _same_as_source(json_path, source_path):
         raise ValueError("destination must differ from the source image")
-    if dest.exists():
-        if not overwrite:
-            raise ValueError(f"destination already exists: {dest.name}")
-        dest.unlink()
-    if json_path.exists():
-        if not overwrite:
-            raise ValueError(f"destination already exists: {json_path.name}")
-        json_path.unlink()
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(payload)
-
     record = {
         "derived": True,
         "parent_sha256": computed_parent,
@@ -115,10 +161,11 @@ def write_sibling(
         "model_sha256": model_sha256,
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    json_path.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
+    json_bytes = (
+        json.dumps(record, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    ).encode("utf-8")
+    _write_exclusive_atomic(dest, payload, source_path, overwrite=overwrite)
+    _write_exclusive_atomic(json_path, json_bytes, source_path, overwrite=overwrite)
     return json_path
 
 
