@@ -1,4 +1,4 @@
-"""Tests cho L2 signals: noise, freq, splicing — contract AlgorithmResult."""
+"""Aux cues (noise, noise_local, freq, splicing) and the AlgorithmResult contract."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def test_splicing_nonjpeg_degrades(valid_png, ts):
     )
 
 
-def test_registry_l2_specs():
+def test_registry_aux_specs():
     for spec in ("noise", "freq", "splicing", "noise_local"):
         assert load_method(spec) is not None
 

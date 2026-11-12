@@ -6,7 +6,8 @@ n, n_excluded, n_anomaly}. Verdict→label: SUSPICIOUS → forged;
 NO_INDICATION/INCONCLUSIVE → authentic (INCONCLUSIVE đếm riêng — độ thận trọng).
 NOT_APPLICABLE và ERROR loại khỏi xét hoàn toàn (đếm n_not_applicable/n_error) —
 docs/evaluation-methodology.md. GT mask sai kích thước → exclude + đếm;
-GT mask rỗng trên forged → data anomaly → exclude + đếm (plan §10).
+GT mask rỗng trên forged → data anomaly → exclude + đếm
+(docs/evaluation-methodology.md: mask thiếu/sai bị loại và đếm, không tự resize).
 """
 
 from __future__ import annotations

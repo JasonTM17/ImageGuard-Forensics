@@ -1,4 +1,4 @@
-"""Phase 8: report export + stats + robustness battery."""
+"""Markdown report export, history stats, robustness battery, and fusion cues."""
 
 from __future__ import annotations
 

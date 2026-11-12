@@ -1,4 +1,4 @@
-"""M2 — Lowe ratio course: self_match keeps only distinctive nearest neighbours.
+"""Lowe ratio: self_match keeps only distinctive nearest neighbours.
 
 Hand-built 5×2 float32 descriptor line (L2):
     d0=0   d1=2   d2=100   d3=102   d4=50.5

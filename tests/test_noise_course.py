@@ -1,4 +1,4 @@
-"""L3 — noise residual order course scenario (deterministic seed 20261106).
+"""Noise residual order across the two halves of one field (seed 20261106).
 
 Một ảnh 128×128: nửa trái là nhiễu Gaussian mạnh, nửa phải là cùng nhiễu
 sau khi Gaussian blur mạnh. NoiseMap không bao giờ trả SUSPICIOUS_INDICATION

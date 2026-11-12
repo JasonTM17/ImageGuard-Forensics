@@ -1,4 +1,4 @@
-"""K3 — keypoint copy-move course scenario (numpy Generator seed 23).
+"""Keypoint copy-move on a synthetic translate forge (numpy Generator seed 23).
 
 Một ảnh 384×384 có texture (gradient + shapes + noise) được dựng bằng
 `np.random.default_rng(23)`. Copy một rectangle 140×140 bằng phép tịnh tiến

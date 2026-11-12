@@ -1,4 +1,4 @@
-"""M1 — geometric verification of translated keypoint pairs."""
+"""Geometric verification keeps translated keypoint pairs and drops outliers."""
 
 from __future__ import annotations
 
