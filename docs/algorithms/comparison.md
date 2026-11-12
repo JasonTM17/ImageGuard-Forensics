@@ -35,8 +35,9 @@ minh authentic/giả cho ảnh bất kỳ. Nguồn công khai của các số d�
   original `INCONCLUSIVE`**; recall cao không đồng nghĩa localization đúng.
 - Macro IoU trên 103 ảnh đã chỉnh: keypoint ≈ 0.461; block ≈ 0.289 (cùng sự kiện).
   **Verdict rate và IoU phải đọc cùng nhau** — localization không chứng minh vùng giả.
-- Số `INCONCLUSIVE` trên ảnh đã chỉnh của block chưa có con số chính xác trong
-  README/limitations nên tài liệu này không trích.
+- Block trên ảnh đã chỉnh: 37 `SUSPICIOUS`, 3 `INCONCLUSIVE`, 63 `NO_INDICATION`
+  (tổng 103; đếm từ hàng đã lưu bằng `scripts/fusion_offline_summary.py`, xem
+  [`docs/fusion-offline-analysis.md`](../fusion-offline-analysis.md)).
 
 **Verdict fusion trong app/UI chưa được chấm điểm riêng** trong sự kiện hai-method
 trên; kết quả tổng hợp GUI có thể khác pipeline đo từng method. Đây là bằng chứng
