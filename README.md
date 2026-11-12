@@ -44,6 +44,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/architecture.md`](docs/architecture.md) | Layer, data flow, cây thư mục |
 | [`docs/testing-strategy.md`](docs/testing-strategy.md) | Kim tự tháp test, determinism, lệnh pytest |
 | [`docs/environment.md`](docs/environment.md) | Phiên bản runtime đã xác minh |
+| [`docs/performance.md`](docs/performance.md) | Thời gian wall-clock đo trên một máy |
 | [`docs/packaging.md`](docs/packaging.md) | PyInstaller; giới hạn build `.exe` |
 | [`docs/algorithms.md`](docs/algorithms.md) | Tổng quan thuật toán |
 | [`docs/algorithms/02-keypoint.md`](docs/algorithms/02-keypoint.md) | Pipeline keypoint |
@@ -51,11 +52,13 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/algorithms/comparison.md`](docs/algorithms/comparison.md) | So sánh method |
 | [`docs/database.md`](docs/database.md) | SQLite, artifact store |
 | [`docs/service-interface.md`](docs/service-interface.md) | Analysis / History / Eval services |
+| [`docs/forensic-report-schema.md`](docs/forensic-report-schema.md) | Hợp đồng JSON stdout của lệnh `analyze` |
 | [`docs/security-error-handling.md`](docs/security-error-handling.md) | safe_open, giới hạn tài nguyên |
 | [`docs/dataset-strategy.md`](docs/dataset-strategy.md) | synthforge, CoMoFoD, split |
 | [`docs/evaluation-methodology.md`](docs/evaluation-methodology.md) | Metric R1–R5, runner |
 | [`docs/experiments.md`](docs/experiments.md) | Ghi chép thử nghiệm |
 | [`docs/failure-cases.md`](docs/failure-cases.md) | Mẫu lỗi đã quan sát |
+| [`docs/limitations.md`](docs/limitations.md) | Giới hạn đã biết, không thêm số mới |
 | [`docs/ingest.md`](docs/ingest.md) | Quét thư mục, custody |
 | [`docs/enhancement-study.md`](docs/enhancement-study.md) | Nghiên cứu tăng cường xem |
 | [`docs/modelforge.md`](docs/modelforge.md) | Model-forge / ONNX (design) |
@@ -63,7 +66,10 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/splicing-study.md`](docs/splicing-study.md) | Splicing cues (exploratory) |
 | [`docs/image-processing-toolkit.md`](docs/image-processing-toolkit.md) | Toán tử xử lý ảnh cơ bản (demo, không dùng cho verdict) |
 | [`docs/reading-list.md`](docs/reading-list.md) | Tài liệu tham khảo |
+| [`docs/course-coverage.md`](docs/course-coverage.md) | Bản đồ chủ đề môn Xử lý ảnh → mã nguồn, test |
 | [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md) | Khung báo cáo đồ án |
+| [`docs/report/capstone-draft.md`](docs/report/capstone-draft.md) | Bản nháp báo cáo đồ án chương 1–4 |
+| [`docs/report/figures.md`](docs/report/figures.md) | Hình minh họa synthetic cho báo cáo |
 
 ## Cấu trúc repo (rút gọn)
 
