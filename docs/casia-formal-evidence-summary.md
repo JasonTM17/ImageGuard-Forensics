@@ -1,6 +1,6 @@
 # Tóm tắt bằng chứng sự kiện CASIA formal (đã redact)
 
-Tài liệu này là **bản tổng hợp công khai** của một sự kiện đánh giá detector đã khóa trên cohort CASIA-CMFD đã sàng lọc. Các artifact JSON, mask PNG, báo cáo đầy đủ và receipt thực thi **không** nằm trong repo git; chúng được giữ ngoài kho công khai để tránh lộ dữ liệu nghiên cứu cục bộ. Mọi **con số** dưới đây được sao chép nguyên văn từ bản ghi sự kiện đã lưu cục bộ (2026-11-08, timezone Asia/Bangkok), không suy diễn thêm.
+Tài liệu này là **bản tổng hợp công khai** của một sự kiện đánh giá detector đã khóa trên cohort CASIA-CMFD đã sàng lọc. Các artifact JSON, mask PNG, báo cáo đầy đủ và receipt thực thi **không** nằm trong repo git; chúng được giữ ngoài kho công khai để tránh lộ dữ liệu nghiên cứu cục bộ. Mọi **con số** dưới đây được trích hoặc tính trực tiếp từ bản ghi sự kiện đã lưu cục bộ (2026-11-08, timezone Asia/Bangkok), không suy diễn thêm.
 
 **Ranh giới:** Sự kiện đo *dấu hiệu suspicious* và localization cue mask so với **oracle mask tác giả** đã chiếu — **không** chứng minh ảnh camera tùy ý là giả hay nguyên bản. **Verdict fusion** trong app/UI **không** được đánh giá trong sự kiện hai-method này.
 
@@ -53,7 +53,7 @@ Tiêu chí đã đăng ký (hash criteria trong contract): block candidate phả
 - Quan sát: block candidate **+1** TP (37 → 38), **dưới** ngưỡng **+5**.
 - Comparator báo `FAIL`; nhãn thất bại gồm `tp_delta_min` và `primary_correction_count`.
 - Các giới hạn khác (FP, IoU, abstention gốc) vẫn trong biên đã duyệt — **không** đủ để chấp nhận candidate.
-- **Quyết định cuối:** scientific gate **FAIL**; ngưỡng production mặc định **không** đổi theo sự kiện này.
+- **Quyết định cuối:** scientific gate **FAIL**; ngưỡng mặc định của ứng dụng **không** đổi theo sự kiện này.
 
 ## SHA-256 artifact và config (theo bản ghi sự kiện)
 
