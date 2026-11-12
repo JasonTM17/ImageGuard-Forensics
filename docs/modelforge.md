@@ -48,9 +48,10 @@ $hold = Join-Path $env:TEMP 'ig-phaseb-holdout'
 & $py -m imageguard.evaluation.modelbench --set $hold --methods keypoint,block,noise,noise_local,freq,splicing,ela --out (Join-Path $env:TEMP 'ig-phaseb-bench-holdout')
 ```
 
-IoU/bF1 là trung bình trên **tất cả mẫu** của mỗi loại; không có mask dự đoán
-được tính bằng 0. `INCONCLUSIVE` vẫn là kết quả thận trọng, không phải xác nhận
-ảnh có chỉnh sửa.
+IoU/bF1 là trung bình trên mọi mẫu có GT non-empty và mask dự đoán đúng hình
+học; mask dự đoán thiếu được tính bằng 0, còn mask sai hình học bị loại khỏi
+trung bình và đếm riêng ở `n_malformed_gt`. `INCONCLUSIVE` vẫn là kết quả thận
+trọng, không phải xác nhận ảnh có chỉnh sửa.
 
 | Bộ / loại | Keypoint verdict; IoU; bF1 | `noise_local` verdict; IoU; bF1 |
 |---|---|---|
@@ -64,22 +65,23 @@ IoU/bF1 là trung bình trên **tất cả mẫu** của mỗi loại; không c�
 | Holdout splice_foreign (n=1) | 1 no indication; 0.000; 0.000 | 1 no indication; 0.000; 0.000 |
 
 The keypoint `move` holdout rows show why verdict and localization must be read
-together: both were `SUSPICIOUS`, but mean IoU was only 0.042. The
-`noise_local` method never returns `SUSPICIOUS`; it supplies a smooth-region cue
-and can return `INCONCLUSIVE`.
+together: both returned `SUSPICIOUS_INDICATION`, but mean IoU was only 0.042. The
+`noise_local` method never returns `SUSPICIOUS_INDICATION`; it supplies a
+smooth-region cue and can return `INCONCLUSIVE`.
 
 On untouched synthetic originals, `noise_local` emitted a non-empty mask on
 1/12 train images (mean area 0.101%, maximum 1.215%) and 1/6 holdout images
 (mean area 0.098%, maximum 0.586%). Both controls had one `INCONCLUSIVE` and no
-`SUSPICIOUS` verdict. Keypoint emitted candidate masks on all 18 originals but
-returned no `SUSPICIOUS` verdict. This is not a real-photo false-positive rate.
+`SUSPICIOUS_INDICATION` verdict. Keypoint emitted candidate masks on all 18
+originals but returned no `SUSPICIOUS_INDICATION` verdict. This is not a
+real-photo false-positive rate.
 
 Block DCT had mean IoU 0 across all four edit types in these LaMa sets. It is
 not a suitable detector for edits that replace pixels instead of preserving a
-copy-move twin. Keypoint marked all `splice_keep` samples `SUSPICIOUS` here with
-mean IoU 0.319 (train n=3) and 0.319 (holdout n=1); high verdict rate with
-moderate localization — đọc cùng IoU/bF1, không chỉ verdict. Sample counts remain
-too small for general claims.
+copy-move twin. Keypoint marked all `splice_keep` samples
+`SUSPICIOUS_INDICATION` here with mean IoU 0.319 (train n=3) and 0.319 (holdout
+n=1); high verdict rate with moderate localization — đọc cùng IoU/bF1, không chỉ
+verdict. Sample counts remain too small for general claims.
 
 **Traceability (re-run 2026-11-12):** `python -m imageguard.evaluation.modelbench`
 on `data/modelforge_audit_train_fixed` và `data/modelforge_audit_holdout_fixed`,
@@ -111,7 +113,8 @@ definitions and empty-mask rules are in [`evaluation-methodology.md`](evaluation
 Markdown audit exports (`reports/audit-261104-fixed-train.md`,
 `reports/audit-261104-fixed-holdout.md`) are gitignored — không nằm trong git.
 Tái lập bằng modelbench trên các bộ `data/modelforge_audit_*_fixed` đã có sẵn
-(không cần sinh lại ảnh):
+(không cần sinh lại ảnh; `data/` gitignored nên bản clone sạch không có các bộ
+này):
 
 ```powershell
 $py = .\.venv\Scripts\python.exe

@@ -3,15 +3,15 @@
 ## Vì sao để design-only
 
 Level 1–2 (traditional DIP) đã đủ cho capstone + học thuật toán nền.
-ML/DL cần dataset lớn + GPU + framework nặng (torch ~2GB) — scope creep rõ
-rệt nếu nhét vào MVP. Tài liệu này là spec để implement sau mà không phá
-kiến trúc hiện tại.
+ML/DL cần dataset lớn + GPU + framework nặng (torch, ước lượng ~2 GB — chưa đo
+trong repo) — scope creep rõ rệt nếu nhét vào MVP. Tài liệu này là spec để
+implement sau mà không phá kiến trúc hiện tại.
 
 ## Điều kiện tiên quyết
 
 - `torch` wheel cho Python hiện tại: `pip index versions torch` — yêu cầu
-  cp314 wheel trước khi commit dep; nếu chưa có → pin python 3.12 venv riêng
-  cho nhánh ML.
+  cp314 wheel trước khi commit dep; nếu chưa có → pin Python 3.13 venv riêng
+  cho nhánh ML (pyproject yêu cầu `>=3.13`).
 - Dataset: CoMoFoD (train) + CASIA v2/IMD2020 (validation), giữ nguyên
   quy tắc split-by-base-image của `evaluation/`.
 - Giữ `ForensicReport`/`AlgorithmResult` contract — model chỉ là một

@@ -10,7 +10,10 @@ PSNR/SSIM gain never establishes a detection gain; negative results are successf
 - N = 24 manipulated samples and 24 matched originals, 256×256, tier `easy`, generation seed `20261106`. One fixed tier, not a mix.
 - Thresholds were the frozen snapshot below. They were not tuned on this set.
 - Richardson–Lucy and Wiener are `NOT_RUN` on AWGN, JPEG, and downsample (no generating blur PSF): 288 arms (24 samples × 2 roles × 3 degradations × 2 restorers).
-- Downsample PSNR and SSIM are null because the arm grid is not the sharp grid. Those nulls are omitted from the bootstrap (`omitted` = 24). No second resize was applied to force a score.
+- Downsample PSNR and SSIM are null because the downsampled image has a
+  different shape from its sharp source (`psnr`/`ssim` return `None` on a shape
+  mismatch). Those nulls are omitted from the bootstrap (`omitted` = 24). No
+  second resize was applied to force a score.
 - A missing prediction mask is stored as IoU 0 and stays in the mean. An uncomputed IoU (alignment failure, or a method that was not run) is omitted, not imputed. Alignment failures: `0`.
 - The earlier N = 4 table in this file is replaced by this run. It is not a second independent confirmation.
 
@@ -150,7 +153,7 @@ PSNR gain is not a detection gain on this set. Gaussian unsharp raises PSNR by 0
 
 ## E3 NAFNet (AI, viewing)
 
-This optional view uses the OpenCV Zoo NAFNet ONNX weight (`deblurring_nafnet_2025may.onnx`), pinned at 91,736,251 bytes with SHA-256 `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`. The model directory README lists the [MIT License](https://github.com/opencv/opencv_zoo/blob/main/models/deblurring_nafnet/README.md). Inference uses CPUExecutionProvider, sequential execution, one intra-op and inter-op thread, basic graph optimization, and RGB float32 NCHW input scaled by 0.00392. A 256-pixel side collapses inside this ONNX (zero-sized Pad). The network canvas therefore keeps every side at least 512 and the long side at most 1024, with replicate padding when a downscale would leave the short side below 512. The result is a viewing image. Padding and resizing are not recovered detail.
+This optional view uses the OpenCV Zoo NAFNet ONNX weight (`deblurring_nafnet_2025may.onnx`), pinned at 91,736,251 bytes with SHA-256 `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`. The model directory README lists the [MIT License](https://github.com/opencv/opencv_zoo/blob/main/models/deblurring_nafnet/README.md). Inference uses CPUExecutionProvider, sequential execution, one intra-op and inter-op thread, basic graph optimization, and RGB float32 NCHW input scaled by 0.00392. A 256-pixel side collapses inside this ONNX (zero-sized Pad). The network canvas therefore keeps every side at least 512 and the long side at most 1024: it downscales only when the long side exceeds 1024 and pads the bottom/right edges with replicate pixels whenever a side is below 512. The result is a viewing image. Padding and resizing are not recovered detail.
 
 ### Runtime gate
 

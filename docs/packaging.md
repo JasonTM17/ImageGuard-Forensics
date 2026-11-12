@@ -6,7 +6,8 @@
 python -m imageguard
 ```
 
-Cần `.venv` đã `pip install -e ".[dev]"` (xem `docs/environment.md`).
+Cần `.venv` đã `pip install -e ".[dev]"` (xem
+[`docs/environment.md`](environment.md)).
 
 ## Cách 2 — PyInstaller onedir
 
@@ -36,8 +37,8 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 
 ## Giới hạn đã biết
 
-- Bản build kèm toàn bộ PySide6/Qt (~300MB giải nén) — bình thường cho
-  Qt desktop.
+- Bản build kèm toàn bộ PySide6/Qt (~300 MB giải nén — số cũ, chưa đo lại
+  trong worktree này) — bình thường cho Qt desktop.
 - Lần QA ngày 2026-11-04: PyInstaller 6.22.3 + PySide6 6.12.0 build
   thành công với Python 3.14.2 và 3.13.7, nhưng executable mới lỗi import
   `QtWidgets` (DLL procedure not found); Qt smoke tối giản cũng lỗi.
@@ -45,6 +46,7 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
   trọn luồng. Dùng cách 1 khi cần chạy source; không suy ra bản `.exe`
   hoạt động từ kết quả pytest hoặc exit code build.
 - Spec hiện chỉ bundle `configs/`, không chứa weight NAFNet. Lựa chọn AI
-  cần ONNX Runtime và weight cung cấp riêng theo `docs/user-guide.md`;
-  chưa xác minh NAFNet trong bản đóng gói. Ba operator cổ điển không cần
-  weight này.
+  cần ONNX Runtime và weight cung cấp riêng theo
+  [`docs/user-guide.md`](user-guide.md); chưa xác minh NAFNet trong bản đóng
+  gói. Ba operator cổ điển (unsharp, CLAHE, non-local means) không cần weight
+  này.
