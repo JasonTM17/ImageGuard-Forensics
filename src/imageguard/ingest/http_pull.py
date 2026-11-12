@@ -1,4 +1,18 @@
-"""Pull bounded JPEG snapshots from explicitly allowlisted HTTP sources."""
+"""Pull bounded JPEG snapshots from explicitly allowlisted HTTP sources.
+
+Each configured ``timeout_s`` value is a monotonic wall-clock budget for a single
+pull attempt (DNS validation, redirects, response headers, and body reads). A server
+cannot extend an attempt indefinitely by trickling bytes before per-socket timeouts.
+
+Cloud metadata endpoints (``metadata.google.internal``, ``metadata.google.com``,
+and ``169.254.169.254``) are always refused, even when ``allow_link_local`` is enabled.
+
+DNS is validated before connect, but the standard library may resolve the hostname
+again when opening the TCP connection (no pinning to the validated address). A hostile
+or racing resolver could theoretically return different addresses after validation;
+mitigation would require connecting to the validated IP while preserving the ``Host``
+header and TLS ``server_hostname``, which is not implemented here.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +40,8 @@ _SAFE_BASENAME = re.compile(r"[A-Za-z0-9._-]+\Z")
 _METADATA_HOSTS = {"metadata.google.internal", "metadata.google.com"}
 _HOST_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
 _METADATA_IP = ipaddress.ip_address("169.254.169.254")
+# Upper bound when callers do not pass an explicit per-attempt timeout (seconds).
+_DEFAULT_ATTEMPT_DEADLINE_S = 60.0
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LAST_ATTEMPTS_LOCK = threading.Lock()
 
@@ -178,6 +194,37 @@ def _retryable(exc: BaseException) -> bool:
     return False
 
 
+def _remaining_attempt_seconds(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _AttemptFailure("timeout", retryable=True)
+    return remaining
+
+
+def _set_response_read_timeout(response: Any, timeout_s: float) -> None:
+    transport = getattr(response, "fp", None)
+    if transport is None:
+        return
+    raw = getattr(transport, "raw", None)
+    if raw is not None:
+        sock = getattr(raw, "_sock", None)
+        if sock is not None and hasattr(sock, "settimeout"):
+            sock.settimeout(timeout_s)
+            return
+    for candidate in (raw, transport):
+        if candidate is not None and hasattr(candidate, "settimeout"):
+            candidate.settimeout(timeout_s)
+            return
+
+
+def _read_response_chunk(response: Any, read_size: int, *, deadline: float | None) -> bytes:
+    if deadline is not None:
+        transport = getattr(response, "fp", None)
+        if transport is not None and hasattr(transport, "read1"):
+            return transport.read1(read_size)
+    return response.read(read_size)
+
+
 def _network_failure(exc: BaseException) -> _AttemptFailure:
     reason = "timeout" if isinstance(exc, (TimeoutError, socket.timeout)) else "connection_error"
     if isinstance(exc, urllib.error.URLError) and isinstance(
@@ -197,7 +244,7 @@ def _validate_target(
     parsed, host, port = _parse_url(url)
     if host not in allowed_hosts:
         raise _Refusal("host_not_allowed")
-    if host in _METADATA_HOSTS and not allow_link_local:
+    if host in _METADATA_HOSTS:
         raise _Refusal("metadata_blocked")
 
     try:
@@ -216,7 +263,7 @@ def _validate_target(
             raise _Refusal("dns_resolution_failed") from None
         if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
             address = address.ipv4_mapped
-        if address == _METADATA_IP and not allow_link_local:
+        if address == _METADATA_IP:
             raise _Refusal("metadata_blocked")
         if address.is_loopback and not allow_loopback:
             raise _Refusal("loopback_blocked")
@@ -433,6 +480,8 @@ def _stream_jpeg(
     base_name: str,
     max_bytes: int,
     secret_values: tuple[str, ...],
+    *,
+    deadline: float | None = None,
 ) -> str:
     content_type = response.headers.get("Content-Type", "")
     media_type = content_type.split(";", 1)[0].strip().lower()
@@ -450,9 +499,18 @@ def _stream_jpeg(
     try:
         with output:
             while True:
+                if deadline is not None:
+                    _set_response_read_timeout(
+                        response,
+                        _remaining_attempt_seconds(deadline),
+                    )
                 read_size = min(64 * 1024, max_bytes - total + 1)
                 try:
-                    chunk = response.read(read_size)
+                    chunk = _read_response_chunk(
+                        response,
+                        read_size,
+                        deadline=deadline,
+                    )
                 except (OSError, http.client.HTTPException) as exc:
                     if _retryable(exc):
                         raise _network_failure(exc) from None
@@ -493,7 +551,11 @@ def _one_attempt(
         urllib.request.ProxyHandler({}),
         _NoRedirectHandler(),
     )
+    if not (0 < timeout_s < float("inf")):
+        raise ValueError("timeout_s must be a positive finite number")
+    attempt_deadline = time.monotonic() + min(timeout_s, _DEFAULT_ATTEMPT_DEADLINE_S)
     for redirects in range(4):
+        _remaining_attempt_seconds(attempt_deadline)
         try:
             parsed, _host, port = _validate_target(
                 current_url,
@@ -509,7 +571,11 @@ def _one_attempt(
         if authorization is not None and _origin(parsed, port) == initial_origin:
             headers["Authorization"] = authorization
         try:
-            response = opener.open(urllib.request.Request(current_url, headers=headers), timeout=timeout_s)
+            socket_timeout = _remaining_attempt_seconds(attempt_deadline)
+            response = opener.open(
+                urllib.request.Request(current_url, headers=headers),
+                timeout=socket_timeout,
+            )
         except urllib.error.HTTPError as exc:
             if 300 <= exc.code < 400:
                 location = exc.headers.get("Location") if exc.headers is not None else None
@@ -552,6 +618,7 @@ def _one_attempt(
                 _filename_from_url(current_url, secret_values),
                 max_bytes,
                 secret_values,
+                deadline=attempt_deadline,
             )
         finally:
             response.close()
