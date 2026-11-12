@@ -83,11 +83,11 @@ FMT_OVERLAY_TWIN = "Cặp điểm nối (Twin pairs) — {method}"
 
 HIST_COL_TIME = "Thời gian"
 HIST_COL_IMAGE = "Ảnh"
-HIST_COL_VERDICT = "Verdict"
-HIST_COL_METHODS = "Methods"
+HIST_COL_VERDICT = "Dấu hiệu"
+HIST_COL_METHODS = "Số phương pháp"
 HIST_COL_ID = "ID"
 
-STATS_COL_VERDICT = "Verdict"
+STATS_COL_VERDICT = "Dấu hiệu"
 STATS_COL_COUNT = "Số lượng"
 FMT_STATS_SUMMARY = "{n} phân tích · thời gian TB: {avg_ms:.0f} ms"
 

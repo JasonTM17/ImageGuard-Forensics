@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -24,6 +25,24 @@ from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.widgets.image_canvas import ImageCanvas
+
+
+def _table_cell(text: str) -> QTableWidgetItem:
+    """Create a read-only cell; tooltip carries full text when the column is narrow."""
+    item = QTableWidgetItem(text)
+    item.setToolTip(text)
+    return item
+
+
+def _configure_history_table(table: QTableWidget) -> None:
+    """Verdict/methods/time fit content; ảnh column fills spare width."""
+    header = table.horizontalHeader()
+    header.setStretchLastSection(False)
+    header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+    header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+    header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+    header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+    header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
 
 
 class HistoryScreen(QWidget):
@@ -40,6 +59,7 @@ class HistoryScreen(QWidget):
             strings.HIST_COL_METHODS,
             strings.HIST_COL_ID,
         ])
+        _configure_history_table(self.table)
         self.table.setColumnHidden(4, True)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -85,12 +105,13 @@ class HistoryScreen(QWidget):
                 f"Không đọc được lịch sử phân tích: {type(e).__name__}: {e}")
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
-            self.table.setItem(i, 0, QTableWidgetItem(r["created_at"][:19]))
-            self.table.setItem(i, 1, QTableWidgetItem(r["image_name"]))
-            self.table.setItem(i, 2, QTableWidgetItem(
-                strings.VERDICT_LABEL.get(r["verdict"], r["verdict"])))
-            self.table.setItem(i, 3, QTableWidgetItem(str(r["n_methods"])))
-            self.table.setItem(i, 4, QTableWidgetItem(r["id"]))
+            self.table.setItem(i, 0, _table_cell(r["created_at"][:19]))
+            self.table.setItem(i, 1, _table_cell(r["image_name"]))
+            verdict_text = strings.VERDICT_LABEL.get(r["verdict"], r["verdict"])
+            self.table.setItem(i, 2, _table_cell(verdict_text))
+            self.table.setItem(i, 3, _table_cell(str(r["n_methods"])))
+            self.table.setItem(i, 4, _table_cell(r["id"]))
+        self.table.resizeColumnsToContents()
         self.lbl_empty.setVisible(not rows)
 
     def _selected_id(self) -> str | None:

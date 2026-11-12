@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -15,6 +15,14 @@ from PySide6.QtWidgets import (
 from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.screens.history import _table_cell
+
+
+def _configure_stats_table(table: QTableWidget) -> None:
+    header = table.horizontalHeader()
+    header.setStretchLastSection(False)
+    header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+    header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
 
 
 class StatsScreen(QWidget):
@@ -34,6 +42,7 @@ class StatsScreen(QWidget):
             strings.STATS_COL_VERDICT,
             strings.STATS_COL_COUNT,
         ])
+        _configure_stats_table(self.table)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         lay.addWidget(self.table)
         self.btn = QPushButton(strings.BTN_REFRESH)
@@ -58,6 +67,7 @@ class StatsScreen(QWidget):
         rows = s.get("by_verdict", {})
         self.table.setRowCount(len(rows))
         for i, (v, n) in enumerate(rows.items()):
-            self.table.setItem(i, 0, QTableWidgetItem(
-                strings.VERDICT_LABEL.get(v, v)))
-            self.table.setItem(i, 1, QTableWidgetItem(str(n)))
+            label = strings.VERDICT_LABEL.get(v, v)
+            self.table.setItem(i, 0, _table_cell(label))
+            self.table.setItem(i, 1, _table_cell(str(n)))
+        self.table.resizeColumnsToContents()
