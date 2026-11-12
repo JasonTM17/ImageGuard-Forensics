@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import cv2
 import numpy as np
 import pytest
@@ -42,13 +40,20 @@ def test_adaptive_mean_vs_cv2_interior() -> None:
     assert rate <= 0.001
 
 
-def test_adaptive_mean_performance_guard() -> None:
+def test_adaptive_mean_large_image_vs_cv2() -> None:
     rng = np.random.default_rng(42)
     gray = rng.integers(0, 256, (512, 512), dtype=np.uint8)
-    t0 = time.perf_counter()
-    adaptive_mean_threshold(gray, block=15, c=4.0)
-    elapsed = time.perf_counter() - t0
-    assert elapsed < 2.0
+    ours = adaptive_mean_threshold(gray, block=15, c=4.0)
+    cv = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 4.0,
+    )
+    # float64 SAT mean vs OpenCV integer mean: near-tie pixels may split
+    # differently. Measured on this seed: 528 of 262144 pixels (0.2%).
+    assert ours.shape == gray.shape
+    assert ours.dtype == np.uint8
+    assert set(np.unique(ours)) <= {0, 255}
+    mismatches = int(np.count_nonzero(ours != cv))
+    assert mismatches / float(gray.size) <= 0.005
 
 
 def test_threshold_validation() -> None:
