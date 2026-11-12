@@ -47,33 +47,52 @@ def _validate_out_dir(path: Path) -> Path:
     return resolved
 
 
+def _resize_to_fit(source: np.ndarray, scale: float) -> np.ndarray:
+    """Downscale ``source`` by ``scale``; always loses at least 1px per axis."""
+    h, w = source.shape[:2]
+    nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+    if nw == w and nh == h:
+        nw, nh = max(1, w - 1), max(1, h - 1)
+    return cv2.resize(source, (nw, nh), interpolation=cv2.INTER_AREA)
+
+
 def write_png_limited(bgr: np.ndarray, path: Path, max_bytes: int = MAX_PNG_BYTES) -> int:
-    """Encode BGR to PNG, downscaling until ``max_bytes`` if needed."""
+    """Encode BGR to PNG, downscaling until the payload is at most ``max_bytes``.
+
+    Returns the number of bytes written. Raises ``ValueError`` (leaving the
+    previous file untouched) when no size fits, so an oversized PNG never
+    reaches disk.
+    """
     if bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("image must be H×W×3 BGR")
     if bgr.size == 0:
         raise ValueError("image must be non-empty")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, (int, np.integer)):
+        raise TypeError("max_bytes must be an integer")
+    cap = int(max_bytes)
+    if cap <= 0:
+        raise ValueError("max_bytes must be positive")
+
     source = np.ascontiguousarray(bgr)
-    last_size = 0
-    for scale in (1.0, 0.85, 0.7, 0.55, 0.45, 0.35, 0.28):
-        if scale != 1.0:
-            h, w = source.shape[:2]
-            nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
-            img = cv2.resize(source, (nw, nh), interpolation=cv2.INTER_AREA)
-        else:
-            img = source
+    scale = 1.0
+    img = source
+    while True:
         ok, buf = cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 9])
         if not ok:
             raise ValueError("OpenCV could not encode PNG")
         payload = buf.tobytes()
-        last_size = len(payload)
-        if last_size <= max_bytes:
+        if len(payload) <= cap:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(payload)
-            return last_size
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
-    return last_size
+            return len(payload)
+        if min(img.shape[:2]) <= 1:
+            raise ValueError(
+                f"cannot encode PNG within {cap} bytes; "
+                f"smallest attempt was {len(payload)} bytes at "
+                f"{img.shape[1]}×{img.shape[0]}"
+            )
+        scale *= 0.85
+        img = _resize_to_fit(source, scale)
 
 
 def _labeled_row(panels: list[np.ndarray], labels: list[str], gap: int = 8) -> np.ndarray:
