@@ -6,6 +6,7 @@ metadata, methods, progress, verdict banner + method cards khi xong).
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 import cv2
@@ -13,6 +14,8 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QGridLayout,
+    QGroupBox,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -42,6 +45,7 @@ class AnalyzeScreen(QWidget):
         self._svc = service
         self._pool = make_pool()
         self._worker: AnalysisWorker | None = None
+        self._cancel_event: threading.Event | None = None
         self._path: Path | None = None
         self._report: ForensicReport | None = None
         self._doc = None
@@ -69,7 +73,8 @@ class AnalyzeScreen(QWidget):
         self.lbl_meta.setWordWrap(True)
         rl.addWidget(self.lbl_meta)
 
-        rl.addWidget(QLabel(strings.LBL_METHODS))
+        methods_box = QGroupBox(strings.LBL_METHODS)
+        methods_grid = QGridLayout(methods_box)
         self.chk_kp = QCheckBox(strings.METHOD_LABEL["copy_move_keypoint"])
         self.chk_kp.setChecked(True)
         self.chk_bl = QCheckBox(strings.METHOD_LABEL["copy_move_block"])
@@ -79,7 +84,7 @@ class AnalyzeScreen(QWidget):
         self.chk_nloc = QCheckBox(strings.METHOD_LABEL["noise_local"])
         self.chk_freq = QCheckBox(strings.METHOD_LABEL["frequency_analysis"])
         self.chk_spl = QCheckBox(strings.METHOD_LABEL["splicing_cues"])
-        for method_key, c in (
+        method_checks = (
             ("copy_move_keypoint", self.chk_kp),
             ("copy_move_block", self.chk_bl),
             ("ela", self.chk_ela),
@@ -87,14 +92,16 @@ class AnalyzeScreen(QWidget):
             ("noise_local", self.chk_nloc),
             ("frequency_analysis", self.chk_freq),
             ("splicing_cues", self.chk_spl),
-        ):
+        )
+        for i, (method_key, c) in enumerate(method_checks):
             label = strings.METHOD_LABEL[method_key]
             a11y_name = strings.FMT_A11Y_ANALYZE_METHOD.format(
                 group=strings.A11Y_ANALYZE_METHODS,
                 label=label,
             )
             apply_a11y(c, a11y_name)
-            rl.addWidget(c)
+            methods_grid.addWidget(c, i // 2, i % 2)
+        rl.addWidget(methods_box)
 
         self.btn_run = QPushButton(strings.BTN_RUN)
         apply_a11y(self.btn_run, strings.A11Y_ANALYZE_RUN)
@@ -136,6 +143,7 @@ class AnalyzeScreen(QWidget):
 
         self.cards_area = QScrollArea()
         apply_a11y(self.cards_area, strings.A11Y_ANALYZE_CARDS)
+        self.cards_area.setMinimumHeight(180)
         self.cards_area.setWidgetResizable(True)
         self.cards_inner = QWidget()
         self.cards_layout = QVBoxLayout(self.cards_inner)
@@ -264,7 +272,9 @@ class AnalyzeScreen(QWidget):
         self._clear_results()  # ẩn banner/export/cards cũ trước khi run mới
         self.lbl_err.setText("")
         self.progress.setValue(0)
-        req = AnalysisRequest(path=self._path, methods=methods)
+        self._cancel_event = threading.Event()
+        req = AnalysisRequest(
+            path=self._path, methods=methods, cancel=self._cancel_event)
         self._worker = AnalysisWorker(self._svc, req)
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.result.connect(self._on_result)
@@ -276,6 +286,7 @@ class AnalyzeScreen(QWidget):
         if self._worker is not None:
             self._worker.cancel()
             self.btn_cancel.setEnabled(False)
+            self.lbl_status.setText(strings.STATUS_ANALYZE_CANCELLING)
 
     def _on_progress(self, frac: float, stage: str) -> None:
         self.progress.setValue(int(frac * 100))
@@ -328,6 +339,8 @@ class AnalyzeScreen(QWidget):
         self.overlay_box.show()
         self.btn_export.show()
         self._apply_overlay()
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            self.lbl_status.setText(strings.STATUS_ANALYZE_CANCELLED)
 
     def _export_report(self) -> None:
         if self._report is None:
@@ -369,8 +382,8 @@ class AnalyzeScreen(QWidget):
         if kind == "mask" and m.mask is not None:
             if m.mask.shape != shape:
                 self.canvas.set_overlay(None)
-                self.lbl_err.setText(
-                    f"Overlay bỏ qua: dims mask {m.mask.shape} ≠ ảnh {shape}")
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="mask", dims=m.mask.shape, shape=shape))
                 return
             bgr = self._doc.array.copy()
             bgr[m.mask > 0] = (0, 0, 255)
@@ -379,8 +392,8 @@ class AnalyzeScreen(QWidget):
         elif kind == "heat" and m.heatmap is not None:
             if m.heatmap.shape[:2] != shape:
                 self.canvas.set_overlay(None)
-                self.lbl_err.setText(
-                    f"Overlay bỏ qua: dims heatmap {m.heatmap.shape} ≠ ảnh {shape}")
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="heatmap", dims=m.heatmap.shape[:2], shape=shape))
                 return
             self.canvas.set_overlay(
                 heat_to_qpixmap(m.heatmap, shape), alpha=0.55)
@@ -390,5 +403,5 @@ class AnalyzeScreen(QWidget):
                 self.canvas.set_overlay(ndarray_to_qpixmap(pi), alpha=1.0)
             else:
                 self.canvas.set_overlay(None)
-                self.lbl_err.setText(
-                    f"Overlay bỏ qua: dims pairs {pi.shape} ≠ ảnh {shape}")
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="pairs", dims=pi.shape[:2], shape=shape))
