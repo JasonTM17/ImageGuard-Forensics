@@ -92,8 +92,10 @@ Before opening `locked`, freeze the primary objective and user-approved
 numerical tradeoffs from dev diagnosis. Locked inference requires a clean source
 checkout, `--pair-contract` and `--role baseline|candidate`; the contract binds
 manifest, protocol, seed, ordered methods, approved criteria hash and each
-role's source/config hashes. An exclusive event-role receipt prevents an
-ordinary repeat of that role. `compare` checks the paired reports against the
+role's source/config hashes. A sealed consumption ledger next to the contract
+binds each manifest/protocol cohort to a single `event_id` across roles; an
+exclusive event-role receipt still prevents an ordinary repeat of that role.
+`compare` checks the paired reports against the
 preregistered criteria. Preserve interrupted events for review; do not change a
 candidate after seeing test outputs and rerun it as an unseen evaluation.
 

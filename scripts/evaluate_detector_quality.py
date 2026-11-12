@@ -44,6 +44,7 @@ _SCORED_STATUS = frozenset(v.value for v in (
     Verdict.SUSPICIOUS_INDICATION, Verdict.NO_INDICATION, Verdict.INCONCLUSIVE))
 _UNSCORED_STATUS = frozenset((Verdict.ERROR.value, Verdict.NOT_APPLICABLE.value,
                              "method_exception", "input_excluded"))
+_COHORT_LEDGER = "locked-cohort-consumption.json"
 
 
 class HistoricalProtocolError(ValueError):
@@ -507,6 +508,36 @@ class CaptureMethod:
         return result
 
 
+def _cohort_ledger_claimed(recorded: dict, manifest_sha256: str,
+                           protocol_sha256: str, event_id: str) -> None:
+    if (recorded.get("manifest_sha256") != manifest_sha256
+            or recorded.get("protocol_sha256") != protocol_sha256):
+        raise ValueError("locked cohort consumption ledger does not match this cohort")
+    if recorded.get("event_id") != event_id:
+        raise ValueError("locked cohort already consumed under a different event_id")
+
+
+def _claim_locked_cohort(receipts_root: Path, *, manifest_sha256: str,
+                         protocol_sha256: str, event_id: str) -> None:
+    """Record one locked consumption per sealed manifest + protocol identity."""
+    _plain_path(receipts_root)
+    ledger_path = receipts_root / _COHORT_LEDGER
+    identity = {"manifest_sha256": manifest_sha256,
+                "protocol_sha256": protocol_sha256, "event_id": event_id}
+    if ledger_path.is_file():
+        try:
+            recorded = _load_sealed(ledger_path)
+        except ValueError as err:
+            raise ValueError("locked cohort consumption ledger is invalid or corrupt") from err
+        _cohort_ledger_claimed(recorded, manifest_sha256, protocol_sha256, event_id)
+        return
+    try:
+        _write(ledger_path, _sealed(identity))
+    except FileExistsError:
+        recorded = _load_sealed(ledger_path)
+        _cohort_ledger_claimed(recorded, manifest_sha256, protocol_sha256, event_id)
+
+
 def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, protocol):
     if contract_path is None or role not in {"baseline", "candidate"}:
         raise ValueError("locked inference requires --pair-contract and --role")
@@ -530,6 +561,8 @@ def _lock_pair(contract_path, role, identity, manifest, config_sha, methods, pro
     event = contract.get("event_id", "")
     if not isinstance(event, str) or not re.fullmatch(r"[a-zA-Z0-9-]{1,80}", event):
         raise ValueError("invalid locked event ID")
+    _claim_locked_cohort(contract_path.parent, manifest_sha256=manifest["sha256"],
+                         protocol_sha256=protocol, event_id=event)
     _write(contract_path.parent / f"event-{event}" / f"{role}.json",
            {"pair_sha256": file_hash(contract_path), "role": role})
     return file_hash(contract_path), contract["criteria_sha256"]
