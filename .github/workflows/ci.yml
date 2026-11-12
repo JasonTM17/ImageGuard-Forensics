@@ -27,6 +27,7 @@ jobs:
 
   test-py313:
     runs-on: windows-latest
+    continue-on-error: true  # compatibility signal only; required check is 'test'
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
