@@ -114,16 +114,34 @@ def test_safe_open_uses_the_bytes_it_hashed(
     path = tmp_path / "substituted.png"
     path.write_bytes(raw_a)
 
-    original_read_bytes = Path.read_bytes
+    original_open = Path.open
 
-    def read_a_then_replace_path(self: Path) -> bytes:
-        if self == path:
-            path.write_bytes(raw_b)
-            return raw_a
-        return original_read_bytes(self)
+    class _ReplaceAfterRead:
+        def __init__(self, handle) -> None:
+            self._handle = handle
 
-    # The captured buffer is image A while later path reads would see image B.
-    monkeypatch.setattr(Path, "read_bytes", read_a_then_replace_path)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> None:
+            self._handle.close()
+
+        def fileno(self) -> int:
+            return self._handle.fileno()
+
+        def read(self, size: int = -1) -> bytes:
+            data = self._handle.read(size)
+            with original_open(path, "wb") as out:
+                out.write(raw_b)
+            return data
+
+    def open_then_replace(self: Path, *args, **kwargs):
+        handle = original_open(self, *args, **kwargs)
+        return _ReplaceAfterRead(handle) if self == path else handle
+
+    # The path is rewritten to image B right after the read; the decoded and
+    # hashed bytes must still be the ones that were read (image A).
+    monkeypatch.setattr(Path, "open", open_then_replace)
 
     doc = safe_open(path, ts)
 
@@ -139,14 +157,29 @@ def test_safe_open_rejects_read_buffer_over_max_bytes(
     path = tmp_path / "oversized.png"
     path.write_bytes(b"x")
     cfg = ThresholdSet(raw={"limits": {"max_file_bytes": {"value": 3}}})
-    original_read_bytes = Path.read_bytes
+    original_open = Path.open
 
-    def return_oversized_buffer(self: Path) -> bytes:
-        if self == path:
+    class _Oversized:
+        def __init__(self, handle) -> None:
+            self._handle = handle
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> None:
+            self._handle.close()
+
+        def fileno(self) -> int:
+            return self._handle.fileno()
+
+        def read(self, size: int = -1) -> bytes:
             return b"four"
-        return original_read_bytes(self)
 
-    monkeypatch.setattr(Path, "read_bytes", return_oversized_buffer)
+    def open_oversized(self: Path, *args, **kwargs):
+        handle = original_open(self, *args, **kwargs)
+        return _Oversized(handle) if self == path else handle
+
+    monkeypatch.setattr(Path, "open", open_oversized)
 
     result = safe_open(path, cfg)
 

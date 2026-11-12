@@ -27,8 +27,6 @@ from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.metadata import extract_exif
 from imageguard.core.models import ImageDocument
 
-_ORIGINAL_PATH_READ_BYTES = Path.read_bytes
-
 
 def _sniff_format(head: bytes) -> str | None:
     for magic, fmt in limits.MAGIC_TABLE:
@@ -74,17 +72,6 @@ def safe_open(
             f"File {len(raw)} bytes vượt giới hạn {max_bytes}",
             size=len(raw),
         )
-    if Path.read_bytes is not _ORIGINAL_PATH_READ_BYTES:
-        try:
-            probe = p.read_bytes()
-        except OSError as e:
-            return _err(ErrorCode.FILE_UNREADABLE, f"Không đọc được file: {e}")
-        if len(probe) > max_bytes:
-            return _err(
-                ErrorCode.FILE_TOO_LARGE,
-                f"File {len(probe)} bytes vượt giới hạn {max_bytes}",
-                size=len(probe),
-            )
     head = raw[: limits.SNIFF_BYTES]
     fmt = _sniff_format(head)
     if fmt is None:
