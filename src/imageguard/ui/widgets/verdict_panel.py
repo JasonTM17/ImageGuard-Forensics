@@ -57,9 +57,12 @@ class MethodCard(QFrame):
         head = QLabel(f"<b>{title}</b> — {verdict_txt}")
         head.setWordWrap(True)
         lay.addWidget(head)
+        apply_a11y(self, strings.FMT_A11Y_METHOD_CARD.format(title=title))
         if result.score is not None:
-            lay.addWidget(QLabel(f"score = {result.score:.4g}  "
-                                 f"({result.score_definition})"))
+            score_lbl = QLabel(f"score = {result.score:.4g}  "
+                               f"({result.score_definition})")
+            score_lbl.setWordWrap(True)
+            lay.addWidget(score_lbl)
         for lim in result.limitations[:4]:
             l = QLabel(f"• {lim}")
             l.setWordWrap(True)
