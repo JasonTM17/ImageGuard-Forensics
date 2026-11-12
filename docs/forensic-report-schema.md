@@ -137,14 +137,24 @@ CLI `--methods` nhận alias registry (`keypoint`, `block`, `ela`, …); JSON lu
 
 ## Ổn định giữa các lần chạy
 
-| Thay đổi (volatile) | Ổn định khi cùng file byte + cùng `--methods` + cùng bản build/ngưỡng |
-|---------------------|------------------------------------------------------------------------|
-| `report_id`, `created_at` | — |
-| `duration_ms` (từng method) | — |
-| `image_sha256`, `image_name`, `image_width`, `image_height` | Có |
-| `thresholds_hash`, `params_hash` | Có (cùng file cấu hình) |
-| `overall_verdict`, `verdict`, `score`, `evidence` (phần lớn) | Có (deterministic theo thuật toán; trừ float/OS timer) |
-| `tool_version`, `env.*` | Phụ thuộc bản cài |
+Chỉ ba trường sau **thay đổi** giữa hai lần chạy trên cùng file byte, cùng
+`--methods`, cùng bản build và cùng ngưỡng:
+
+| Trường | Nguồn trong mã |
+|--------|-----------------|
+| `report_id` | `str(uuid.uuid4())` cho mỗi phiên phân tích |
+| `created_at` | `datetime.now(UTC).isoformat()` khi dựng report |
+| `methods[].duration_ms` | `time.perf_counter()` của từng pipeline, làm tròn xuống mili-giây |
+
+Mọi trường forensic còn lại giữ nguyên: `image_sha256`, `image_name`,
+`image_width`, `image_height`, `thresholds_hash`, `overall_verdict`,
+`limitations`, `disclaimer`, và trong từng phần tử `methods[]`: `method`,
+`verdict`, `score`, `score_definition`, `evidence`, `limitations`,
+`params_hash`, `has_mask`. Ngoại lệ duy nhất là khi lần chạy gặp lỗi lưu
+lịch sử/artifact: report thêm một cảnh báo vào `limitations` (xem
+`AnalysisService.analyze`). `tool_version` và `env.*` chỉ đổi khi đổi bản cài
+hoặc môi trường Python/OpenCV/NumPy, không đổi giữa hai lần chạy trên cùng
+máy.
 
 Tổng thời gian pipeline (wall-clock) **không** có trường ở JSON stdout; chỉ tổng `methods[].duration_ms` có thể dùng để ước lượng (không bằng wall-clock).
 

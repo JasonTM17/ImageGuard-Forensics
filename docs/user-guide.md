@@ -26,7 +26,9 @@ chạy chính cho demo đồ án trừ khi bạn tự verify lại trên máy m�
 
 Lệnh in ra stdout cùng cấu trúc JSON mà ứng dụng lưu khi phân tích (báo cáo dấu hiệu).
 Nếu thoát mã khác 0, đó là `ErrorResult` (ví dụ file không đọc được), không phải một verdict
-forensics trên ảnh.
+forensics trên ảnh. Giữa hai lần chạy trên cùng file, chỉ `report_id`, `created_at` và
+`methods[].duration_ms` có thể thay đổi; các trường forensic còn lại giữ nguyên khi cùng
+byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
 
 ## Quy trình phân tích
 
@@ -122,3 +124,23 @@ Thêm `--config <file>` sau `<dir>` để dùng cấu hình riêng. Cấu hình 
 mặc định nằm trong `data/`, thư mục đã được gitignore. `enhance_sibling` mặc
 định tắt. Khi bật, ingest ghi thêm `<tên>.view.png` để xem, không phân tích
 file đó và không đổi file gốc.
+
+Mỗi lần quét in một dòng tổng kết đúng dạng:
+
+```text
+ingest once: analyzed=1 errors=0 skipped_duplicate=0 deferred=2
+```
+
+`max_pending` (khóa cấp cao nhất trong file YAML của ingest, số nguyên dương,
+mặc định `1`) giới hạn số file **mỗi lần quét** gửi vào phân tích. File vượt
+hạn mức bị **deferred**: vẫn nằm trên đĩa và có dòng custody `deferred`, nhưng
+**chưa được phân tích, chưa được decode hay kiểm tra hợp lệ** — mới chỉ qua
+kiểm tra magic bytes và độ ổn định của file. Vì vậy `errors=0` cùng
+`deferred>0` **không** có nghĩa mọi file trong thư mục đều hợp lệ: một file
+hỏng nằm trong nhóm deferred chỉ làm tăng `errors` khi lần quét sau thực sự
+gửi nó đi phân tích. `deferred` chỉ đếm số file **mới** bị đánh dấu trong lần
+quét đó; file đã bị đánh dấu từ lần trước không được đếm lại dù vẫn đang chờ.
+
+Để xử lý phần còn lại, chạy lại `ingest once <dir>` (file từng bị deferred
+được xếp trước ở lần quét kế tiếp) hoặc tăng `max_pending` trong file cấu hình
+ingest; `ingest watch` lặp lại hạn mức đó ở mỗi lần quét.

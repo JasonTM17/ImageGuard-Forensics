@@ -20,6 +20,39 @@ The config supports `camera_label`, `max_pending` (default `1`), `methods`
 enabled, the HTTP snapshot puller may place finished JPEGs in the watched
 folder. Folder scanning itself does not open network connections.
 
+## Summary line and deferred files
+
+Every scan prints one summary line in exactly this shape:
+
+```text
+ingest once: analyzed=2 errors=0 skipped_duplicate=1 deferred=3
+```
+
+`ingest watch` prints the same line with `watch` in place of `once`, and only
+for scans that had activity. `analyzed` counts files submitted to
+`AnalysisService` and reported without error, `errors` counts submitted files
+that came back as an error, and `skipped_duplicate` counts files whose SHA-256
+was already seen in the same scan.
+
+`max_pending` in the ingest YAML (top-level key, positive integer, default `1`)
+caps how many files **one scan** submits for analysis. Every remaining
+candidate is **deferred**: it is recorded as a `deferred` custody event and
+left on disk, but it has **not** been analyzed, and its bytes have **not** been
+decoded or validated — only the magic-byte sniff and the file-stability check
+ran. Therefore `errors=0` together with `deferred>0` does **not** mean every
+file in the folder is valid: a corrupt image among the deferred files only
+produces an `error` (and increments `errors`) once a later scan actually
+submits it.
+
+`deferred` counts files newly marked deferred by that scan. A file that was
+already marked `deferred` in an earlier scan is not counted again even while it
+still waits, so `deferred=0` alone is not proof that nothing is left.
+
+To process the rest, rerun `ingest once <dir>` (files with a prior `deferred`
+event are ordered first in the next scan), or raise `max_pending` in the ingest
+YAML so one scan submits more files. `ingest watch` repeats the same per-scan
+budget on each poll.
+
 Optional boolean `enhance_sibling` (default `false`): when `true`, after a
 successful ingest analysis the scanner loads the same source file with
 `safe_open`, runs the classical unsharp derive used elsewhere, and writes
