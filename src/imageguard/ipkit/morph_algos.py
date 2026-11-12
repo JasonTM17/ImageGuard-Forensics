@@ -39,16 +39,26 @@ def require_binary_image(img: np.ndarray, *, name: str = "binary") -> np.ndarray
     --------
     >>> require_binary_image(np.array([[0, 255], [255, 0]], dtype=np.uint8)).shape
     (2, 2)
+
+    Ghi chú bước (tối thiểu hoá dùng bộ nhớ khi đã đúng kiểu)::
+
+        uint8:  0→False, 255→True   (ví dụ 1×2: [0,255] → [F,T])
     """
+    # Đưa đầu vào về ndarray để kiểm tra hình dạng/thuộc tính thống nhất (tiền xử lý morphology)
     arr = np.asarray(img)
+    # Morphology nhị phân chỉ áp dụng trên lưới 2D có ít nhất một pixel
     if arr.ndim != 2 or arr.size == 0:
         raise ValueError(f"{name} must be a non-empty 2D array")
+    # bool/True=tiền cảnh: không copy nếu đã bool — tránh đổi hành vi tham chiếu không cần thiết
     if arr.dtype == np.bool_ or arr.dtype == bool:
         return arr.astype(bool, copy=False)
     if arr.dtype == np.uint8:
+        # Chỉ 0 và 255: mọi giá trị xám khác không phải mask nhị phân chuẩn trong bài
         if not np.all((arr == 0) | (arr == 255)):
             raise ValueError(f"{name} uint8 must contain only 0 and 255")
+        # 255≠0 trong uint8 nên astype(bool) đúng quy ước True=đối tượng đen/tiền cảnh
         return arr.astype(bool)
+    # Các kiểu khác (float, int...) không được dùng trực tiếp cho phép toán tập hợp C4
     raise TypeError(f"{name} must be bool or uint8 (0/255)")
 
 
@@ -56,8 +66,11 @@ def _check_hit_or_miss_pair(
     se_fg: np.ndarray, se_bg: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """Kiểm tra cặp SE hit-or-miss cùng kích thước lẻ, chỉ 0/1, không trùng foreground/background."""
+    # B₁: tập vị trí trong SE phải khớp tiền cảnh khi erosion trên A (hit-or-miss / morphology)
     fg = _check_se(se_fg).astype(bool)
+    # B₂: tập vị trí phải khớp nền khi erosion trên phần bù Aᶜ
     bg = _check_se(se_bg).astype(bool)
+    # Hai mẫu cùng “cửa sổ” quanh gốc — lệch shape sẽ làm lệch tọa độ hit
     if fg.shape != bg.shape:
         raise ValueError("se_fg and se_bg must have the same shape")
     # Trên slide, B₁ và B₂ có thể cùng đánh dấu 1 tại một ô: lần lượt kiểm tra trên A và Aᶜ
@@ -65,33 +78,48 @@ def _check_hit_or_miss_pair(
 
 
 def _binary_erode(mask: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Co nhị phân: điểm z thuộc A⊖B khi mọi pixel của B dịch tới z nằm trong A (C4, erosion)."""
+    """Co nhị phân: điểm z thuộc A⊖B khi mọi pixel của B dịch tới z nằm trong A (C4, erosion).
+
+    Ví dụ tư duy 3×3, B toàn 1: pixel trung tâm chỉ giữ True nếu cả vùng 3×3 quanh nó
+    trên A đều True — giống “lọc AND” theo structuring element.
+    """
     elem = _check_se(se).astype(bool)
     h, w = mask.shape
     kh, kw = elem.shape
+    # Tâm SE tại (ph,pw): padding bằng nửa kích thước để dịch B khớp mọi z trong ảnh gốc
     ph, pw = kh // 2, kw // 2
     # Nền ảo False: dịch B ra ngoài biên không thể “nằm gọn” trong A
     pad = np.pad(mask, ((ph, ph), (pw, pw)), mode="constant", constant_values=False)
+    # Chỉ xét ô B=1 — ô 0 trong SE không ràng buộc (chuẩn morphology nhị phân)
     active = np.argwhere(elem)
     if active.size == 0:
+        # SE rỗng / không có pixel bật: giao rỗng → co ra toàn False
         return np.zeros((h, w), dtype=bool)
+    # Khởi tạo “mọi z đủ điều kiện”, rồi AND dần từng mẫu dịch B
     out = np.ones((h, w), dtype=bool)
     for ky, kx in active:
+        # Cắt cửa sổ h×w của mask đã pad: tương ứng mask dịch theo offset (ky,kx) trong SE
         slab = pad[ky : ky + h, kx : kx + w]
         out &= slab
     return out
 
 
 def _binary_dilate(mask: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Giãn nhị phân: A⊕B là tập dịch z sao cho B phản xạ và A giao nhau (C4, dilation)."""
+    """Giãn nhị phân: A⊕B là tập dịch z sao cho B phản xạ và A giao nhau (C4, dilation).
+
+    Đối lập erosion: pixel z True nếu có **ít nhất một** dịch B (tại ô active của SE)
+    sao cho vùng tương ứng trên mask có giao với True — tư duy “lọc OR”.
+    """
     elem = _check_se(se).astype(bool)
     h, w = mask.shape
     kh, kw = elem.shape
     ph, pw = kh // 2, kw // 2
+    # Cùng quy ước padding như erosion: biên ảnh coi là nền khi dịch SE
     pad = np.pad(mask, ((ph, ph), (pw, pw)), mode="constant", constant_values=False)
     active = np.argwhere(elem)
     if active.size == 0:
         return np.zeros((h, w), dtype=bool)
+    # Bắt đầu từ rỗng, cộng (OR) các bản sao mask dịch theo từng điểm của B
     out = np.zeros((h, w), dtype=bool)
     for ky, kx in active:
         slab = pad[ky : ky + h, kx : kx + w]
@@ -100,7 +128,12 @@ def _binary_dilate(mask: np.ndarray, se: np.ndarray) -> np.ndarray:
 
 
 def _binary_open(mask: np.ndarray, se: np.ndarray) -> np.ndarray:
-    """Mở nhị phân: giãn(co(A,B),B) — dùng cho phần thân xương Lantuejoul."""
+    """Mở nhị phân: giãn(co(A,B),B) — dùng cho phần thân xương Lantuejoul.
+
+    Mở cắt gai nhỏ và làm phẳng biên cục bộ; trong skeleton, Aₖ−(Aₖ∘B) giữ “lõi”
+    không bị mở nuốt mất.
+    """
+    # ∘ = mở: co trước (bỏ chi tiết nhỏ hơn B) rồi giãn (khôi phục kích thước vùng còn)
     return _binary_dilate(_binary_erode(mask, se), se)
 
 
@@ -136,6 +169,7 @@ def hit_or_miss(binary: np.ndarray, se_fg: np.ndarray, se_bg: np.ndarray) -> np.
     in_fg = _binary_erode(mask, fg.astype(np.uint8))
     # Erosion trên nền: B₂ phải nằm trong phần bù A
     in_bg = _binary_erode(~mask, bg.astype(np.uint8))
+    # Hit tại z khi cả hai điều kiện erosion đồng thời đúng — giao tập hợp trên slide
     return in_fg & in_bg
 
 
@@ -163,6 +197,7 @@ def boundary_extraction(binary: np.ndarray, se: np.ndarray) -> np.ndarray:
     """
     mask = require_binary_image(binary)
     elem = _check_se(se)
+    # Co A bằng B: lõi “còn sau erosion” — pixel nằm sâu trong đối tượng
     eroded = _binary_erode(mask, elem)
     # Hiệu tập hợp: giữ pixel thuộc A nhưng bị mất sau co
     return mask & ~eroded
@@ -205,10 +240,12 @@ def region_filling(
     """
     mask = require_binary_image(binary)
     elem = _check_se(se)
+    # Aᶜ: vùng nền — chỉ giãn/lấp trong phần bù của tiền cảnh (region filling / morphology)
     ac = ~mask
     if seed is None:
         # Nền nối biên ảnh; phần nền còn lại là lỗ kín — hợp với A để lấp lỗ (auto border seed)
         exterior = _border_connected_background(ac)
+        # Lỗ = nền không 4-liên thông ra viền ảnh (hố kín trong đối tượng)
         holes = ac & ~exterior
         return mask | holes
     s = np.asarray(seed)
@@ -216,12 +253,15 @@ def region_filling(
         raise TypeError("seed must be a bool array")
     if s.shape != mask.shape:
         raise ValueError("seed must be a bool mask with the same shape as binary")
+    # Hạt ban đầu phải nằm trong lỗ (nền), không trên tiền cảnh
     x = s & ac
     prev = np.zeros_like(x)
     # Lặp giãn trong Aᶜ từ hạt bên trong như công thức Xₖ trên slide
     while not np.array_equal(x, prev):
         prev = x.copy()
+        # Giãn nhưng cắt bởi Aᶜ — không “tràn” vào tiền cảnh
         x = _binary_dilate(x, elem) & ac
+    # Hợp lỗ đã lan với A: lỗ nội bộ chuyển thành foreground
     return mask | x
 
 
@@ -238,13 +278,16 @@ def fill_holes(
 def _border_connected_background(ac: np.ndarray) -> np.ndarray:
     """Đánh dấu mọi pixel nền (True trong ac) 4-liên thông với viền ảnh."""
     h, w = ac.shape
+    # B vuông 3×3 ≈ giãn 8-neighborhood dùng trong lặp lan truyền morphology
     se = np.ones((3, 3), dtype=np.uint8)
     x = np.zeros((h, w), dtype=bool)
+    # X₀: mọi pixel nền trên bốn cạnh ảnh — “cầu nối” ra vô cực ngoài khung
     x[0, :] |= ac[0, :]
     x[-1, :] |= ac[-1, :]
     x[:, 0] |= ac[:, 0]
     x[:, -1] |= ac[:, -1]
     prev = np.zeros_like(x)
+    # Lặp giãn∩nền cho tới bão hoà: connected components / region filling phụ trợ
     while not np.array_equal(x, prev):
         prev = x.copy()
         x = (_binary_dilate(x, se) & ac) | x
@@ -286,6 +329,7 @@ def connected_components(
     mask = require_binary_image(binary)
     h, w = mask.shape
     labels = np.zeros((h, w), dtype=np.int32)
+    # Quét một phần láng giềng đủ để không bỏ sót cạnh khi duyệt trái→phải, trên→dưới
     if connectivity == 4:
         offsets = [(-1, 0), (0, -1)]
     else:
@@ -294,6 +338,7 @@ def connected_components(
     parent: list[int] = [0]
 
     def find(i: int) -> int:
+        # Path compression: rút ngắn cây nhãn tương đương (segmentation / components)
         while parent[i] != i:
             parent[i] = parent[parent[i]]
             i = parent[i]
@@ -315,10 +360,12 @@ def connected_components(
                 if 0 <= ny < h and 0 <= nx < w and labels[ny, nx] > 0:
                     neigh_labels.append(labels[ny, nx])
             if not neigh_labels:
+                # Thành phần mới: tách nhãn chưa gộp
                 parent.append(next_label)
                 labels[y, x] = next_label
                 next_label += 1
             else:
+                # Gộp nhãn láng giềng: dùng min làm đại diện tạm (equivalence trên slide)
                 m = min(neigh_labels)
                 labels[y, x] = m
                 for other in neigh_labels:
@@ -344,6 +391,7 @@ def connected_components(
 
 def _convex_hull_structuring_pairs() -> list[tuple[np.ndarray, np.ndarray]]:
     """Bốn cặp SE hit-or-miss trong slide convex hull (hướng Đông, Bắc, Tây, Nam)."""
+    # Mỗi hàng: (B₁,B₂) bắt “góc lõm” cục bộ để bù pixel làm lồi — morphology / hit-or-miss
     return [
         (
             np.array([[0, 0, 0], [0, 1, 1], [0, 1, 1]], dtype=np.uint8),
@@ -397,6 +445,7 @@ def convex_hull(binary: np.ndarray) -> np.ndarray:
         for se_fg, se_bg in pairs:
             hits = hit_or_miss(work, se_fg, se_bg)
             if np.any(hits):
+                # Hợp pixel hit vào tập làm việc — mở rộng dần về phía lõm
                 work |= hits
                 changed = True
     return work
@@ -404,6 +453,7 @@ def convex_hull(binary: np.ndarray) -> np.ndarray:
 
 def _thinning_structuring_pairs() -> list[tuple[np.ndarray, np.ndarray]]:
     """Bộ SE xoay 90° cho làm mảnh (hit-or-miss), theo chuỗi B₁…Bₙ trong slide."""
+    # Mẫu gốc 3×3: bắt điểm đầu/cạnh có thể gỡ mà không đứt đối tượng (thinning hit-or-miss)
     base_fg = np.array(
         [
             [0, 0, 0],
@@ -422,6 +472,7 @@ def _thinning_structuring_pairs() -> list[tuple[np.ndarray, np.ndarray]]:
     )
     pairs: list[tuple[np.ndarray, np.ndarray]] = []
     fg, bg = base_fg, base_bg
+    # Xoay 90° bốn lần → bộ SE đối xứng quay cho mọi hướng biên (thinning morphology)
     for _ in range(4):
         pairs.append((fg.copy(), bg.copy()))
         fg = np.rot90(fg)
@@ -463,6 +514,7 @@ def thinning(binary: np.ndarray, *, max_passes: int = 64) -> np.ndarray:
             hits = hit_or_miss(work, se_fg, se_bg)
             # Hiệu tập hợp: bỏ các pixel khớp mẫu làm mảnh
             work &= ~hits
+        # Dừng sớm khi một vòng cả bốn SE không đổi A — tiết kiệm vòng lặp demo
         if np.array_equal(work, before):
             break
     return work
@@ -493,6 +545,7 @@ def thickening(binary: np.ndarray, *, max_passes: int = 64) -> np.ndarray:
     np.True_
     """
     mask = require_binary_image(binary)
+    # Làm dày A ↔ làm mảnh phần bù Aᶜ (đối xứng morphology slide)
     comp = ~mask
     thinned_bg = thinning(comp, max_passes=max_passes)
     thick = ~thinned_bg
@@ -502,6 +555,7 @@ def thickening(binary: np.ndarray, *, max_passes: int = 64) -> np.ndarray:
 
 def _drop_isolated_points(mask: np.ndarray, connectivity: Connectivity) -> np.ndarray:
     """Xoá pixel foreground không có láng giềng foreground (theo connectivity)."""
+    # Chọn lưới láng giềng theo định nghĩa liên thông 4 hoặc 8 (segmentation / morphology)
     if connectivity == 4:
         neighbors = [
             (-1, 0),
@@ -531,6 +585,7 @@ def _drop_isolated_points(mask: np.ndarray, connectivity: Connectivity) -> np.nd
                 ny, nx = y + dy, x + dx
                 if 0 <= ny < h and 0 <= nx < w and mask[ny, nx]:
                     count += 1
+            # Điểm đơn lẻ không láng giềng foreground — artefact sau thickening
             if count == 0:
                 out[y, x] = False
     return out
@@ -577,9 +632,11 @@ def skeleton(
     # Co dần A cho tới rỗng, cộng dồn lõi sau mở tại mỗi mức
     while np.any(a_k):
         opened = _binary_open(a_k, elem)
+        # Sₖ = phần Aₖ bị “mất” khi mở — gai nhỏ và lõi 1-pixel rơi vào đây (skeleton morphology)
         sk = a_k & ~opened
         skel |= sk
         subsets.append(sk.copy())
+        # Bước kế: Aₖ₊₁ = Aₖ eroded — chuỗi co đa tỷ lệ Lantuejoul
         a_k = _binary_erode(a_k, elem)
     if return_subsets:
         return skel, subsets
