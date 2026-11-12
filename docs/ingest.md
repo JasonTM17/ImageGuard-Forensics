@@ -4,7 +4,14 @@ Folder ingest watches one directory for finished still images and sends them
 through `AnalysisService` serially. It ignores hidden names and files ending in
 `.tmp`, `.partial`, or `.filepart`, checks that file size and modification time
 stay stable across two observations, and sniffs image magic before analysis.
-It polls with the Python standard library and leaves input files in place.
+Symlinks and Windows reparse points (junctions) in the watched folder are not
+followed: each link is logged once as an `error` with `PATH_INVALID` and left
+on disk. Before SHA-256 hashing, file size is compared to the shared
+`MAX_FILE_BYTES` limit from `configs/thresholds.yaml` (`limits`); oversize files
+are logged once as `FILE_TOO_LARGE` without reading the full byte stream. After
+analysis, the report `image_sha256` must match the scan-time hash; a mismatch
+is recorded as `FILE_UNREADABLE` instead of `analyzed`. It polls with the
+Python standard library and leaves input files in place.
 
 Use `python -m imageguard ingest once <dir>` for a single scan or
 `python -m imageguard ingest watch <dir>` to keep polling. Add
@@ -16,9 +23,13 @@ under the gitignored `data/` directory.
 
 The config supports `camera_label`, `max_pending` (default `1`), `methods`
 (default `keypoint`, `block`, `ela`), a cwd-relative `data_dir` (default
-`data`), an optional `consent_note`, and an optional raw `http` mapping. When
-enabled, the HTTP snapshot puller may place finished JPEGs in the watched
-folder. Folder scanning itself does not open network connections.
+`data`), an optional `consent_note`, and an optional raw `http` mapping.
+`data_dir` must be relative to the process working directory when the config is
+loaded: absolute paths, `..` segments, drive-relative paths (for example
+`D:folder`), and root-relative Windows paths (for example `\private`) are
+rejected, and the resolved `data_dir` must remain under the resolved working
+directory. When enabled, the HTTP snapshot puller may place finished JPEGs in
+the watched folder. Folder scanning itself does not open network connections.
 
 ## Summary line and deferred files
 

@@ -11,6 +11,7 @@ no network, real database, or analysis service is used.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -52,7 +53,11 @@ class _RecordingService:
         self.calls.append(request.path)
         if self._result_factory is not None:
             return self._result_factory(request)
-        return SimpleNamespace(report_id=f"analysis-{len(self.calls)}")
+        content_sha = hashlib.sha256(request.path.read_bytes()).hexdigest()
+        return SimpleNamespace(
+            report_id=f"analysis-{len(self.calls)}",
+            image_sha256=content_sha,
+        )
 
 
 def _config(data_dir: Path, *, max_pending: int = 1) -> IngestConfig:
@@ -214,7 +219,8 @@ def test_corrupt_jpeg_is_logged_as_decode_error_and_not_retried(
     def result_for(request):
         if request.path.name == "broken.jpg":
             return ErrorResult(ErrorCode.DECODE_FAILED, "decode failed")
-        return SimpleNamespace(report_id="analysis-ok")
+        content_sha = hashlib.sha256(request.path.read_bytes()).hexdigest()
+        return SimpleNamespace(report_id="analysis-ok", image_sha256=content_sha)
 
     config = _config(tmp_path / "data", max_pending=2)
     service = _RecordingService(result_for)
@@ -254,7 +260,7 @@ def test_directory_link_is_not_descended(tmp_path: Path) -> None:
     assert inner.is_file()
 
 
-def test_file_symlink_is_followed_under_link_basename(tmp_path: Path) -> None:
+def test_file_symlink_is_skipped_with_path_invalid_error(tmp_path: Path) -> None:
     watch_dir = tmp_path / "watch"
     watch_dir.mkdir()
     outside = tmp_path / "outside"
@@ -268,16 +274,25 @@ def test_file_symlink_is_followed_under_link_basename(tmp_path: Path) -> None:
         pytest.skip("file symlinks are not available on this platform")
     config = _config(tmp_path / "data")
     service = _RecordingService()
+    ingestor = _ingestor(config, service)
     try:
-        summary = _ingestor(config, service).scan_once(watch_dir)
+        summary = ingestor.scan_once(watch_dir)
+        assert (
+            summary.analyzed,
+            summary.errors,
+            summary.skipped_duplicate,
+            summary.deferred,
+        ) == (0, 1, 0, 0)
+        assert ingestor.scan_once(watch_dir).has_activity is False
     finally:
         link.unlink()
 
-    assert summary.analyzed == 1
-    assert service.calls == [link]
-    assert [r["basename"] for r in _events(config.custody_path)] == [
-        "linked.jpg"
-    ]
+    assert service.calls == []
+    records = _events(config.custody_path)
+    assert len(records) == 1
+    assert records[0]["basename"] == "linked.jpg"
+    assert records[0]["event"] == "error"
+    assert records[0]["error_code"] == "PATH_INVALID"
 
 
 @pytest.mark.parametrize(
