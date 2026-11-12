@@ -7,10 +7,12 @@ Tất cả hình trong thư mục này là **ví dụ minh họa** sinh từ ả
 Từ thư mục gốc repository, với virtualenv dự án và `src` trên `PYTHONPATH`:
 
 ```powershell
-$env:QT_QPA_PLATFORM = 'offscreen'
 $env:PYTHONPATH = 'src'
+# Không đặt QT_QPA_PLATFORM=offscreen — tab GUI cần nền tảng Windows có font.
 python scripts/make_report_figures.py
 ```
+
+Tab GUI: nền tảng Qt `windows (default)`, font `Segoe UI`.
 
 Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 byte.
 
@@ -36,31 +38,31 @@ Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 b
 
 ### `gui_tab_analyze.png` — Giao diện — tab Phân tích
 
-- **Nội dung:** Ảnh chụp offscreen 1280×800 sau khi chạy phân tích trên ảnh synthetic forge (mọi method bật).
-- **Cách sinh:** QT_QPA_PLATFORM=offscreen, QWidget.grab; PNG 242678 byte
-- **Kích thước file:** 242678 byte
+- **Nội dung:** Ảnh chụp native 1280×800 sau khi chạy phân tích trên ảnh synthetic forge (mọi method bật).
+- **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 217614 byte
+- **Kích thước file:** 217614 byte
 
 ### `gui_tab_enhance.png` — Giao diện — tab Tăng cường
 
 - **Nội dung:** Tab xem thử với banner và blend 50% giữa ảnh blur synthetic và CLAHE (không ghi đè file gốc).
-- **Cách sinh:** offscreen grab; PNG 242642 byte
-- **Kích thước file:** 242642 byte
+- **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 304124 byte
+- **Kích thước file:** 304124 byte
 
 ### `gui_tab_history.png` — Giao diện — tab Lịch sử
 
-- **Nội dung:** Một dòng lịch sử từ phiên phân tích synthetic vừa chạy (SQLite tạm).
-- **Cách sinh:** offscreen grab; PNG 7121 byte
-- **Kích thước file:** 7121 byte
+- **Nội dung:** Ba dòng lịch sử từ phiên phân tích synthetic (AnalysisService, SQLite tạm).
+- **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 25707 byte
+- **Kích thước file:** 25707 byte
 
 ### `gui_tab_stats.png` — Giao diện — tab Thống kê
 
 - **Nội dung:** Thống kê phiên trên cùng dữ liệu synthetic (không phải benchmark).
-- **Cách sinh:** offscreen grab; PNG 6902 byte
-- **Kích thước file:** 6902 byte
+- **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 23034 byte
+- **Kích thước file:** 23034 byte
 
 ### `gui_tab_settings.png` — Giao diện — tab Cài đặt
 
-- **Nội dung:** Ngưỡng đọc từ cấu hình dự án — minh họa layout báo cáo.
-- **Cách sinh:** offscreen grab; PNG 10022 byte
-- **Kích thước file:** 10022 byte
+- **Nội dung:** Cây ngưỡng đọc từ cấu hình dự án — minh họa layout báo cáo.
+- **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 80205 byte
+- **Kích thước file:** 80205 byte
 

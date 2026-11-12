@@ -14,9 +14,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-# Offscreen Qt must be set before PySide6 import.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 import cv2
 import numpy as np
 
@@ -25,6 +22,12 @@ DEFAULT_OUT = REPO_ROOT / "docs" / "report" / "figures"
 SEED = 20261112
 GUI_SIZE = (1280, 800)
 MAX_PNG_BYTES = 300 * 1024
+GUI_FONT_CANDIDATES = ("Segoe UI", "Tahoma", "Arial")
+FONT_PROBE_VI = "Ảnh chụp báo cáo — Phân tích"
+_LAST_GUI_PLATFORM = ""
+
+# Recorded for figures.md after a successful GUI capture run.
+_LAST_GUI_FONT = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +249,118 @@ def make_pipeline_figures(out_dir: Path, records: list[FigureRecord]) -> None:
     )
 
 
+def _gui_platform_label() -> str:
+    """Human-readable Qt platform name for docs (no host paths)."""
+    explicit = os.environ.get("QT_QPA_PLATFORM")
+    if explicit:
+        return explicit
+    if sys.platform == "win32":
+        return "windows (default)"
+    return "native default"
+
+
+def _prepare_gui_platform() -> str:
+    """Ensure GUI grabs use a font-capable Qt platform (not offscreen)."""
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        os.environ.pop("QT_QPA_PLATFORM", None)
+    label = _gui_platform_label()
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        raise RuntimeError(
+            "GUI report figures need a real Qt platform with system fonts. "
+            "Unset QT_QPA_PLATFORM=offscreen before running this script."
+        )
+    return label
+
+
+def _apply_gui_font(app: object) -> str:
+    """Pick an installed font with Vietnamese/Latin glyphs and verify a text grab."""
+    from PySide6.QtGui import QFont, QFontDatabase, QFontMetrics
+    from PySide6.QtWidgets import QLabel
+
+    families = set(QFontDatabase.families())
+    chosen = ""
+    for family in GUI_FONT_CANDIDATES:
+        if family not in families:
+            continue
+        font = QFont(family, 10)
+        metrics = QFontMetrics(font)
+        if metrics.horizontalAdvance(FONT_PROBE_VI) < 80:
+            continue
+        app.setFont(font)
+        chosen = family
+        break
+    if not chosen:
+        raise RuntimeError(
+            "Cannot render Vietnamese UI text: none of "
+            f"{GUI_FONT_CANDIDATES} produced glyph metrics on this system."
+        )
+
+    label = QLabel(FONT_PROBE_VI)
+    label.setFont(QFont(chosen, 11))
+    label.adjustSize()
+    app.processEvents()
+    gray = cv2.cvtColor(_qpixmap_to_bgr(label.grab()), cv2.COLOR_BGR2GRAY)
+    if float(np.std(gray)) < 12.0:
+        raise RuntimeError(
+            "Font probe render is blank (typical of offscreen Qt without fonts). "
+            "Run on native Windows Qt without QT_QPA_PLATFORM=offscreen."
+        )
+    return chosen
+
+
+def _verify_gui_screenshot_png(path: Path) -> None:
+    """Reject grabs that lack ink in tab bar / disclaimer (tofu or empty UI)."""
+    data = path.read_bytes()
+    bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if bgr is None:
+        raise RuntimeError(f"could not decode GUI screenshot {path.name}")
+    height = bgr.shape[0]
+    bands = (
+        ("tab bar", bgr[0 : min(48, height), :, :]),
+        ("footer", bgr[max(0, height - 44) :, :, :]),
+    )
+    for region_name, band in bands:
+        gray = cv2.cvtColor(band, cv2.COLOR_BGR2GRAY)
+        dark_fraction = float((gray < 160).mean())
+        if dark_fraction < 0.008:
+            raise RuntimeError(
+                f"{path.name}: {region_name} has no readable text "
+                "(missing fonts or offscreen tofu); not writing usable report figures."
+            )
+
+
+def _seed_history_rows(
+    analysis: object,
+    tmp_path: Path,
+    *,
+    extra_count: int = 2,
+) -> None:
+    """Persist extra synthetic analyses so History/Stats tabs are populated."""
+    from imageguard.core.models import ForensicReport
+    from imageguard.evaluation.synthforge import generate_set
+    from imageguard.services.analysis_service import AnalysisRequest
+
+    if extra_count < 1:
+        raise ValueError("extra_count must be >= 1")
+    hist_dir = tmp_path / "history_synth"
+    generate_set(
+        n=extra_count,
+        seed=SEED + 101,
+        out_dir=hist_dir,
+        size=(352, 352),
+        tier="easy",
+    )
+    forged_paths = sorted(hist_dir.glob("*_F.png"))
+    if len(forged_paths) < extra_count:
+        raise FileNotFoundError("synthforge did not emit enough forged PNGs for history")
+    methods = ["keypoint", "block", "ela"]
+    for forged in forged_paths[:extra_count]:
+        report = analysis.analyze(AnalysisRequest(path=forged, methods=methods))
+        if not isinstance(report, ForensicReport):
+            detail = getattr(report, "message", report)
+            raise ValueError(f"history seed analysis failed: {detail}")  # noqa: TRY004
+
+
 def _qpixmap_to_bgr(pix) -> np.ndarray:
     from PySide6.QtCore import QBuffer, QByteArray, QIODevice
 
@@ -267,8 +382,11 @@ def _grab_main_window(window, filename: str, out_dir: Path) -> int:
     from PySide6.QtWidgets import QApplication
 
     QApplication.processEvents()
+    out_path = out_dir / filename
     bgr = _qpixmap_to_bgr(window.grab())
-    return write_png_limited(bgr, out_dir / filename)
+    size = write_png_limited(bgr, out_path)
+    _verify_gui_screenshot_png(out_path)
+    return size
 
 
 def _wait_worker(pool, worker, app, timeout_ms: int = 120_000) -> None:
@@ -299,11 +417,16 @@ def _wait_worker(pool, worker, app, timeout_ms: int = 120_000) -> None:
 
 
 def make_gui_figures(out_dir: Path, forged_path: Path, records: list[FigureRecord]) -> None:
+    global _LAST_GUI_PLATFORM, _LAST_GUI_FONT
+
+    platform_label = _prepare_gui_platform()
     from PySide6.QtWidgets import QApplication
 
     from imageguard.ui.main_window import MainWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
+    _LAST_GUI_FONT = _apply_gui_font(app)
+    _LAST_GUI_PLATFORM = platform_label
     with tempfile.TemporaryDirectory(
         prefix="ig_report_fig_",
         ignore_cleanup_errors=True,
@@ -369,15 +492,21 @@ def _capture_gui_tabs(
     if analyze._report is None:
         raise RuntimeError("analysis did not complete on synthetic image")
 
+    _seed_history_rows(analysis, tmp_path, extra_count=2)
+
     window.tabs.setCurrentWidget(analyze)
+    gui_note = (
+        f"Qt {_LAST_GUI_PLATFORM}, QFont({_LAST_GUI_FONT}), "
+        f"MainWindow {GUI_SIZE[0]}×{GUI_SIZE[1]} grab"
+    )
     size = _grab_main_window(window, "gui_tab_analyze.png", out_dir)
     records.append(
         FigureRecord(
             "gui_tab_analyze.png",
             "Giao diện — tab Phân tích",
-            "Ảnh chụp offscreen 1280×800 sau khi chạy phân tích trên "
+            "Ảnh chụp native 1280×800 sau khi chạy phân tích trên "
             "ảnh synthetic forge (mọi method bật).",
-            f"QT_QPA_PLATFORM=offscreen, QWidget.grab; PNG {size} byte",
+            f"{gui_note}; PNG {size} byte",
         )
     )
 
@@ -423,7 +552,7 @@ def _capture_gui_tabs(
             "Giao diện — tab Tăng cường",
             "Tab xem thử với banner và blend 50% giữa ảnh blur synthetic "
             "và CLAHE (không ghi đè file gốc).",
-            f"offscreen grab; PNG {size} byte",
+            f"{gui_note}; PNG {size} byte",
         )
     )
 
@@ -435,8 +564,8 @@ def _capture_gui_tabs(
         FigureRecord(
             "gui_tab_history.png",
             "Giao diện — tab Lịch sử",
-            "Một dòng lịch sử từ phiên phân tích synthetic vừa chạy (SQLite tạm).",
-            f"offscreen grab; PNG {size} byte",
+            "Ba dòng lịch sử từ phiên phân tích synthetic (AnalysisService, SQLite tạm).",
+            f"{gui_note}; PNG {size} byte",
         )
     )
 
@@ -449,7 +578,7 @@ def _capture_gui_tabs(
             "gui_tab_stats.png",
             "Giao diện — tab Thống kê",
             "Thống kê phiên trên cùng dữ liệu synthetic (không phải benchmark).",
-            f"offscreen grab; PNG {size} byte",
+            f"{gui_note}; PNG {size} byte",
         )
     )
 
@@ -460,8 +589,8 @@ def _capture_gui_tabs(
         FigureRecord(
             "gui_tab_settings.png",
             "Giao diện — tab Cài đặt",
-            "Ngưỡng đọc từ cấu hình dự án — minh họa layout báo cáo.",
-            f"offscreen grab; PNG {size} byte",
+            "Cây ngưỡng đọc từ cấu hình dự án — minh họa layout báo cáo.",
+            f"{gui_note}; PNG {size} byte",
         )
     )
 
@@ -482,10 +611,20 @@ def write_figures_md(out_dir: Path, records: list[FigureRecord]) -> None:
         "Từ thư mục gốc repository, với virtualenv dự án và `src` trên `PYTHONPATH`:",
         "",
         "```powershell",
-        "$env:QT_QPA_PLATFORM = 'offscreen'",
         "$env:PYTHONPATH = 'src'",
+        "# Không đặt QT_QPA_PLATFORM=offscreen — tab GUI cần nền tảng Windows có font.",
         "python scripts/make_report_figures.py",
         "```",
+        "",
+        (
+            "Tab GUI: nền tảng Qt "
+            f"`{_LAST_GUI_PLATFORM or _gui_platform_label()}`"
+            + (
+                f", font `{_LAST_GUI_FONT}`."
+                if _LAST_GUI_FONT
+                else " với font hệ thống (ưu tiên Segoe UI)."
+            )
+        ),
         "",
         f"Seed cố định: `{SEED}`. Mỗi PNG được nén/resize để ≤ {MAX_PNG_BYTES} byte.",
         "",
