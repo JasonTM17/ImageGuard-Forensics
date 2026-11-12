@@ -213,7 +213,7 @@ path ([`docs/database.md`](../database.md)).
 
 ### 3.5 Giao diện người dùng
 
-Năm tab: Analyze | Enhance | History | Stats | Settings; `DisclaimerBar` cố định;
+Năm tab: Analyze | Enhance | History | Stats | Settings; câu lưu ý nằm trong báo cáo (không có thanh riêng);
 wording “dấu hiệu” trong `src/imageguard/ui/strings.py`
 ([`docs/ui-design.md`](../ui-design.md)).
 

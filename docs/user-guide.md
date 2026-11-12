@@ -50,7 +50,7 @@ byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
    - Cards từng method: score + định nghĩa score + limitations.
    - Dropdown overlay: mask đỏ / heatmap trên ảnh gốc (zoom: lăn chuột,
      pan: kéo).
-   - Thanh disclaimer cố định: kết quả là *dấu hiệu*, không phải kết luận.
+   - Kết quả là *dấu hiệu*, không phải kết luận; câu lưu ý nằm trong báo cáo xuất ra.
    - **Xuất Markdown:** sau khi có báo cáo, nút *Xuất báo cáo (Markdown)*
      lưu file `.md` (qua `ReportService.export_markdown`): disclaimer, metadata
      ảnh, hash ngưỡng, bảng từng method — không xác suất “ảnh giả”.

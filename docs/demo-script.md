@@ -267,7 +267,7 @@ Trích từ [`limitations.md`](limitations.md) — **không bổ sung con số m
 Câu trả lời ngắn, bám [`limitations.md`](limitations.md) và [`README.md`](../README.md).
 
 1. **Ứng dụng có kết luận ảnh giả không?**  
-   Không. Chỉ báo *dấu hiệu nghi vấn* (`suspicious_indication`), *không thấy dấu hiệu*, hoặc *không đủ bằng chứng* (`INCONCLUSIVE`). Disclaimer cố định trên UI và trong báo cáo Markdown.
+   Không. Chỉ báo *dấu hiệu nghi vấn* (`suspicious_indication`), *không thấy dấu hiệu*, hoặc *không đủ bằng chứng* (`INCONCLUSIVE`). Câu lưu ý này nằm trong báo cáo (JSON và Markdown).
 
 2. **`INCONCLUSIVE` có phải lỗi không?**  
    Không. Là abstain khi texture kém, tín hiệu mâu thuẫn, hoặc cue phụ không đủ — hành vi có chủ đích (keypoint trên ảnh gốc CASIA có nhiều inconclusive).

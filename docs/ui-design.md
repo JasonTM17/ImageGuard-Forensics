@@ -19,8 +19,9 @@
    "kết luận"; verdict không dùng đỏ/xanh tuyệt đối (đỏ = phán có tội, xanh =
    minh oan — cả hai overclaim). Test `test_strings_no_forbidden_wording`
    quét các hằng chuỗi in hoa trong `strings.py`.
-6. **Disclaimer cố định**: `DisclaimerBar` dưới cùng mọi màn hình, không
-   ẩn được.
+6. **Disclaimer nằm trong báo cáo**: câu lưu ý (dấu hiệu, không phải kết luận)
+   đi kèm `ForensicReport` và báo cáo Markdown; cửa sổ chính không có thanh
+   disclaimer riêng.
 
 ## Cấu trúc shell — 5 tab
 
@@ -28,12 +29,11 @@
 ui/
   app.py           QApplication + build_services() wire DI
   main_window.py   QTabWidget: Analyze | Enhance | History | Stats | Settings
-                   + DisclaimerBar (ngoài tab, luôn hiện)
   strings.py       nhãn/text UI chính (integrity-tested)
   workers.py       WorkerSignals + AnalysisWorker; EnhanceSignals + EnhanceWorker
   widgets/
     image_canvas.py    QGraphicsView: zoom(wheel)/pan(drag)/fit + overlay alpha
-    verdict_panel.py   VerdictBanner + MethodCard + DisclaimerBar
+    verdict_panel.py   VerdictBanner + MethodCard
   screens/
     analyze.py     open(drag-drop/picker) → preview+EXIF → methods → run/cancel
                    → Markdown export sau khi có ForensicReport
