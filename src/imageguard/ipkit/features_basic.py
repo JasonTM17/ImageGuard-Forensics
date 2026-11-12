@@ -225,19 +225,19 @@ def rect_sum(
     ):
         if isinstance(val, bool) or not isinstance(val, (int, np.integer)):
             raise TypeError(f"{name} must be an integer")
-    t, l, hh, ww = int(top), int(left), int(height), int(width)
+    t, lf, hh, ww = int(top), int(left), int(height), int(width)
     if hh < 0 or ww < 0:
         raise ValueError("height and width must be non-negative")
     # Kích thước ảnh gốc = sat−1 (hàng/cột 0 là padding).
     h_max, w_max = sat_arr.shape[0] - 1, sat_arr.shape[1] - 1
-    if t < 0 or l < 0 or t + hh > h_max or l + ww > w_max:
+    if t < 0 or lf < 0 or t + hh > h_max or lf + ww > w_max:
         raise ValueError("rectangle exceeds image bounds")
     # Công thức bài giảng: D = S4 + S1 − S2 − S3 (tổng trong ABC D).
     return float(
-        sat_arr[t + hh, l + ww]
-        - sat_arr[t, l + ww]
-        - sat_arr[t + hh, l]
-        + sat_arr[t, l]
+        sat_arr[t + hh, lf + ww]
+        - sat_arr[t, lf + ww]
+        - sat_arr[t + hh, lf]
+        + sat_arr[t, lf]
     )
 
 
@@ -268,11 +268,11 @@ def haar_feature(
     hh, ww = int(height), int(width)
     if hh <= 0 or ww <= 0:
         raise ValueError("height and width must be positive")
-    t, l = int(top), int(left)
+    t, lf = int(top), int(left)
 
     # Gói rect_sum trong cửa sổ (top,left) — mọi Haar là tổ hợp các hình chữ nhật con.
     def rs(dy: int, dx: int, h: int, w: int) -> float:
-        return rect_sum(sat, t + dy, l + dx, h, w)
+        return rect_sum(sat, t + dy, lf + dx, h, w)
 
     if kind == "two_h":
         # Chia đôi chiều ngang (nguyên //2, phần lẻ ở nửa phải).

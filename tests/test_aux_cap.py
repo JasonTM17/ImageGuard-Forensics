@@ -37,7 +37,7 @@ def test_noise_map_downscales_and_upscales() -> None:
     r = NoiseMap().analyze(_doc(), _cfg(128))
     assert r.heatmap.shape == (256, 256)
     assert r.mask is None or r.mask.shape == (256, 256)
-    assert any("downscale" in l for l in r.limitations)
+    assert any("downscale" in lim for lim in r.limitations)
     assert r.evidence["scale"] == 0.5
     assert r.evidence["block"] == 8  # 16 * 0.5 — cùng kích thước vật lý
 
@@ -49,7 +49,7 @@ def test_noise_local_downscales_and_upscales() -> None:
     r = NoiseLocal().analyze(_doc(), cfg)
     assert r.heatmap.shape == (256, 256)
     assert r.mask is None or r.mask.shape == (256, 256)
-    assert any("downscale" in l for l in r.limitations)
+    assert any("downscale" in lim for lim in r.limitations)
     assert r.evidence["scale"] == 0.5
     assert r.evidence["min_region_blocks"] == cfg.value(
         "noise", "min_region_blocks")
@@ -61,7 +61,7 @@ def test_freq_view_downscales_and_upscales() -> None:
     r = FreqView().analyze(_doc(), _cfg(128))
     assert r.heatmap.shape == (256, 256)
     assert r.evidence["window"] == 4  # 8 * 0.5 — cùng kích thước vật lý
-    assert any("downscale" in l for l in r.limitations)
+    assert any("downscale" in lim for lim in r.limitations)
     assert r.evidence["scale"] == 0.5
 
 
@@ -70,4 +70,4 @@ def test_small_image_keeps_full_resolution() -> None:
 
     r = NoiseMap().analyze(_doc(), load_thresholds())  # 256 < aux_max_side 4096
     assert r.evidence["scale"] == 1.0
-    assert not any("downscale" in l for l in r.limitations)
+    assert not any("downscale" in lim for lim in r.limitations)

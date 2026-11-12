@@ -13,7 +13,8 @@ from imageguard.evaluation.comofod import CoMoFoDAdapter
 def _mk(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     img = np.random.default_rng(0).integers(0, 255, (64, 64, 3), dtype=np.uint8)
-    mask = np.zeros((64, 64), np.uint8); mask[10:30, 10:30] = 255
+    mask = np.zeros((64, 64), np.uint8)
+    mask[10:30, 10:30] = 255
     for sid in ("001", "002", "003"):
         cv2.imwrite(str(root / f"{sid}_F.png"), img)
         cv2.imwrite(str(root / f"{sid}_O.png"), img)

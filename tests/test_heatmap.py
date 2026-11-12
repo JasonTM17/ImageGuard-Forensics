@@ -40,8 +40,10 @@ def test_overlay_mask_binary() -> None:
 
 
 def test_fuse_any_all() -> None:
-    a = np.zeros((40, 40), np.uint8); a[0:20, :] = 255
-    b = np.zeros((40, 40), np.uint8); b[10:30, :] = 255
+    a = np.zeros((40, 40), np.uint8)
+    a[0:20, :] = 255
+    b = np.zeros((40, 40), np.uint8)
+    b[10:30, :] = 255
     uni = fuse_masks([a, b], "any")
     inter = fuse_masks([a, b], "all", close_k=0)
     assert (uni > 0).sum() > (inter > 0).sum()

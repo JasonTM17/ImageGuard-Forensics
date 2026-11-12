@@ -64,7 +64,7 @@ class MethodCard(QFrame):
             score_lbl.setWordWrap(True)
             lay.addWidget(score_lbl)
         for lim in result.limitations[:4]:
-            l = QLabel(f"• {lim}")
-            l.setWordWrap(True)
-            l.setStyleSheet("color:#555;")
-            lay.addWidget(l)
+            lim_lbl = QLabel(f"• {lim}")
+            lim_lbl.setWordWrap(True)
+            lim_lbl.setStyleSheet("color:#555;")
+            lay.addWidget(lim_lbl)

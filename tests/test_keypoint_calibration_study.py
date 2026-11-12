@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from keypoint_calibration_study import (
+from keypoint_calibration_study import (  # noqa: E402
     analyze_image,
     median_inlier_pair_distance_px,
     rank_auc,
@@ -21,8 +21,8 @@ from keypoint_calibration_study import (
     wilson_interval,
 )
 
-from imageguard.core.config import load_thresholds
-from imageguard.core.models import ImageDocument
+from imageguard.core.config import load_thresholds  # noqa: E402
+from imageguard.core.models import ImageDocument  # noqa: E402
 
 
 def test_rank_auc_perfect_separation():

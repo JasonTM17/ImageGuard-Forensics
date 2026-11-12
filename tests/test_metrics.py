@@ -42,15 +42,18 @@ def test_pixel_r1_gt_empty_skips() -> None:
 
 
 def test_pixel_r2_pred_empty_f1_zero() -> None:
-    gt = np.zeros((10, 10), np.uint8); gt[2:6, 2:6] = 255
+    gt = np.zeros((10, 10), np.uint8)
+    gt[2:6, 2:6] = 255
     r = pixel_metrics(None, gt)
     assert r["rule"] == "R2" and r["f1"] == 0.0 and r["iou"] == 0.0
     assert r["precision"] is None and r["recall"] == 0.0
 
 
 def test_pixel_normal_case() -> None:
-    gt = np.zeros((10, 10), np.uint8); gt[0:5, :] = 255
-    pred = np.zeros((10, 10), np.uint8); pred[3:8, :] = 255
+    gt = np.zeros((10, 10), np.uint8)
+    gt[0:5, :] = 255
+    pred = np.zeros((10, 10), np.uint8)
+    pred[3:8, :] = 255
     r = pixel_metrics(pred, gt)
     assert r["skipped"] is None
     assert r["precision"] is not None and 0 < r["iou"] < 1
@@ -60,16 +63,20 @@ def test_pixel_normal_case() -> None:
 def test_pixel_dim_mismatch_rejected() -> None:
     import pytest
 
-    gt = np.zeros((10, 10), np.uint8); gt[0:5] = 255
+    gt = np.zeros((10, 10), np.uint8)
+    gt[0:5] = 255
     pred = np.zeros((8, 8), np.uint8)
     with pytest.raises(ValueError):
         pixel_metrics(pred, gt)
 
 
 def test_aggregate_macro_micro() -> None:
-    gt1 = np.zeros((10, 10), np.uint8); gt1[0:5] = 255
-    p1 = np.zeros((10, 10), np.uint8); p1[0:5] = 255
-    gt2 = np.zeros((10, 10), np.uint8); gt2[0:5] = 255
+    gt1 = np.zeros((10, 10), np.uint8)
+    gt1[0:5] = 255
+    p1 = np.zeros((10, 10), np.uint8)
+    p1[0:5] = 255
+    gt2 = np.zeros((10, 10), np.uint8)
+    gt2[0:5] = 255
     agg = aggregate_pixel([
         pixel_metrics(p1, gt1),           # perfect
         pixel_metrics(None, gt2),          # R2 miss

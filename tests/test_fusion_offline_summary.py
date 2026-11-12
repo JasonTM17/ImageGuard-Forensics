@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
-from fusion_offline_summary import (
+from fusion_offline_summary import (  # noqa: E402
     METHOD_BLOCK,
     METHOD_KEYPOINT,
     aggregate_samples,
@@ -23,8 +23,8 @@ from fusion_offline_summary import (
     wilson_interval,
 )
 
-from imageguard.core.enums import Verdict
-from imageguard.forensics.fusion import combine
+from imageguard.core.enums import Verdict  # noqa: E402
+from imageguard.forensics.fusion import combine  # noqa: E402
 
 
 def _wilson_ref(successes: int, n: int, z: float = 1.959963984540054) -> tuple[float, float]:

@@ -24,13 +24,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from imageguard.core.config import ThresholdSet, load_thresholds
-from imageguard.core.io import safe_open
-from imageguard.core.models import ImageDocument
-from imageguard.core.preprocess import preprocess_keypoint
-from imageguard.forensics.keypoint.detectors import create_backend
-from imageguard.forensics.keypoint.geo_verify import geometric_verify
-from imageguard.forensics.keypoint.matchers import self_match
+from imageguard.core.config import ThresholdSet, load_thresholds  # noqa: E402
+from imageguard.core.io import safe_open  # noqa: E402
+from imageguard.core.models import ImageDocument  # noqa: E402
+from imageguard.core.preprocess import preprocess_keypoint  # noqa: E402
+from imageguard.forensics.keypoint.detectors import create_backend  # noqa: E402
+from imageguard.forensics.keypoint.geo_verify import geometric_verify  # noqa: E402
+from imageguard.forensics.keypoint.matchers import self_match  # noqa: E402
 
 Label = Literal["forged", "original"]
 Z_95 = 1.959963984540054

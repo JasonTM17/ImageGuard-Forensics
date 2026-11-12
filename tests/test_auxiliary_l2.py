@@ -32,7 +32,7 @@ def test_noise_detects_smoother_patch(valid_png, ts):
     assert r.verdict == Verdict.INCONCLUSIVE
     assert r.score is not None and r.score_definition
     assert r.mask is not None and (r.mask > 0).sum() > 0
-    assert any("outlier" in l or "corroborate" in l for l in r.limitations)
+    assert any("outlier" in lim or "corroborate" in lim for lim in r.limitations)
 
 
 def test_noise_clean_uniform(valid_jpg, ts):
@@ -170,10 +170,11 @@ def test_noise_local_small_and_flat(ts):
     doc = ImageDocument(array=img, width=512, height=512, channels=3,
                         image_format="png", sha256="c", file_bytes=0,
                         file_name="c.png")
-    ev = threading.Event(); ev.set()
+    ev = threading.Event()
+    ev.set()
     r = NoiseLocal().analyze(doc, ts, cancel=ev)
     assert r.verdict == Verdict.INCONCLUSIVE
-    assert any("cancelled" in l for l in r.limitations)
+    assert any("cancelled" in lim for lim in r.limitations)
 
 
 def test_cancel_cooperative(valid_png, ts):

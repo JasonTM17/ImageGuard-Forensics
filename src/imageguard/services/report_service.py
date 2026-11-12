@@ -90,7 +90,7 @@ class ReportService:
         lims = rep.get("limitations") or []
         if lims:
             lines += ["## Cảnh báo tổng", ""]
-            lines += [f"- {l}" for l in lims]
+            lines += [f"- {lim}" for lim in lims]
             lines.append("")
         lines += [
             "---",

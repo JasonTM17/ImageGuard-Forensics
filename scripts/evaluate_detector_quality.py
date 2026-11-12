@@ -148,7 +148,9 @@ def _strict_pair(image: Path, original: Path, mask: Path) -> str | None:
             return "decode_limit_exceeded"
     try:
         with Image.open(image) as f, Image.open(original) as o, Image.open(mask) as m:
-            f.load(); o.load(); m.load()
+            f.load()
+            o.load()
+            m.load()
             if f.size != o.size or m.size != f.size:
                 return "geometry_mismatch"
             values = np.asarray(m.convert("L"))
