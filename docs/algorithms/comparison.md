@@ -24,7 +24,7 @@ có thể là `INCONCLUSIVE` — pipeline conservative by design; không coi đ�
 
 Sự kiện đánh giá formal trên **103 cặp** CASIA đã screen (native oracle, không
 phải ảnh chụp camera). Block baseline ngưỡng `.01`; keypoint cùng cấu hình ở cả
-baseline và candidate. Kết quả lưu trong artifact formal (không commit plans/).
+baseline và candidate. Kết quả lưu trong artifact đánh giá cục bộ (không nằm trong repo).
 
 | method | edited recall (TP / 103) | original FP / 103 | original INCONCLUSIVE / 103 |
 |---|---:|---:|---:|
