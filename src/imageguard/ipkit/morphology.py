@@ -43,13 +43,15 @@ def _erode_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
     pad = np.pad(
         channel, ((ph, ph), (pw, pw)), mode="constant", constant_values=255
     )
-    out = np.empty_like(channel)
-    for y in range(h):
-        for x in range(w):
-            patch = pad[y : y + kh, x : x + kw]
-            vals = patch[se.astype(bool)]
-            out[y, x] = int(vals.min()) if vals.size else 255
-    return out
+    active = np.argwhere(se.astype(bool))
+    if active.size == 0:
+        return np.full((h, w), 255, dtype=channel.dtype)
+    out: np.ndarray | None = None
+    for ky, kx in active:
+        slab = pad[ky : ky + h, kx : kx + w]
+        out = slab if out is None else np.minimum(out, slab)
+    assert out is not None
+    return out.astype(channel.dtype, copy=False)
 
 
 def _dilate_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
@@ -57,13 +59,15 @@ def _dilate_gray(channel: np.ndarray, se: np.ndarray) -> np.ndarray:
     kh, kw = se.shape
     ph, pw = kh // 2, kw // 2
     pad = np.pad(channel, ((ph, ph), (pw, pw)), mode="constant", constant_values=0)
-    out = np.empty_like(channel)
-    for y in range(h):
-        for x in range(w):
-            patch = pad[y : y + kh, x : x + kw]
-            vals = patch[se.astype(bool)]
-            out[y, x] = int(vals.max()) if vals.size else 0
-    return out
+    active = np.argwhere(se.astype(bool))
+    if active.size == 0:
+        return np.zeros((h, w), dtype=channel.dtype)
+    out: np.ndarray | None = None
+    for ky, kx in active:
+        slab = pad[ky : ky + h, kx : kx + w]
+        out = slab if out is None else np.maximum(out, slab)
+    assert out is not None
+    return out.astype(channel.dtype, copy=False)
 
 
 def _check_se(se: np.ndarray) -> np.ndarray:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import cv2
 import numpy as np
 import pytest
@@ -27,16 +29,26 @@ def test_otsu_bimodal_toy() -> None:
 
 
 def test_adaptive_mean_vs_cv2_interior() -> None:
-    rng = np.random.default_rng(11)
-    gray = rng.integers(0, 256, (48, 48), dtype=np.uint8)
+    rng = np.random.default_rng(27)
+    gray = rng.integers(0, 256, (64, 64), dtype=np.uint8)
     block, c = 11, 4.0
     ours = adaptive_mean_threshold(gray, block, c)
     cv = cv2.adaptiveThreshold(
         gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block, c,
     )
-    # Mean filter uses BORDER_REPLICATE; rare ties differ from OpenCV uchar path (≤3/2304 here).
+    # float64 local mean vs OpenCV integer/blur path: occasional 1-level tie breaks differ.
     mismatches = int(np.count_nonzero(ours != cv))
-    assert mismatches <= 3
+    rate = mismatches / float(gray.size)
+    assert rate <= 0.001
+
+
+def test_adaptive_mean_performance_guard() -> None:
+    rng = np.random.default_rng(42)
+    gray = rng.integers(0, 256, (512, 512), dtype=np.uint8)
+    t0 = time.perf_counter()
+    adaptive_mean_threshold(gray, block=15, c=4.0)
+    elapsed = time.perf_counter() - t0
+    assert elapsed < 2.0
 
 
 def test_threshold_validation() -> None:

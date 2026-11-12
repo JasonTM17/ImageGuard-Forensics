@@ -55,11 +55,15 @@ def adaptive_mean_threshold(gray: np.ndarray, block: int, c: float) -> np.ndarra
     r = b // 2
     src = img.astype(np.float64)
     padded = np.pad(src, r, mode="edge")
-    out = np.zeros((h, w), dtype=np.uint8)
+    area = float(b * b)
 
-    for y in range(h):
-        for x in range(w):
-            window = padded[y : y + b, x : x + b]
-            mean = float(window.sum()) / float(b * b)
-            out[y, x] = 255 if src[y, x] > mean - offset else 0
-    return out
+    sat = np.cumsum(np.cumsum(padded, axis=0), axis=1)
+    sat = np.pad(sat, ((1, 0), (1, 0)), mode="constant", constant_values=0.0)
+
+    yy = np.arange(h, dtype=np.intp)[:, np.newaxis]
+    xx = np.arange(w, dtype=np.intp)[np.newaxis, :]
+    y2 = yy + b
+    x2 = xx + b
+    win_sum = sat[y2, x2] - sat[yy, x2] - sat[y2, xx] + sat[yy, xx]
+    mean = win_sum / area
+    return np.where(src > mean - offset, 255, 0).astype(np.uint8)

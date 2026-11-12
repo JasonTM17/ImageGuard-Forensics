@@ -45,6 +45,8 @@ mag = gradient_magnitude(gray)
 | `otsu_threshold(gray)` | Tối đa hóa \(\sigma_B^2(t)\) trên histogram 256-bin; trả về `int` ngưỡng. |
 | `adaptive_mean_threshold(gray, block, c)` | Pixel \(>\) (trung bình cục bộ \(block×block\) \(- c\)) → 255, ngược lại 0. |
 
+**Độ phức tạp (sau tối ưu):** `adaptive_mean_threshold` dùng ảnh tích phân (cumulative sum trên ảnh edge-padded) — thời gian \(O(HW)\), bộ nhớ \(O(HW)\). Erosion/dilation lặp theo từng ô active của phần tử cấu trúc \(k×k\) (tối đa \(k^2\) lần min/max trên view đã pad), không lặp từng pixel Python — \(O(HW \cdot |SE|)\) với \(|SE| \le k^2\).
+
 ```python
 from imageguard.ipkit import otsu_threshold, adaptive_mean_threshold
 
@@ -80,4 +82,4 @@ $env:PYTHONPATH='D:\ig-wt-k1\src'
 & 'D:\ImageGuard Forensics\.venv\Scripts\python.exe' -m pytest tests/test_ipkit_*.py -q -p no:cacheprovider
 ```
 
-Lần chạy gần nhất (worktree `ig-wt-k1`, chỉ `test_ipkit_*.py`): **16 passed** (khoảng 0,6s, pytest `-q -p no:cacheprovider`).
+Lần chạy gần nhất (worktree `ig-wt-k1`, chỉ `test_ipkit_*.py`): **18 passed** (khoảng 0,5s, pytest `-q -p no:cacheprovider`).
