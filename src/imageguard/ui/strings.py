@@ -74,7 +74,7 @@ BTN_REFRESH = "Làm mới"
 
 OVERLAY_NONE = "Không dùng lớp phủ"
 FMT_OVERLAY_SKIP_DIMS = (
-    "Bỏ qua lớp phủ: kích thước {kind} {dims} không khớp kích thước ảnh {shape}"
+    "Overlay bỏ qua: kích thước {kind} {dims} không khớp kích thước ảnh {shape}"
 )
 OVERLAY_MASK_FMT = "Lớp phủ vùng — {label}"
 OVERLAY_HEATMAP_FMT = "Bản đồ nhiệt — {label}"
