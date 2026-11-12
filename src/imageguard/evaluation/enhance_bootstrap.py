@@ -1,4 +1,11 @@
-"""Percentile bootstrap intervals; not BCa and not a p-value."""
+"""Khoảng tin cậy bootstrap theo phân vị cho trung bình mẫu.
+
+Lấy lại có hoàn lại n lần, mỗi lần tính trung bình, rồi lấy phân vị 2.5% và 97.5%
+của các trung bình đó (khoảng ~95%). Không dùng BCa, không phải p-value thống kê.
+
+Dùng khi so sánh chỉ số (ví dụ PSNR) giữa ảnh khôi phục và ảnh suy giảm trên
+nhiều mẫu có ghép cặp.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +16,7 @@ import numpy as np
 
 
 def _as_float_array(values: Iterable[float] | np.ndarray) -> np.ndarray:
+    """Chuẩn hóa đầu vào thành vector float64; ``None`` → NaN để lọc sau."""
     if isinstance(values, np.ndarray):
         raw_values = values
     else:
@@ -27,6 +35,7 @@ def _as_float_array(values: Iterable[float] | np.ndarray) -> np.ndarray:
 
 
 def _validate_n_boot(n_boot: int) -> int:
+    """Số lần bootstrap phải là số nguyên ≥ 1."""
     if isinstance(n_boot, bool) or not isinstance(n_boot, (int, np.integer)):
         raise TypeError("n_boot must be an integer")
     if n_boot < 1:
@@ -39,7 +48,10 @@ def bootstrap_mean(
     rng: np.random.Generator,
     n_boot: int = 2000,
 ) -> dict[str, Any]:
-    """Return a percentile bootstrap interval for the finite sample mean."""
+    """Khoảng phân vị 2.5–97.5% cho trung bình mẫu (bootstrap có hoàn lại).
+
+    Mỗi lần lặp: chọn ngẫu nhiên có lặp n phần tử, tính mean; n < 2 → không có low/high.
+    """
     n_boot = _validate_n_boot(n_boot)
     finite = _as_float_array(values)
     finite = finite[np.isfinite(finite)]
@@ -51,6 +63,7 @@ def bootstrap_mean(
     if n >= 2:
         indices = rng.integers(0, n, size=(n_boot, n))
         resample_means = np.mean(finite[indices], axis=1)
+        # Phân vị của phân phối bootstrap ≈ khoảng tin cậy empiric cho mean
         low, high = (float(value) for value in np.percentile(resample_means, [2.5, 97.5]))
 
     return {
@@ -69,7 +82,10 @@ def bootstrap_paired_diff(
     rng: np.random.Generator,
     n_boot: int = 2000,
 ) -> dict[str, Any]:
-    """Return a percentile bootstrap interval for paired enhanced-minus-degraded means."""
+    """Bootstrap trên hiệu ghép cặp (enhanced − degraded), ví dụ ΔPSNR theo ảnh.
+
+    Cắt theo cặp ngắn hơn; chỉ giữ cặp finite; thêm khóa ``n_pairs`` vào kết quả.
+    """
     enhanced_values = _as_float_array(enhanced)
     degraded_values = _as_float_array(degraded)
     pair_count = min(enhanced_values.size, degraded_values.size)
@@ -84,7 +100,7 @@ def bootstrap_paired_diff(
 
 
 def overlaps_zero(interval: dict[str, Any]) -> bool | None:
-    """Return whether the interval includes zero, or ``None`` without both bounds."""
+    """Kiểm tra khoảng [low, high] có chứa 0 — gợi ý hiệu trung bình có thể không khác 0."""
     low = interval.get("low")
     high = interval.get("high")
     if low is None or high is None:

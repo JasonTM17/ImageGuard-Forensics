@@ -1,4 +1,11 @@
-"""Experimental edge-based blur-kernel estimates for evaluation studies."""
+"""Ước lượng kernel làm mờ (PSF) mù từ cạnh thẳng trên ảnh BGR.
+
+Luồng chính: chuyển xám → Canny (C5 – phát hiện cạnh) → HoughLinesP → hồ sơ cường độ
+vuông góc cạnh → so khớp bước nhịp (step) sau convolution với ứng viên disk/motion
+→ chọn kernel lỗi MSE nhỏ nhất. Chỉ dùng pixel ảnh, không đọc tham số sinh dữ liệu.
+
+Giới hạn: cần cạnh đủ dài, tương phản và đa hướng (motion); không ước Gaussian tùy ý.
+"""
 
 from __future__ import annotations
 
@@ -16,10 +23,12 @@ _SHIFTS = np.arange(-1.5, 1.51, 0.5, dtype=np.float32)
 
 
 def _not_run(reason: str) -> tuple[None, dict[str, Any]]:
+    """Trả kernel ``None`` và metadata ``NOT_RUN`` khi không đủ bằng chứng cạnh."""
     return None, {"status": "NOT_RUN", "reason": reason}
 
 
 def _as_gray_u8(image: np.ndarray) -> np.ndarray | None:
+    """Chuẩn hóa BGR uint8/xám đủ lớn; từ chối NaN, phức hoặc ảnh quá nhỏ."""
     source = np.asarray(image)
     if (
         source.ndim != 3
@@ -41,6 +50,10 @@ def _as_gray_u8(image: np.ndarray) -> np.ndarray | None:
 def _edge_profile(
     gray: np.ndarray, line: np.ndarray
 ) -> dict[str, Any] | None:
+    """Hồ sơ cường độ dọc pháp tuyến cạnh: đo ESF rồi chuẩn hóa thành profile [0,1].
+
+    Dùng ``remap`` lấy mẫu dọc vuông góc đường Hough — liên quan feature extraction / C5.
+    """
     x1, y1, x2, y2 = (float(value) for value in line.reshape(-1))
     dx = x2 - x1
     dy = y2 - y1
@@ -94,7 +107,8 @@ def _edge_profile(
 
 
 def _edge_profiles(gray: np.ndarray) -> list[dict[str, Any]]:
-    edges = cv2.Canny(gray, 35, 105, L2gradient=True)
+    """Canny + HoughLinesP → tối đa 12 profile cạnh độc lập theo hướng (C5)."""
+    edges = cv2.Canny(gray, 35, 105, L2gradient=True)  # ngưỡng kép, gradient L2
     minimum_length = max(20, min(gray.shape) // 10)
     lines = cv2.HoughLinesP(
         edges,
@@ -126,7 +140,7 @@ def _edge_profiles(gray: np.ndarray) -> list[dict[str, Any]]:
         if not duplicate:
             candidates.append(profile)
 
-    # Keep the longest independent edge evidence from each direction first.
+    # Ưu tiên cạnh dài, tối đa 2 profile mỗi bin 15° để đa dạng hướng cho motion.
     candidates.sort(key=lambda item: item["length"], reverse=True)
     selected: list[dict[str, Any]] = []
     per_direction: dict[int, int] = {}
@@ -142,6 +156,7 @@ def _edge_profiles(gray: np.ndarray) -> list[dict[str, Any]]:
 
 
 def _has_directional_diversity(profiles: list[dict[str, Any]]) -> bool:
+    """Có ≥2 cạnh lệch góc ≥20° thì mới thêm ứng viên kernel motion vào lưới tìm."""
     for index, first in enumerate(profiles):
         for second in profiles[index + 1 :]:
             difference = abs(first["angle"] - second["angle"])
@@ -154,6 +169,7 @@ def _has_directional_diversity(profiles: list[dict[str, Any]]) -> bool:
 def _analytic_step_profile(
     kernel: np.ndarray, normal: np.ndarray, offsets: np.ndarray
 ) -> np.ndarray:
+    """Phân bố tích lũy khối lượng kernel theo khoảng cách ký trên pháp tuyến — tìm thô nhanh."""
     height, width = kernel.shape
     rows, columns = np.indices((height, width), dtype=np.float32)
     projection = (
@@ -168,6 +184,7 @@ def _analytic_step_profile(
 
 
 def _prepare_step_model(normal: np.ndarray, offsets: np.ndarray) -> dict[str, Any]:
+    """Ảnh bước nhịp (step) nhị phân và tọa độ remap cho mô phỏng làm mờ cạnh."""
     margin = _PROFILE_RADIUS + 8 + 4
     side = 2 * margin + 1
     center = side // 2
@@ -185,6 +202,7 @@ def _prepare_step_model(normal: np.ndarray, offsets: np.ndarray) -> dict[str, An
 def _filter2d_step_profile(
     kernel: np.ndarray, model: dict[str, Any]
 ) -> np.ndarray:
+    """Conv step với kernel ứng viên rồi đọc profile — khớp chính xác hơn giai đoạn coarse (C2)."""
     filtered = cv2.filter2D(
         model["step"],
         ddepth=cv2.CV_32F,
@@ -202,6 +220,7 @@ def _filter2d_step_profile(
 
 
 def _profile_error(observed: np.ndarray, predicted: np.ndarray) -> float:
+    """MSE profile sau dịch thử ±1.5px — bù lệch căn cạnh không chính xác."""
     offsets = np.arange(-_PROFILE_RADIUS, _PROFILE_RADIUS + 1, dtype=np.float32)
     errors = []
     for shift in _SHIFTS:
@@ -217,6 +236,7 @@ def _profile_error(observed: np.ndarray, predicted: np.ndarray) -> float:
 
 
 def _candidates(include_motion: bool) -> list[tuple[dict[str, Any], np.ndarray]]:
+    """Lưới tham số disk (r=1..8) và motion (lẻ, góc 5°) cho tìm kiếm brute-force."""
     candidates = [
         ({"family": "disk", "parameters": {"radius": radius}}, disk_kernel(radius))
         for radius in range(1, 9)
@@ -245,6 +265,7 @@ def _candidate_scores(
     *,
     use_filter2d: bool,
 ) -> list[tuple[float, dict[str, Any], np.ndarray]]:
+    """Trung bình MSE profile quan sát vs dự đoán trên mọi cạnh; thấp hơn = khớp hơn."""
     prepared = [
         _prepare_step_model(profile["normal"], profile["offsets"])
         for profile in profiles
@@ -267,6 +288,7 @@ def _candidate_scores(
 
 
 def _valid_estimate(kernel: np.ndarray) -> tuple[np.ndarray | None, str | None]:
+    """Chuẩn hóa kernel ước lượng; loại delta gần (gần như không mờ) hoặc khối lượng không hợp lệ."""
     estimate = np.asarray(kernel, dtype=np.float64)
     if estimate.ndim != 2 or estimate.size == 0 or not np.all(np.isfinite(estimate)):
         return None, "estimated kernel is nonfinite"
@@ -282,10 +304,10 @@ def _valid_estimate(kernel: np.ndarray) -> tuple[np.ndarray | None, str | None]:
 
 
 def estimate_kernel(image: np.ndarray) -> tuple[np.ndarray | None, dict[str, Any]]:
-    """Estimate a disk or motion PSF from isolated straight edges in a BGR image.
+    """Ước lượng mù PSF disk hoặc motion từ cạnh thẳng trong ảnh BGR.
 
-    The estimator only receives image pixels. It does not accept or inspect the
-    generating study parameters.
+    Hai pha: coarse (profile phân tích) → shortlist → refine ``filter2D``;
+    motion được tinh chỉnh góc ±4°. Chỉ dùng pixel — không đọc tham số sinh ảnh.
     """
     gray = _as_gray_u8(image)
     if gray is None:
@@ -319,7 +341,7 @@ def estimate_kernel(image: np.ndarray) -> tuple[np.ndarray | None, dict[str, Any
         return _not_run("candidate step fit was nonfinite")
     best = min(refined, key=lambda item: item[0])
 
-    # Refine the motion angle locally after the bounded coarse search.
+    # Tinh chỉnh góc motion quanh ứng viên coarse — bước lưới 1° tương đương ±4.
     if best[1]["family"] == "motion":
         length = int(best[1]["parameters"]["length"])
         angle = float(best[1]["parameters"]["angle_deg"])
@@ -348,6 +370,7 @@ def estimate_kernel(image: np.ndarray) -> tuple[np.ndarray | None, dict[str, Any
 
 
 def _unit_kernel(kernel: np.ndarray, name: str) -> np.ndarray:
+    """Kernel float hữu hạn, không âm, tổng = 1 — chuẩn cho so sánh L2."""
     result = np.asarray(kernel, dtype=np.float64)
     if result.ndim != 2 or result.size == 0 or not np.all(np.isfinite(result)):
         raise ValueError(f"{name} must be a finite non-empty 2D kernel")
@@ -360,7 +383,10 @@ def _unit_kernel(kernel: np.ndarray, name: str) -> np.ndarray:
 
 
 def kernel_error(estimated: np.ndarray, ground_truth: np.ndarray) -> float:
-    """Return translation-aligned normalized L2 error between unit-sum kernels."""
+    """L2 chuẩn hóa ‖estimate−truth‖/‖truth‖ sau căn dịch tối ưu trên canvas lớn.
+
+    Cho phép lệch tịnh tiến vì ước lượng mù không khóa tâm kernel.
+    """
     estimate = _unit_kernel(estimated, "estimated kernel")
     truth = _unit_kernel(ground_truth, "ground-truth kernel")
     common_height = max(estimate.shape[0], truth.shape[0])

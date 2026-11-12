@@ -1,10 +1,14 @@
-"""Enhancement metrics and mask alignment.
+"""Chỉ số chất lượng ảnh và căn chỉnh mặt nạ cho tab Enhance.
 
-PSNR is ``10 * log10(255**2 / MSE)``, with MSE computed over every pixel and
-channel in float64. SSIM follows Wang et al. (2004): an 11x11 Gaussian window
-with sigma 1.5, ``C1 = (0.01*255)**2``, and ``C2 = (0.03*255)**2``; the result
-is the mean of the local SSIM map across pixels and channels. Undefined PSNR
-for identical inputs and IoU for two empty masks are represented by ``None``.
+PSNR (đỉnh tín hiệu trên nhiễu): MSE trên mọi pixel/kênh ở float64, rồi
+``10 * log10(255² / MSE)`` dB — chủ đề đánh giá sau lọc/khôi phục (C2/C3).
+
+SSIM (Wang et al. 2004): cửa sổ Gaussian 11×11, σ=1.5; trung bình cục bộ μ,
+phương sai σ² và hiệp σ_xy; hằng ổn định C1, C2; lấy trung bình bản đồ SSIM cục bộ
+— gần với cảm nhận cấu trúc hơn MSE thuần.
+
+``align_mask`` / ``iou`` hỗ trợ so khớp vùng (segmentation / đánh giá mặt nạ).
+PSNR khi MSE=0 và IoU khi hợp rỗng trả về ``None``.
 """
 
 from __future__ import annotations
@@ -14,7 +18,11 @@ import numpy as np
 
 
 def psnr(pred: np.ndarray, ref: np.ndarray) -> float | None:
-    """Compute peak signal-to-noise ratio in dB, or None when undefined."""
+    """PSNR (dB): so sánh ảnh khôi phục ``pred`` với tham chiếu ``ref``.
+
+    Công thức: 10·log₁₀(255²/MSE).     Khác kích thước hoặc MSE=0 → ``None``.
+    MSE tính trên mọi pixel/kênh — chỉ số toàn cục sau lọc/khôi phục (C2/C3).
+    """
     prediction = np.asarray(pred)
     reference = np.asarray(ref)
     if prediction.shape != reference.shape:
@@ -27,7 +35,11 @@ def psnr(pred: np.ndarray, ref: np.ndarray) -> float | None:
 
 
 def ssim(pred: np.ndarray, ref: np.ndarray) -> float | None:
-    """Compute mean Wang 2004 local SSIM, or None for incompatible images."""
+    """SSIM trung bình (Wang 2004): μ, σ² cục bộ qua lọc Gaussian 11×11 (C2).
+
+    Bản đồ SSIM = [(2μ_xμ_y+C1)(2σ_xy+C2)] / [(μ_x²+μ_y²+C1)(σ_x²+σ_y²+C2)].
+    Ảnh nhỏ hơn 11×11 hoặc shape lệch → ``None``.
+    """
     prediction = np.asarray(pred)
     reference = np.asarray(ref)
     if prediction.shape != reference.shape or prediction.ndim not in (2, 3):
@@ -46,6 +58,7 @@ def ssim(pred: np.ndarray, ref: np.ndarray) -> float | None:
     mu_x_sq = mu_x * mu_x
     mu_y_sq = mu_y * mu_y
     mu_xy = mu_x * mu_y
+    # E[X²] − μ² ≈ phương sai cục bộ; E[XY] − μ_xμ_y ≈ hiệp cục bộ
     sigma_x_sq = cv2.GaussianBlur(
         x * x, (11, 11), 1.5, borderType=cv2.BORDER_REFLECT
     ) - mu_x_sq
@@ -67,7 +80,10 @@ def ssim(pred: np.ndarray, ref: np.ndarray) -> float | None:
 
 
 def align_mask(mask: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
-    """Resize a mask to ``(height, width)`` for coordinate alignment only."""
+    """Đổi kích thước mặt nạ về (cao, rộng) đích — INTER_NEAREST giữ nhãn rời rạc.
+
+    Chỉ căn tọa độ với ảnh khác cỡ; không dùng cho IoU nếu caller resize sai luồng.
+    """
     if len(shape) < 2:
         raise ValueError("shape must include height and width")
     height, width = int(shape[0]), int(shape[1])
@@ -79,7 +95,10 @@ def align_mask(mask: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
 
 
 def iou(pred: np.ndarray, gt: np.ndarray) -> float | None:
-    """Compute binary intersection over union without resizing or cropping."""
+    """IoU nhị phân: |pred ∩ gt| / |pred ∪ gt| (segmentation / đánh giá vùng).
+
+    Pixel > 0 coi là foreground. Hợp rỗng hoặc shape khác → ``None``.
+    """
     prediction = np.asarray(pred)
     ground_truth = np.asarray(gt)
     if prediction.shape != ground_truth.shape:

@@ -1,8 +1,8 @@
-"""Qt-free enhancement engine for the Enhance tab.
+"""Lõi xử lý Enhance không phụ thuộc Qt.
 
-Thin boundary over the evaluation restoration operators: the UI compute path
-never imports PySide6, AnalysisService, or a database. Derived images are
-written next to the source with a ``.json`` provenance sibling.
+Gọi ``restore`` (và tùy chọn NAFNet) từ evaluation, ghi PNG + sidecar JSON
+(gốc SHA-256, tham số, thời điểm). Tách lớp này để luồng tính toán không kéo
+PySide6 hay cơ sở dữ liệu — phù hợp kiểm thử và mô tả pipeline khôi phục (C2/C3).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from imageguard.evaluation.enhance_ops import restore as restore_classical
 
 
 def derive(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict]:
-    """Apply a viewing operator and return (array, metadata)."""
+    """Điểm vào Enhance: ``nafnet`` gọi mô hình học sâu, còn lại gọi ``restore`` cổ điển."""
     source = np.asarray(image).copy()
     if kind == "nafnet":
         from imageguard.enhancement.nafnet import infer
@@ -31,7 +31,7 @@ def derive(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict
 
 
 def _sha256_file(path: Path) -> str:
-    """Return the SHA-256 hex digest of file bytes (streamed reads)."""
+    """Băm SHA-256 theo khối — xác minh file gốc khớp ``parent_sha256`` khi ghi sibling."""
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -42,7 +42,7 @@ def _sha256_file(path: Path) -> str:
 def _guard_destination_for_publish(
     path: Path, source: Path, *, overwrite: bool
 ) -> None:
-    """Refuse publishing when the target is missing, taken, or the source file."""
+    """Không ghi đè ảnh nguồn và không ghi chồng file đích khi ``overwrite=False``."""
     if _same_as_source(path, source):
         raise ValueError("destination must differ from the source image")
     if path.exists() and not overwrite:
@@ -56,7 +56,7 @@ def _write_exclusive_atomic(
     *,
     overwrite: bool,
 ) -> None:
-    """Write bytes via an exclusive temp file and atomic replace."""
+    """Ghi qua file tạm ``O_EXCL`` rồi ``os.replace`` — tránh file dở khi lỗi giữa chừng."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     _guard_destination_for_publish(dest, source, overwrite=overwrite)
     tmp_path: Path | None = None
@@ -95,7 +95,7 @@ def _write_exclusive_atomic(
 
 
 def _same_as_source(path: Path, source: Path) -> bool:
-    """True when ``path`` is the source file, including after a junction swap."""
+    """So sánh cùng inode/resolve để ảnh derive không thay thế nhầm file gốc."""
     if path.resolve() == source.resolve():
         return True
     if not path.exists():
@@ -117,11 +117,9 @@ def write_sibling(
     overwrite: bool = False,
     model_sha256: str | None = None,
 ) -> Path:
-    """Write ``image`` as PNG and a ``.json`` provenance sibling.
+    """Ghi PNG kết quả khôi phục và sidecar JSON (method, params, hash, UTC).
 
-    The source file is never written. An existing destination is removed only
-    when ``overwrite`` is true, and only after the resolved PNG and sidecar
-    are checked again against the source.
+    Không sửa file nguồn; ``overwrite`` phải bật mới thay file đích đã tồn tại.
     """
     source_path = Path(source)
     dest = Path(dest_png)
@@ -170,7 +168,7 @@ def write_sibling(
 
 
 def _json_safe(value: object) -> object:
-    """Normalize numpy containers/scalars so ``json.dumps`` never fails."""
+    """Chuyển ndarray/scalar NumPy trong metadata thành kiểu JSON serializable."""
     if isinstance(value, dict):
         return {str(key): _json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):

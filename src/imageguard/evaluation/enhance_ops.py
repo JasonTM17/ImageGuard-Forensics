@@ -1,7 +1,15 @@
-"""Classical image degradation and restoration operators for evaluation studies.
+"""Toán tử suy giảm và khôi phục cổ điển phục vụ đánh giá thực nghiệm.
 
-These operators produce controlled image variants. Their outputs are method
-inputs, not evidence that an image has been restored to an original state.
+Mô-đun này tạo các biến thể ảnh có kiểm soát (mờ, nhiễu, nén JPEG, v.v.) và
+các bước khôi phục tương ứng (Wiener, Richardson–Lucy, unsharp, CLAHE, NLM).
+Đầu ra chỉ là đầu vào cho pipeline đo PSNR/SSIM và bootstrap — không chứng minh
+ảnh đã trở lại trạng thái gốc.
+
+Liên hệ bài giảng:
+- C2 (lọc không gian): ``filter2D``, kernel Gaussian/disk/motion, unsharp mask.
+- C3 (miền tần số): Wiener qua ``fft2`` / ``ifft2``.
+- DCT / JPEG: suy giảm ``jpeg`` qua ``imencode`` / ``imdecode``.
+- Nhiễu: AWGN (mô hình cộng Gaussian).
 """
 
 from __future__ import annotations
@@ -11,6 +19,7 @@ import numpy as np
 
 
 def _integer(value: int, name: str, minimum: int = 1) -> int:
+    """Ép kiểu số nguyên hợp lệ; từ chối bool và giá trị dưới ``minimum``."""
     if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
         raise TypeError(f"{name} must be an integer")
     result = int(value)
@@ -20,6 +29,7 @@ def _integer(value: int, name: str, minimum: int = 1) -> int:
 
 
 def _real(value: float, name: str, minimum: float | None = None) -> float:
+    """Ép kiểu float hữu hạn; tùy chọn kiểm tra ngưỡng dưới (σ, NSR, v.v.)."""
     result = float(value)
     if not np.isfinite(result):
         raise ValueError(f"{name} must be finite")
@@ -29,6 +39,7 @@ def _real(value: float, name: str, minimum: float | None = None) -> float:
 
 
 def _image_copy(image: np.ndarray) -> np.ndarray:
+    """Sao chép ảnh 2D/3D để suy giảm/khôi phục không đụng buffer gốc."""
     source = np.asarray(image)
     if source.ndim not in (2, 3) or source.size == 0:
         raise ValueError("image must be a non-empty 2D or 3D array")
@@ -36,11 +47,12 @@ def _image_copy(image: np.ndarray) -> np.ndarray:
 
 
 def _uint8(image: np.ndarray) -> np.ndarray:
+    """Làm tròn và kẹp [0, 255] — chuẩn hiển thị uint8 sau phép cộng/nhân."""
     return np.clip(np.rint(image), 0, 255).astype(np.uint8)
 
 
 def _bgr_uint8(image: np.ndarray, kind: str) -> np.ndarray:
-    """Validate the three-channel uint8 BGR input the colour operators need."""
+    """Kiểm tra ảnh BGR uint8 (CLAHE/NLM cần không gian màu đúng định dạng)."""
     if image.ndim != 3 or image.shape[2] != 3:
         raise ValueError(f"{kind} expects a three-channel BGR image")
     if image.dtype != np.uint8:
@@ -49,6 +61,7 @@ def _bgr_uint8(image: np.ndarray, kind: str) -> np.ndarray:
 
 
 def _normalized_kernel(kernel: np.ndarray) -> np.ndarray:
+    """Chuẩn hóa kernel 2D sao tổng = 1 — bảo toàn năng lượng khi conv (C2)."""
     result = np.asarray(kernel, dtype=np.float32)
     if result.ndim != 2 or result.size == 0:
         raise ValueError("kernel must be a non-empty 2D array")
@@ -59,7 +72,10 @@ def _normalized_kernel(kernel: np.ndarray) -> np.ndarray:
 
 
 def gaussian_kernel(ksize: int, sigma: float) -> np.ndarray:
-    """Return a normalized square Gaussian kernel with odd dimensions."""
+    """Kernel Gaussian 2D tách được: tích ngoài 1D × 1D, lọc làm mờ đẳng hướng (C2).
+
+    ``ksize`` lẻ; ``sigma`` điều khiển độ rộng bell. Mô hình suy giảm out-of-focus / sensor.
+    """
     size = _integer(ksize, "ksize")
     if size % 2 == 0:
         raise ValueError("ksize must be odd")
@@ -69,7 +85,7 @@ def gaussian_kernel(ksize: int, sigma: float) -> np.ndarray:
 
 
 def disk_kernel(radius: int) -> np.ndarray:
-    """Return a normalized filled elliptical kernel of the requested radius."""
+    """Kernel hình đĩa (ellipse đặc) — lọc hộp tròn, liên quan morphology/structuring (C2)."""
     r = _integer(radius, "radius", minimum=0)
     size = 2 * r + 1
     ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
@@ -77,7 +93,7 @@ def disk_kernel(radius: int) -> np.ndarray:
 
 
 def motion_kernel(length: int, angle_deg: float) -> np.ndarray:
-    """Return a normalized, rasterized straight-line motion kernel."""
+    """PSF chuyển động: đoạn thẳng raster hóa theo góc — mô phỏng rung camera (C2 conv)."""
     size = _integer(length, "length")
     angle = _real(angle_deg, "angle_deg")
     kernel = np.zeros((size, size), dtype=np.uint8)
@@ -95,6 +111,7 @@ def motion_kernel(length: int, angle_deg: float) -> np.ndarray:
 
 
 def _metadata(kind: str, **parameters: object) -> dict:
+    """Gói loại toán tử và tham số thực tế để lưu provenance / tái lập thí nghiệm."""
     return {"kind": kind, **parameters}
 
 
@@ -102,6 +119,7 @@ def _awgn_generator(
     rng: np.random.Generator | int,
     declared_seed: object | None,
 ) -> tuple[np.random.Generator, int | list[int] | None]:
+    """Chuẩn hóa RNG và seed để nhiễu AWGN có thể tái lập trong metadata."""
     if isinstance(rng, (int, np.integer)) and not isinstance(rng, bool):
         seed = int(rng)
         if declared_seed is not None and int(declared_seed) != seed:
@@ -131,7 +149,11 @@ def degrade(
     params: dict,
     rng: np.random.Generator | int | None,
 ) -> tuple[np.ndarray, dict]:
-    """Apply one controlled degradation and return its effective parameters."""
+    """Một bước suy giảm có kiểm soát; trả (ảnh, metadata).
+
+    Hỗ trợ: gaussian/disk/motion (lọc không gian C2), awgn (nhiễu), jpeg (DCT+RL),
+    downsample (lấy mẫu không gian). ``rng`` chỉ cần cho awgn.
+    """
     source = _image_copy(image)
     if kind == "gaussian":
         size = _integer(params["ksize"], "ksize")
@@ -139,7 +161,7 @@ def degrade(
             raise ValueError("ksize must be odd")
         sigma = _real(params["sigma"], "sigma", minimum=np.finfo(float).tiny)
         kernel = gaussian_kernel(size, sigma)
-        output = cv2.filter2D(source, -1, kernel)
+        output = cv2.filter2D(source, -1, kernel)  # tích chập với PSF Gaussian
         return output, _metadata(
             kind, ksize=size, sigma=sigma, kernel=kernel.tolist()
         )
@@ -163,13 +185,14 @@ def degrade(
         sigma = _real(params["sigma"], "sigma", minimum=0.0)
         generator, seed = _awgn_generator(rng, params.get("seed"))
         noise = generator.normal(0.0, sigma, size=source.shape)
-        output = _uint8(source.astype(np.float64) + noise)
+        output = _uint8(source.astype(np.float64) + noise)  # AWGN cộng, độ lệch chuẩn sigma
         return output, _metadata(kind, sigma=sigma, seed=seed)
 
     if kind == "jpeg":
         quality = _integer(params["quality"], "quality", minimum=0)
         if quality > 100:
             raise ValueError("quality must be in [0, 100]")
+        # Vòng nén/giải JPEG: mất thông tin khối 8×8 DCT — chủ đề JPEG trong môn
         ok, encoded = cv2.imencode(
             ".jpg", source, [cv2.IMWRITE_JPEG_QUALITY, quality]
         )
@@ -186,19 +209,21 @@ def degrade(
         target = (width // factor, height // factor)
         if target[0] == 0 or target[1] == 0:
             raise ValueError("factor must leave a non-zero output dimension")
-        output = cv2.resize(source, target, interpolation=cv2.INTER_AREA)
+        output = cv2.resize(source, target, interpolation=cv2.INTER_AREA)  # lấy mẫu thưa
         return output, _metadata(kind, factor=factor)
 
     raise ValueError(f"unsupported degradation kind: {kind}")
 
 
 def _kernel_from_params(params: dict) -> np.ndarray:
+    """Đọc kernel từ metadata degrade (oracle/wrong/estimated) cho Wiener/RL."""
     if "kernel" not in params:
         raise ValueError("params must include a kernel")
     return _normalized_kernel(np.asarray(params["kernel"], dtype=np.float32))
 
 
 def _preserve_wrong_delta(params: dict, metadata: dict) -> None:
+    """Ghi lại tham số kernel sai (wrong_*) khi thí nghiệm so sánh ước lượng mù."""
     for name in ("wrong_sigma", "wrong_radius", "wrong_angle_deg"):
         if name in params:
             metadata[name] = params[name]
@@ -207,9 +232,13 @@ def _preserve_wrong_delta(params: dict, metadata: dict) -> None:
 def _richardson_lucy(
     source: np.ndarray, kernel: np.ndarray, iterations: int
 ) -> np.ndarray:
+    """Richardson–Lucy: deconvolution iterative trong không gian (C2), giả định Poisson/Gaussian.
+
+    Mỗi vòng: conv ước lượng → tỉ số quan sát/dự đoán → nhân hiệu chỉnh conv kernel lật.
+    """
     observed = source.astype(np.float32)
     estimate = observed.copy()
-    flipped = cv2.flip(kernel, -1)
+    flipped = cv2.flip(kernel, -1)  # kernel lật ≈ adjoint trong conv tuyến tính
     epsilon = np.finfo(np.float32).eps
     for _ in range(iterations):
         blurred = cv2.filter2D(estimate, -1, kernel, borderType=cv2.BORDER_REFLECT)
@@ -224,6 +253,10 @@ def _richardson_lucy(
 def _wiener_channel(
     channel: np.ndarray, kernel: np.ndarray, nsr: float
 ) -> np.ndarray:
+    """Wiener một kênh: H*·G / (|H|² + NSR) trong miền tần số (C3).
+
+    PSF nhúng góc trên lưới FFT; NSR ~ tỉ lệ nhiễu/tín hiệu, lớn hơn → mượt hơn.
+    """
     height, width = channel.shape
     padded = np.zeros((height, width), dtype=np.float64)
     for row in range(kernel.shape[0]):
@@ -235,7 +268,7 @@ def _wiener_channel(
         axis=(0, 1),
     )
     transfer = np.fft.fft2(padded)
-    power = np.abs(transfer) ** 2
+    power = np.abs(transfer) ** 2  # |H(u,v)|² — phổ năng lượng của PSF
     denominator = np.maximum(power + nsr, np.finfo(np.float64).eps)
     estimate = np.fft.ifft2(
         np.fft.fft2(channel.astype(np.float64))
@@ -246,6 +279,7 @@ def _wiener_channel(
 
 
 def _wiener(source: np.ndarray, kernel: np.ndarray, nsr: float) -> np.ndarray:
+    """Wiener đa kênh: xử lý từng kênh BGR độc lập rồi ghép."""
     if source.ndim == 2:
         restored = _wiener_channel(source, kernel, nsr)
     else:
@@ -260,7 +294,7 @@ def _wiener(source: np.ndarray, kernel: np.ndarray, nsr: float) -> np.ndarray:
 
 
 def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict]:
-    """Apply a classical restoration operator and record its effective inputs."""
+    """Khôi phục/cải biên cổ điển: unsharp, CLAHE, NLM, Richardson–Lucy, Wiener."""
     source = _image_copy(image)
 
     if kind == "unsharp":
@@ -270,6 +304,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         sigma = _real(params["sigma"], "sigma", minimum=np.finfo(float).tiny)
         amount = _real(params["amount"], "amount", minimum=0.0)
         blurred = cv2.GaussianBlur(source, (size, size), sigmaX=sigma)
+        # Unsharp: gốc + amount × (high-pass ≈ gốc − làm mờ) — lọc không gian C2
         restored = source.astype(np.float64) + amount * (
             source.astype(np.float64) - blurred.astype(np.float64)
         )
@@ -290,6 +325,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         )
         lab = cv2.cvtColor(source, cv2.COLOR_BGR2LAB)
         lightness, a_channel, b_channel = cv2.split(lab)
+        # CLAHE chỉ kéo kênh L theo ô — cân bằng cục bộ, không đổi màu a/b
         clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile)
         adjusted = clahe.apply(lightness)
         output = cv2.cvtColor(
@@ -307,6 +343,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         search_size = _integer(params["searchWindowSize"], "searchWindowSize")
         if template_size % 2 == 0 or search_size % 2 == 0:
             raise ValueError("NLM window sizes must be odd")
+        # NLM: trung bình có trọng số theo tương đồng patch — giảm nhiễu giữ cạnh
         output = cv2.fastNlMeansDenoisingColored(
             source,
             None,
@@ -353,10 +390,10 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
 
 
 def wrong_kernel(kind: str, params: dict) -> np.ndarray:
-    """Build a distinct blur kernel and record its changed parameter in params.
+    """Tạo kernel làm mờ *khác* kernel thật để thử khôi phục với PSF sai.
 
-    ``params`` may be the metadata dict returned by :func:`degrade`; the
-    selected ``wrong_*`` value is added to that dict for later reporting.
+    Ghi ``wrong_sigma`` / ``wrong_radius`` / ``wrong_angle_deg`` vào ``params``
+    (thường là metadata từ :func:`degrade`) cho báo cáo so sánh oracle vs wrong.
     """
     if not isinstance(params, dict):
         raise TypeError("params must be a dict so the wrong parameter is recorded")
