@@ -12,8 +12,9 @@
 ## ERD
 
 ```
-image_assets 1───n analyses 1───n method_results
-                        └───n artifacts
+image_assets 1───n analyses
+                   ├───n method_results
+                   └───n artifacts
 experiments 1───n experiment_results
 meta(key,value): schema_version
 ```
@@ -21,13 +22,15 @@ meta(key,value): schema_version
 | Bảng | Vai trò |
 |---|---|
 | image_assets | dedup theo sha256 — cùng file = cùng row |
-| analyses | một lần phân tích: verdict, config_hash, duration |
-| method_results | per-method: verdict/score/score_definition/evidence/limitations |
-| artifacts | rel_path tới `data/artifacts/<analysis_id>/` |
-| experiments + experiment_results | eval runs + metrics JSON |
+| analyses | một lần phân tích: `overall_verdict`, `config_hash`, `duration_ms` |
+| method_results | per-method: `verdict`/`score`/`score_definition`/`evidence_json`/`limitations_json` |
+| artifacts | rel_path tới `data/artifacts/<analysis_id>/`; kind `mask`/`heatmap`/`pairs`/`report` (schema khai báo thêm `ela`) |
+| experiments + experiment_results | eval runs + `metrics_json` |
+| meta | key/value — `schema_version` |
 
 ## Artifact files
 
 `data/artifacts/<analysis_id>/{method}_mask.png`, `{method}_heat.png`,
-`report.json`. Delete analysis → cascade rows + `ArtifactStore.delete_analysis`
-dọn thư mục file.
+`{method}_pairs.png` (khi method có `pairs_image`), `report.json`.
+`export_markdown` ghi thêm `report.md` vào cùng thư mục. Delete analysis →
+cascade rows + `ArtifactStore.delete_analysis` dọn thư mục file.

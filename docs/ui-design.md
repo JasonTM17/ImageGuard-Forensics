@@ -2,10 +2,11 @@
 
 ## Nguyên tắc
 
-1. **Engine Qt-free**: `imageguard.forensics/*` không import Qt. UI chỉ gọi
-   `AnalysisService`/`HistoryService` — thay UI toolkit không đụng engine.
-   Tab Tăng cường gọi `imageguard.enhancement.derive` (Qt-free, không DB)
-   thay vì `AnalysisService`.
+1. **Engine Qt-free**: `imageguard.forensics/*` không import Qt. UI gọi
+   service (`AnalysisService`, `HistoryService`, `ReportService`) và engine
+   tăng cường Qt-free (`imageguard.enhancement.derive`) — thay UI toolkit
+   không đụng engine. Tab Tăng cường gọi `derive` (Qt-free, không DB) thay vì
+   `AnalysisService`.
 2. **UI thread không bao giờ chạy forensics**: mọi phân tích qua
    `QThreadPool` (maxThreadCount=1 — serialize để giới hạn RAM) +
    `QRunnable`. Rule cứng: worker không chạm QWidget; dữ liệu đi qua signals.
@@ -13,10 +14,11 @@
    (không kill thread — kill thread giữa native OpenCV call = crash).
 4. **QImage phải `.copy()`**: QImage giữ pointer vào buffer ndarray; ndarray
    bị GC → dangling pointer → crash ngẫu nhiên. Mọi bridge numpy→Qt đều copy.
-5. **Wording trung thựp**: mọi text tập trung `ui/strings.py` —
-   "dấu hiệu" không "kết luận"; verdict không dùng đỏ/xanh tuyệt đối
-   (đỏ = phán có tội, xanh = minh oan — cả hai overclaim). Test
-   `test_strings_no_forbidden_wording` enforce.
+5. **Wording trung thực**: phần lớn nhãn/text UI tập trung `ui/strings.py`
+   (một số thông báo dialog viết trực tiếp trong screen) — "dấu hiệu" không
+   "kết luận"; verdict không dùng đỏ/xanh tuyệt đối (đỏ = phán có tội, xanh =
+   minh oan — cả hai overclaim). Test `test_strings_no_forbidden_wording`
+   quét các hằng chuỗi in hoa trong `strings.py`.
 6. **Disclaimer cố định**: `DisclaimerBar` dưới cùng mọi màn hình, không
    ẩn được.
 
@@ -27,7 +29,7 @@ ui/
   app.py           QApplication + build_services() wire DI
   main_window.py   QTabWidget: Analyze | Enhance | History | Stats | Settings
                    + DisclaimerBar (ngoài tab, luôn hiện)
-  strings.py       toàn bộ text VN (integrity-tested)
+  strings.py       nhãn/text UI chính (integrity-tested)
   workers.py       WorkerSignals + AnalysisWorker; EnhanceSignals + EnhanceWorker
   widgets/
     image_canvas.py    QGraphicsView: zoom(wheel)/pan(drag)/fit + overlay alpha
@@ -48,7 +50,7 @@ Thống kê → Cài đặt. Smoke test: `tests/test_ui_smoke.py` assert `tabs.c
 
 ```
 AnalyzeScreen._run()
-  → AnalysisRequest(path, methods, cancel=Event)
+  → AnalysisRequest(path, methods)  (AnalysisWorker tự tạo cancel Event)
   → AnalysisWorker(QRunnable) ──pool──▶ thread
        │  signals.progress(frac, stage)  ← progress_cb từ service
        │  signals.result(ForensicReport|ErrorResult)
@@ -59,8 +61,9 @@ AnalyzeScreen._run()
 ```
 
 - `ErrorResult` từ `safe_open` hiển thị trong `lbl_err` — KHÔNG dialog crash.
-- Method `NOT_APPLICABLE` (ELA trên PNG) vẫn render card xám kèm limitation.
-- History persist qua Phase-6 `HistoryService`; delete gỡ artifacts trên đĩa.
+- Method `NOT_APPLICABLE` (ELA trên PNG) vẫn render `MethodCard` kèm limitation.
+- `AnalysisService` persist history; `HistoryService` list/get/delete, delete
+  gỡ artifacts trên đĩa.
 
 ## Enhance tab
 
@@ -75,10 +78,10 @@ database-free) và check `threading.Event` trước khi emit `result`;
   đổi opacity của overlay — không ghi pixel, không chạy lại operator.
 - Banner `strings.ENHANCE_BANNER` cố định, luôn hiện: ảnh tăng cường là
   bản xem, không phải bằng chứng; phân tích dấu hiệu chỉ gắn với file gốc.
-- Xuất: PNG + `.json` sibling (`derive.write_sibling`) ghi
-  `parent_sha256`/`derived_sha256`/`method`/`params`/`model_sha256` (null hoặc hash ONNX)/
-  `created_utc`; đích trùng file gốc bị từ chối, đích đã tồn tại phải xác
-  nhận ghi đè.
+- Xuất: PNG + `.json` sibling (`derive.write_sibling`) ghi `derived`,
+  `parent_sha256`/`derived_sha256`/`method`/`params`/`model_sha256` (null với
+  operator cổ điển, hash ONNX với NAFNet)/`created_utc`; đích trùng file gốc bị
+  từ chối, đích đã tồn tại phải xác nhận ghi đè.
 
 ## Stats tab
 
@@ -89,6 +92,7 @@ phân bố trong DB cục bộ) — không chạy detector, không thay verdict 
 
 - **Mask**: `bgr[mask>0] = (0,0,255)` blend 0.6/0.4 với gốc.
 - **Heatmap**: `render_heatmap` (colormap) resize về base, alpha=0.55.
+- **Pairs** (keypoint): ảnh `pairs_image` làm overlay, alpha=1.0.
 
 ## Tests
 

@@ -8,20 +8,21 @@
 │  QGraphicsView viewer · worker bridge       │
 ├─────────────────────────────────────────────┤
 │ Services — Phase 6                          │
-│  AnalysisService · HistoryService · EvalSvc │
-│  ReportService (Markdown export)            │
+│  AnalysisService · HistoryService           │
+│  EvaluationService · ReportService          │
+│  (report Markdown export)                   │
 ├─────────────────────────────────────────────┤
 │ Forensics engine (Qt-free, headless)        │
-│  methods/  copy_move_keypoint · block · ela │
+│  keypoint/ block/ auxiliary/ (ela, noise)   │
 │  localize/ mask fusion · heatmap            │
-│  fusion/   verdict adjudication             │
+│  fusion.py combine() — luật verdict         │
 ├─────────────────────────────────────────────┤
 │ Core domain                                 │
 │  models · enums · errors · limits · config  │
 │  io (safe_open) · metadata · preprocess     │
 ├─────────────────────────────────────────────┤
 │ Enhancement (Qt-free derive / NAFNet view)  │
-│ Ingest (folder watch · custody log)         │
+│ Ingest (folder scan · custody log)          │
 │ Evaluation — synthforge · metrics · studies │
 │ Persistence — SQLite + artifact store       │
 └─────────────────────────────────────────────┘
@@ -30,20 +31,21 @@
 ## Nguyên tắc bất biến
 
 1. **Engine Qt-free** — `src/imageguard/core/`, `forensics/`, `evaluation/`, `enhancement/`, `ingest/` không import PySide6. Test headless bằng pytest.
-2. **GUI thread sở hữu widget** — worker chỉ trả `AlgorithmResult`/`ForensicReport` qua signal; không chạm widget.
-3. **Ngưỡng tập trung** — mọi constant thuật toán nằm trong `configs/thresholds.yaml` với `source` giải thích nguồn.
-4. **Không overclaim** — Verdict 5 trạng thái; ELA/EXIF/noise là exploratory; report có disclaimer + `score_definition`.
+2. **GUI thread sở hữu widget** — worker chỉ trả `ForensicReport`/`ErrorResult` qua signal; không chạm widget.
+3. **Ngưỡng tập trung** — ngưỡng thuật toán chính nằm trong `configs/thresholds.yaml` với `source` giải thích nguồn; một số hằng tiền xử lý/hiển thị vẫn nằm trong code.
+4. **Không overclaim** — Verdict 5 trạng thái; ELA/EXIF/noise/freq/splicing là exploratory (AUX); report có disclaimer, mỗi `score` đi kèm `score_definition`.
 5. **Đường dẫn tương đối** — artifact/history lưu relative path + basename; tuyệt đối không lưu absolute path.
 
 ## Data flow (phân tích một ảnh)
 
 ```
-file → safe_open (magic→caps→decode→exif_transpose) → ImageDocument
-     → preprocess per-method → method.analyze(gray, cfg) → AlgorithmResult[]
-     → fusion.adjudicate() → ForensicReport → artifacts/{report_id}/ + SQLite
+file → safe_open (path→size→magic→caps→decode→exif_transpose) → ImageDocument
+     → method.analyze(doc, cfg, cancel) (mỗi method tự preprocess)
+     → AlgorithmResult[] → fusion.combine() → ForensicReport
+     → data/artifacts/{report_id}/ + SQLite
 ```
 
-Folder ingest lives outside `forensics/` and `core/`; it waits for finished
+Folder ingest lives outside `forensics/` and `core/`; it scans for finished
 still images, then calls the headless `AnalysisService` and appends custody
 events without changing the analysis or verdict pipeline.
 
@@ -61,19 +63,20 @@ src/imageguard/
                localize/   fusion_masks.py heatmap.py
   enhancement/ derive.py nafnet.py
   ingest/      folder.py commands.py config.py custody.py http_pull.py
+  ipkit/       edges.py morphology.py noise.py threshold.py _util.py
   services/    analysis_service.py history_service.py
                evaluation_service.py report_service.py
-  storage/     db.py artifacts.py repository.py models.py history.py
+  storage/     db.py artifacts.py repository.py models.py
   evaluation/  synthforge.py metrics.py runner.py comofod.py datasets.py
                robustness.py modelforge.py modelbench.py
                blind_kernel.py enhance_ops.py enhance_metrics.py
                enhance_study.py enhance_bootstrap.py nafnet_arm.py
                splicing_study.py
-  ui/          app.py main_window.py workers.py strings.py
+  ui/          app.py main_window.py workers.py strings.py a11y.py
                screens/  analyze.py enhance.py history.py stats.py settings.py
                widgets/  image_canvas.py verdict_panel.py
 configs/thresholds.yaml
 tests/
 docs/      xem README.md — chỉ mục đầy đủ
-data/ artifacts/  (runtime, gitignored)
+data/      (runtime, gitignored; artifacts/ nằm trong data/)
 ```
