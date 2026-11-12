@@ -75,15 +75,48 @@ _FIELD_SPECS = {
 }
 
 
+_RE_QUOTED_PATH = re.compile(
+    r'"(?:[A-Za-z]:[\\/]|\\\\|/)[^"]*"|'
+    r"'(?:[A-Za-z]:[\\/]|\\\\|/)[^']*'"
+)
+_RE_UNC_PATH = re.compile(r"\\\\[^\\]+(?:\\[^\\\"'\n\r]+)+")
+_RE_WIN_ABS_PATH = re.compile(
+    r"[A-Za-z]:(?:(?:\\[^\\\"'\n\r]+)+|(?:/[^/\\\"'\n\r]+)+)"
+)
+_RE_POSIX_ABS_PATH = re.compile(r"/(?:[^/\\\"'\n\r]+(?:/[^/\\\"'\n\r]+)+)")
+_RE_PATH_LIKE = re.compile(
+    r"(?:[A-Za-z]:[\\/]|\\\\|/(?:home|Users|tmp|var|etc)(?:/|\\))"
+)
+
+
+def _path_match_to_basename(match: re.Match[str]) -> str:
+    token = match.group(0).strip("\"'")
+    return Path(token.replace("\\", "/")).name
+
+
+def _redact_paths_in_message(raw: str) -> str:
+    """Thay mọi đường dẫn tuyệt đối (kể cả có khoảng trắng) bằng tên file."""
+    if raw is None:
+        raise ValueError("message must be a string")
+    out = raw
+    for pattern in (
+        _RE_QUOTED_PATH,
+        _RE_UNC_PATH,
+        _RE_WIN_ABS_PATH,
+        _RE_POSIX_ABS_PATH,
+    ):
+        out = pattern.sub(_path_match_to_basename, out)
+    return out
+
+
 def _sanitize_exception_text(exc: BaseException) -> str:
     """Rút gọn thông báo lỗi — không lộ đường dẫn host, chỉ tên file nếu có."""
-    raw = str(exc)
-
-    def _to_basename(match: re.Match[str]) -> str:
-        segment = match.group(0).replace("\\", "/")
-        return Path(segment).name
-
-    sanitized = re.sub(r"(?:[A-Za-z]:)?(?:[\\/])[^\s\"']+", _to_basename, raw)
+    raw = str(exc).strip()
+    if not raw:
+        return f"{type(exc).__name__}: {strings.MSG_EXCEPTION_PATH_REDACTED}"
+    sanitized = _redact_paths_in_message(raw)
+    if _RE_PATH_LIKE.search(sanitized):
+        return f"{type(exc).__name__}: {strings.MSG_EXCEPTION_PATH_REDACTED}"
     return f"{type(exc).__name__}: {sanitized}"
 
 

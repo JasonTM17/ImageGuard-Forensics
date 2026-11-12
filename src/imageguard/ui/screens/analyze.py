@@ -79,9 +79,21 @@ class AnalyzeScreen(QWidget):
         self.chk_nloc = QCheckBox(strings.METHOD_LABEL["noise_local"])
         self.chk_freq = QCheckBox(strings.METHOD_LABEL["frequency_analysis"])
         self.chk_spl = QCheckBox(strings.METHOD_LABEL["splicing_cues"])
-        for c in (self.chk_kp, self.chk_bl, self.chk_ela,
-                  self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
-            apply_a11y(c, strings.A11Y_ANALYZE_METHODS)
+        for method_key, c in (
+            ("copy_move_keypoint", self.chk_kp),
+            ("copy_move_block", self.chk_bl),
+            ("ela", self.chk_ela),
+            ("noise_inconsistency", self.chk_noise),
+            ("noise_local", self.chk_nloc),
+            ("frequency_analysis", self.chk_freq),
+            ("splicing_cues", self.chk_spl),
+        ):
+            label = strings.METHOD_LABEL[method_key]
+            a11y_name = strings.FMT_A11Y_ANALYZE_METHOD.format(
+                group=strings.A11Y_ANALYZE_METHODS,
+                label=label,
+            )
+            apply_a11y(c, a11y_name)
             rl.addWidget(c)
 
         self.btn_run = QPushButton(strings.BTN_RUN)

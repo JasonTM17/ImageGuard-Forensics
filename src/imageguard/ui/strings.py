@@ -133,6 +133,9 @@ A11Y_ANALYZE_PROGRESS = "Tiến độ phân tích"
 A11Y_ANALYZE_OVERLAY = "Chọn lớp phủ xem trên ảnh"
 A11Y_ANALYZE_EXPORT = "Xuất báo cáo phân tích Markdown"
 A11Y_ANALYZE_METHODS = "Chọn phương pháp phân tích"
+FMT_A11Y_ANALYZE_METHOD = "{group} — {label}"
+
+MSG_EXCEPTION_PATH_REDACTED = "Thao tác thất bại (chi tiết đường dẫn đã được ẩn)."
 A11Y_ANALYZE_CARDS = "Danh sách kết quả theo phương pháp"
 
 A11Y_ENHANCE_OPEN = "Mở ảnh để tăng cường"
