@@ -111,12 +111,16 @@ def test_casia_lock_binds_population_and_oracle_before_exclusive_receipt(tmp_pat
         contract["population"]["forged"] += 1
     elif change == "row_inventory":
         manifest["rows"][0]["image_path"] = "held-aside.png"
-    path = tmp_path / "pair.json"
+    cohort_root = tmp_path / "cohort"
+    cohort_root.mkdir()
+    receipts_root = tmp_path / "receipts"
+    receipts_root.mkdir()
+    path = receipts_root / "pair.json"
     path.write_text(json.dumps(contract), encoding="utf-8")
     def lock():
         return protocol._lock_pair(path, "baseline", identity, manifest, "e" * 64,
-                                   ["copy_move_block"], "c" * 64)
-    receipt = tmp_path / "event-casia-fixture/baseline.json"
+                                   ["copy_move_block"], "c" * 64, cohort_root)
+    receipt = receipts_root / "event-casia-fixture/baseline.json"
     if change is None:
         lock()
         assert receipt.is_file()
