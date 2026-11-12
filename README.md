@@ -91,7 +91,7 @@ Các số dưới đây đến từ **một sự kiện đánh giá chính thứ
 | Phương pháp | Trên ảnh đã chỉnh (103) | Trên ảnh gốc (103) |
 | --- | --- | --- |
 | **Keypoint** | 94 coi suspicious (9 FN); 9 INCONCLUSIVE trên ảnh chỉnh | 22 FP suspicious; **59 INCONCLUSIVE** (trong 81 hàng “nonsuspicious” theo confusion) |
-| **Block** | 37 coi suspicious (66 không suspicious); 3 INCONCLUSIVE | 0 FP suspicious; 0 INCONCLUSIVE |
+| **Block** | 37 coi suspicious; 66 không suspicious *(gồm 3 `INCONCLUSIVE` + 63 `NO_INDICATION` trên ảnh chỉnh — [`docs/fusion-offline-analysis.md`](docs/fusion-offline-analysis.md))* | 0 FP suspicious; 0 INCONCLUSIVE |
 
 - Block: original FPR **0/103** trên mẫu này — *không* khẳng định FPR luôn bằng 0 mọi nguồn ảnh.
 - Keypoint: edited recall ~**91,26%** trên cohort này; original FPR ~**21,36%** (22/103).

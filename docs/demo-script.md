@@ -18,7 +18,7 @@ Tài liệu cho **bảo vệ đồ án** môn Xử lý ảnh: người trình b�
 | --- | --- |
 | Kiểm tra phiên bản / import | **PASS** |
 | Sinh ảnh synthforge (CLI hoặc Python) | **PASS** |
-| `imageguard analyze` (CLI) | **PASS** (~15,7 s cho ảnh 512×512, keypoint+block) |
+| `imageguard analyze` (CLI) | **PASS** (≈2,2 s wall-clock ảnh 512×512 keypoint+block; xem [`docs/performance.md`](performance.md)) |
 | Xuất Markdown qua `ReportService` (tương đương nút GUI) | **PASS** |
 | Smoke GUI 4 s (process không thoát sớm) | **PASS** |
 | Demo `ipkit` (CLI) | **PASS** |
@@ -73,7 +73,7 @@ Get-ChildItem .\synth
 **Đầu ra mẫu:**
 
 ```text
-Wrote 1 samples to .\synth (manifest: .\synth\meta.json)
+Wrote 1 samples to synth (manifest: synth\meta.json)
 
 easy_0000_F.png   # ảnh chỉnh sửa tổng hợp — dùng cho phân tích
 easy_0000_O.png   # gốc
@@ -118,7 +118,7 @@ cd <scratch>
 $env:PYTHONPATH = "<repo>\src"
 $env:PYTHONIOENCODING = "utf-8"
 $img = (Resolve-Path .\synth\easy_0000_F.png).Path
-<python> -m imageguard analyze $img --methods keypoint,block --no-persist | Select-Object -First 12
+<python> -m imageguard analyze $img --methods keypoint,block --no-persist | Select-String 'overall_verdict|"verdict"|has_mask'
 ```
 
 **Kết quả đã quan sát trên cùng ảnh synth:**
@@ -131,7 +131,7 @@ $img = (Resolve-Path .\synth\easy_0000_F.png).Path
 | `copy_move_block` | `suspicious_indication`, `has_mask`: true |
 | `exif_audit` | `inconclusive` (cue phụ; không tự kết luận) |
 
-Thời gian wall-clock một lần đo: **≈15,7 s** (máy chạy thử demo).
+Thời gian wall-clock một lần đo: **≈2,2 s** (cùng lệnh Phần 3); median `analysis_service` 512 px trong [`docs/performance.md`](performance.md) là **2.1750727000035113 s** (superset: thêm `ela` + EXIF so với chỉ keypoint+block).
 
 **Câu nói:** `suspicious_indication` = có cấu trúc giống copy-move trong pipeline, **không** đồng nghĩa “ảnh giả”. Exit code ≠ 0 chỉ khi lỗi đọc file (`ErrorResult`), không phải verdict.
 
@@ -164,7 +164,7 @@ cd <repo>
 **Checklist trên máy chiếu (theo [`docs/ui-design.md`](ui-design.md), [`docs/user-guide.md`](user-guide.md)):**
 
 1. Tab **Phân tích** — **Mở ảnh** → chọn `easy_0000_F.png`.
-2. Bật **Copy-Move keypoint** và **Copy-Move block** → **Phân tích**; chờ progress (dự trù ~15–30 s cho 512²).
+2. Bật **Copy-Move keypoint** và **Copy-Move block** → **Phân tích**; chờ progress (≈2–3 s trên máy đo theo [`docs/performance.md`](performance.md), có thể lâu hơn trên máy yếu).
 3. Đọc banner verdict (cam / xám / vàng) — nhắc disclaimer dưới cùng.
 4. Dropdown **overlay**: mask đỏ và/hoặc heatmap; zoom (lăn chuột), pan (kéo). So sánh **cảm quan** với `easy_0000_M.png` (GT) nếu mở song song — **không** gọi đó là “độ chính xác %”.
 5. Thẻ từng method: đọc `score_definition` và `limitations` trên card.
@@ -291,7 +291,7 @@ Câu trả lời ngắn, bám [`limitations.md`](limitations.md) và [`README.md
    Không. synthforge sinh ảnh procedural trong repo; không dùng ảnh cá nhân ([`docs/report/figures.md`](report/figures.md)).
 
 9. **Giới hạn copy-move xoay/phóng to?**  
-   Block DCT yếu khi biến đổi hình học lớn; tier `hard` synthforge có rotate/scale — có thể `NO_INDICATION` dù có forgery.
+   Block DCT yếu khi biến đổi hình học lớn; tier `hard` synthforge có rotate/scale — có thể `NO_INDICATION` dù vùng copy-move có thật (mask GT).
 
 10. **Tại sao không ship `.exe` làm đường chính?**  
     [`docs/user-guide.md`](user-guide.md) và [`docs/packaging.md`](packaging.md): build PyInstaller từng gặp lỗi Qt DLL; demo khuyến nghị chạy source `python -m imageguard`.

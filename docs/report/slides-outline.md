@@ -109,8 +109,8 @@ không đủ texture thay vì đoán bừa.
   (`docs/algorithms/03-block.md`).
 - Flat-block filter (loại block `std < ε`) chống false positive ở vùng trời/tường trơn
   (`docs/algorithms/03-block.md`).
-- Chỉ bắt copy dạng translate; copy + rotate/scale/flip → `NO_INDICATION`
-  (`docs/limitations.md`).
+- Chỉ bắt copy dạng translate; copy + rotate/scale/flip → **thường** `NO_INDICATION`
+  (`docs/algorithms/03-block.md`, `docs/limitations.md`).
 
 **Speaker note:** Block bắt được vùng ít góc mà keypoint bỏ sót, nhưng đổi hình học là mất dấu vì
 hệ số DCT thay đổi hoàn toàn.
@@ -160,8 +160,8 @@ kết quả càng dễ là `INCONCLUSIVE`.
 
 **Bullets**
 
-- Tab Analyze hiển thị overlay mask/heatmap; worker trả `AlgorithmResult`/`ForensicReport` qua signal,
-  không chạm widget (`docs/ui-design.md`).
+- Tab Analyze hiển thị overlay mask/heatmap; worker trả `ForensicReport` hoặc `ErrorResult` qua signal;
+  `AlgorithmResult` nằm trong `report.methods` — worker không chạm widget (`docs/ui-design.md`).
 - History đọc bảng `analyses` từ SQLite; mở lại, xoá phiên và xuất Markdown qua `ReportService`
   (`docs/ui-design.md`, `docs/user-guide.md`).
 - Tab Enhance chỉ để xem; pixel enhanced **không** được đưa vào fusion verdict
@@ -183,8 +183,10 @@ Markdown để đối chiếu lại.
   không phải ảnh chụp camera tùy ý (`README.md`).
 - Keypoint: **94/103** ảnh đã chỉnh bị coi suspicious, **9** `INCONCLUSIVE`; trên ảnh gốc có
   **22/103** FP và **59/103** `INCONCLUSIVE` (`README.md`).
-- Block: **37/103** ảnh đã chỉnh bị coi suspicious (**66** không suspicious); trên ảnh gốc
-  **0/103** FP suspicious (`README.md`).
+- Block: **37/103** ảnh đã chỉnh bị coi suspicious; **66** không suspicious (gồm **3** `INCONCLUSIVE`
+  và **63** `NO_INDICATION` — [`docs/fusion-offline-analysis.md`](../fusion-offline-analysis.md));
+  trên ảnh gốc **0/103** FP suspicious (`README.md`, `docs/limitations.md`).
+  Bảng so sánh method không có cột `INCONCLUSIVE` trên ảnh chỉnh (`docs/algorithms/comparison.md`).
 - Keypoint recall ~**91,26%**, original FPR ~**21,36%**; macro IoU mask **0,461** (keypoint) so với
   **0,289** (block), baseline **.01** (`README.md`, `docs/algorithms/comparison.md`).
 
@@ -220,8 +222,9 @@ theo kích thước. Số này là thời gian trên một máy, không phải c
 
 **Bullets**
 
-- Trước sự kiện, tiêu chí cải thiện recall ảnh mức cho candidate block được đăng ký trước và gắn
-  với hợp đồng đánh giá (`docs/evaluation-methodology.md`).
+- Trước sự kiện, tiêu chí đã đăng ký: cải thiện recall ảnh mức (block coi suspicious trên ảnh chỉnh)
+  ít nhất **+5** so với baseline, FPR giữ (`docs/report/capstone-draft.md`, mục 4.6); cơ chế
+  candidate gắn với hợp đồng đánh giá (`docs/evaluation-methodology.md`).
 - `compare` kết luận **rejected**: candidate không được chấp nhận, ngưỡng production không đổi
   (`docs/report/capstone-draft.md`, mục 4.6).
 - Kết quả âm tính được giữ nguyên trong báo cáo thay vì chỉnh ngưỡng sau khi xem output test
@@ -262,8 +265,8 @@ cohort kèm giới hạn, và các giới hạn này được nêu ngay trong b�
 - Ảnh synth và fixture dùng seed cố định; cùng seed cho cùng bytes (`docs/testing-strategy.md`).
 - Hình trong bài sinh bằng `scripts/make_report_figures.py`; bảng hiệu năng sinh bằng
   `scripts/bench_methods.py` (`docs/report/figures.md`, `docs/performance.md`).
-- Kiểm thử headless: `$env:PYTHONPATH='src'; python -m pytest -q -p no:cacheprovider`, kèm
-  `ruff check` (`docs/testing-strategy.md`).
+- Kiểm thử headless: `$env:PYTHONPATH = '<repo>\src'; & '<python>' -m pytest -x -q -p no:cacheprovider`,
+  kèm `ruff check` (`docs/testing-strategy.md`).
 
 **Speaker note:** Số trong bài được chép từ tài liệu đã lưu, còn hình có script sinh lại. Nhờ vậy
 người chấm có thể kiểm tra thay vì tin vào slide.
@@ -300,7 +303,7 @@ Mỗi dòng dưới đây là một con số xuất hiện trong bài, kèm ngu�
 | Số cặp CASIA | 103 cặp | `README.md` |
 | Keypoint, ảnh chỉnh | 94/103 suspicious; 9 `INCONCLUSIVE` | `README.md` |
 | Keypoint, ảnh gốc | 22/103 FP; 59/103 `INCONCLUSIVE` | `README.md` |
-| Block, ảnh chỉnh | 37/103 suspicious; 66 không suspicious | `README.md` |
+| Block, ảnh chỉnh | 37/103 suspicious; 66 không suspicious (3 `INCONCLUSIVE` + 63 `NO_INDICATION`) | `README.md`, `docs/fusion-offline-analysis.md` |
 | Block, ảnh gốc | 0/103 FP; 0 `INCONCLUSIVE` | `README.md` |
 | Keypoint recall / FPR | ~91,26% / ~21,36% | `README.md` |
 | Macro IoU | 0,461 (keypoint); 0,289 (block); baseline .01 | `README.md`, `docs/algorithms/comparison.md` |
