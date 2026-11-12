@@ -1,6 +1,6 @@
 """Block copy-move course — translate vs rotated paste (seed 23, 160²).
 
-Locked outcomes (default ``ThresholdSet``, see ``plans/reports/w-l4-261106.md``):
+Locked outcomes with the default ``ThresholdSet``:
 translate → ``SUSPICIOUS_INDICATION`` with mask IoU vs source∪destination > 0;
 rotated paste → ``NO_INDICATION`` on this seed (not asserted suspicious).
 """

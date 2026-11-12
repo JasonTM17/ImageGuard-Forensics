@@ -1,6 +1,6 @@
-"""N2 — noise cue rate course (deterministic seed 20261106).
+"""Noise cue outlier_frac course (deterministic seed 20261106).
 
-Locked outcomes (default ``ThresholdSet``, see ``plans/reports/w-n2-261106.md``):
+Locked outcomes with the default ``ThresholdSet``:
 
 - split image (left half strong Gaussian noise, right half the same noise after
   a heavy Gaussian blur): ``evidence["outlier_frac"] == 0.0`` (0/64 blocks);
