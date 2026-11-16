@@ -179,8 +179,8 @@ Sơ đồ đầy đủ: [`docs/architecture.md`](../architecture.md) (ASCII laye
 Các tab Enhance, History, Settings, Stats: `figures/gui_tab_*.png` — metadata
 trong [`figures.md`](figures.md).
 
-[SINH VIÊN BỔ SUNG: sơ đồ layer H1 và luồng sequence H2 nếu giảng viên yêu cầu
-— hiện chưa có file vector trong repo; vẽ theo `architecture.md`.]
+Sơ đồ layer H1 (`figures/h1-layer-diagram.svg`) và luồng phân tích H2
+(`figures/h2-analysis-flow.svg`) — vector, vẽ theo `architecture.md`.
 
 ### 3.2 Luồng dữ liệu một lần phân tích
 

@@ -1,29 +1,16 @@
-## Mô tả
+## Summary
 
-<!-- Một chủ đề mỗi PR. Conventional Commits trên các commit. -->
+<!-- Một đoạn ngắn: thay đổi gì và vì sao. Giữ wording khoa học —
+"dấu hiệu/gợi ý điều tra", không khẳng định ảnh giả mạo. -->
 
-## Ranh giới khoa học
+## Changes
 
-- [ ] Không thêm wording khẳng định forgery/authentic hay xác suất giả mạo.
-- [ ] Không mở rộng enum `Verdict` hoặc schema báo cáo (trừ khi maintainer đã đồng ý trước).
+- ...
 
-## Phạm vi kỹ thuật
+## Verification
 
-- [ ] Không sửa `configs/thresholds.yaml` / ngưỡng detector (trừ khi được giao).
-- [ ] Không thêm dependency trong `pyproject.toml` (trừ khi được giao).
-- [ ] Không commit `data/`, `models/`, secrets, ảnh cá nhân.
+<!-- Lệnh đã chạy + kết quả: `ruff check`, `pytest`, GUI/CLI thử tay, bản .exe -->
 
-## Kiểm tra (PowerShell)
+## Notes
 
-```text
-QT_QPA_PLATFORM=offscreen
-python -m ruff check src tests scripts
-python -m pytest <đường-dẫn-test-liên-quan> -q -p no:cacheprovider
-```
-
-- Ruff:
-- Pytest:
-
-## Liên quan
-
-<!-- Fixes #… (nếu có) -->
+<!-- Giới hạn/thứ chưa verify; quyết định kỹ thuật cần reviewer chú ý -->

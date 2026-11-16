@@ -246,6 +246,27 @@ def make_pipeline_figures(out_dir: Path, records: list[FigureRecord]) -> None:
         )
     )
 
+    # Hình H4 báo cáo: mask keypoint vs mask block-DCT trên cùng ảnh forge.
+    block_mask = (
+        block.mask if block.mask is not None else np.zeros(forged.shape[:2], np.uint8)
+    )
+    h4_panels = _labeled_row(
+        [forged, overlay_mask(forged, kp.mask), overlay_mask(forged, block_mask)],
+        ["Forge (synthetic)", "Mask keypoint", "Mask block-DCT"],
+        gap=10,
+    )
+    h4_path = out_dir / "copymove_masks_keypoint_vs_block.png"
+    size_h4 = write_png_limited(h4_panels, h4_path)
+    records.append(
+        FigureRecord(
+            "copymove_masks_keypoint_vs_block.png",
+            "Mask keypoint vs block-DCT trên cùng ảnh synth",
+            "So sánh mask union keypoint (SIFT/ORB qua RANSAC) và mask "
+            "shift-voted block-DCT trên cùng ảnh forge synthetic (hình H4).",
+            f"KeypointCopyMove + BlockCopyMove; PNG {size_h4} byte",
+        )
+    )
+
     blur_src = _base_image(np.random.default_rng(SEED + 3), (420, 420))
     blurred = cv2.GaussianBlur(blur_src, (0, 0), sigmaX=2.8)
     unsharp, _ = derive(blurred, "unsharp", dict(RESTORER_PARAMS["unsharp"]))

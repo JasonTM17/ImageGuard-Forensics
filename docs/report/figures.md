@@ -24,6 +24,12 @@ Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 b
 - **Cách sinh:** synthforge + KeypointCopyMove; PNG 287320 byte
 - **Kích thước file:** 287320 byte
 
+### `copymove_masks_keypoint_vs_block.png` — Mask keypoint vs block-DCT (hình H4)
+
+- **Nội dung:** Ba khung: ảnh forge synthetic, mask union keypoint (SIFT/ORB qua RANSAC), mask shift-voted block-DCT trên cùng ảnh — so sánh vùng định vị hai method.
+- **Cách sinh:** synthforge + KeypointCopyMove + BlockCopyMove; PNG 242668 byte
+- **Kích thước file:** 242668 byte
+
 ### `freq_block_spectrum.png` — Block-DCT và phổ tần số
 
 - **Nội dung:** Ví dụ cue khám phá: heatmap block-DCT và phổ FFT trên cùng ảnh synthetic forge (không khẳng định độ chính xác).
@@ -65,4 +71,19 @@ Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 b
 - **Nội dung:** Cây ngưỡng đọc từ cấu hình dự án — minh họa layout báo cáo.
 - **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 80205 byte
 - **Kích thước file:** 80205 byte
+
+### `gui_tab_analyze_verdict.png` — Giao diện — tab Phân tích từ bản đóng gói
+
+- **Nội dung:** Bản `.exe` PyInstaller chạy thật: phân tích ảnh synthetic copy-move đến 100%, banner "Có dấu hiệu nghi vấn" và thẻ kết quả từng method. Dùng cho hình H3.
+- **Cách sinh:** `dist/ImageGuard/ImageGuard.exe` (PyInstaller 6.22.3, Python 3.13.12), chụp màn hình Windows 2026-11-16
+
+### `h1-layer-diagram.svg` — Sơ đồ layer (hình H1)
+
+- **Nội dung:** Stack UI → Services → Forensics engine → Core domain và tầng hỗ trợ (Enhancement/Ingest/Evaluation/Persistence/IPKit), bám `architecture.md`.
+- **Cách sinh:** SVG vector viết tay
+
+### `h2-analysis-flow.svg` — Luồng một lần phân tích (hình H2)
+
+- **Nội dung:** file → safe_open → ImageDocument → method.analyze → fusion.combine → ForensicReport → artifacts + SQLite; nhánh ErrorResult.
+- **Cách sinh:** SVG vector viết tay
 

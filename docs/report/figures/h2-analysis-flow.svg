@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="300" viewBox="0 0 920 300" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="920" height="300" fill="#ffffff"/>
+  <text x="460" y="30" text-anchor="middle" font-size="17" font-weight="600" fill="#1a1a1a">Luồng dữ liệu một lần phân tích</text>
+
+  <g font-size="11.5">
+    <rect x="20" y="90" width="110" height="60" rx="6" fill="#f3f4f6" stroke="#6b7280" stroke-width="1.5"/>
+    <text x="75" y="114" text-anchor="middle" font-weight="600" fill="#111827">file ảnh</text>
+    <text x="75" y="132" text-anchor="middle" font-size="10" fill="#4b5563">đường dẫn input</text>
+
+    <line x1="130" y1="120" x2="150" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+    <rect x="154" y="90" width="130" height="60" rx="6" fill="#fef9c3" stroke="#eab308" stroke-width="1.5"/>
+    <text x="219" y="110" text-anchor="middle" font-weight="600" fill="#713f12">safe_open</text>
+    <text x="219" y="126" text-anchor="middle" font-size="9.5" fill="#a16207">path→size→magic→caps</text>
+    <text x="219" y="140" text-anchor="middle" font-size="9.5" fill="#a16207">decode→exif_transpose</text>
+
+    <line x1="284" y1="120" x2="304" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+    <rect x="308" y="90" width="120" height="60" rx="6" fill="#fef9c3" stroke="#eab308" stroke-width="1.5"/>
+    <text x="368" y="114" text-anchor="middle" font-weight="600" fill="#713f12">ImageDocument</text>
+    <text x="368" y="132" text-anchor="middle" font-size="10" fill="#a16207">+ preprocess/method</text>
+
+    <line x1="428" y1="120" x2="448" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+    <rect x="452" y="90" width="130" height="60" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="517" y="110" text-anchor="middle" font-weight="600" fill="#14532d">method.analyze()</text>
+    <text x="517" y="126" text-anchor="middle" font-size="10" fill="#15803d">doc, cfg, cancel</text>
+    <text x="517" y="140" text-anchor="middle" font-size="10" fill="#15803d">keypoint·block·aux</text>
+
+    <line x1="582" y1="120" x2="602" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+    <rect x="606" y="90" width="130" height="60" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="671" y="110" text-anchor="middle" font-weight="600" fill="#14532d">fusion.combine()</text>
+    <text x="671" y="126" text-anchor="middle" font-size="10" fill="#15803d">AlgorithmResult[]</text>
+    <text x="671" y="140" text-anchor="middle" font-size="10" fill="#15803d">→ verdict</text>
+
+    <line x1="736" y1="120" x2="756" y2="120" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+    <rect x="760" y="90" width="140" height="60" rx="6" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+    <text x="830" y="114" text-anchor="middle" font-weight="600" fill="#312e81">ForensicReport</text>
+    <text x="830" y="132" text-anchor="middle" font-size="10" fill="#4338ca">JSON + disclaimer</text>
+  </g>
+
+  <line x1="830" y1="150" x2="830" y2="196" stroke="#555" stroke-width="1.5" marker-end="url(#arr2)"/>
+  <g>
+    <rect x="690" y="200" width="210" height="56" rx="6" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1.5"/>
+    <text x="795" y="222" text-anchor="middle" font-size="12" font-weight="600" fill="#374151">data/artifacts/{report_id}/</text>
+    <text x="795" y="240" text-anchor="middle" font-size="10.5" fill="#4b5563">+ SQLite (history, metadata)</text>
+  </g>
+  <line x1="690" y1="228" x2="180" y2="228" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <rect x="20" y="200" width="160" height="56" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="100" y="222" text-anchor="middle" font-size="12" font-weight="600" fill="#7f1d1d">ErrorResult</text>
+  <text x="100" y="240" text-anchor="middle" font-size="10" fill="#b91c1c">lỗi mở/đọc → exit ≠ 0</text>
+  <line x1="219" y1="150" x2="100" y2="196" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arr2)"/>
+</svg>
