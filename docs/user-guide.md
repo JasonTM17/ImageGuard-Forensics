@@ -75,7 +75,9 @@ không kết luận điều gì về ảnh.
   (dùng chung cho mọi suy luận ONNX model-forge, gồm NAFNet) — cài bằng
   `pip install -e ".[lama]"` để kéo **onnxruntime**; không bắt buộc cho
   copy-move/ELA. Cung cấp riêng file
-  `models/deblurring_nafnet_2025may.onnx`. Ứng dụng kiểm tra kích thước
+  `models/deblurring_nafnet_2025may.onnx` — với bản exe đóng gói thì đặt
+  thư mục `models/` cạnh `ImageGuard.exe` (và build bằng `.[dev,lama]`,
+  xem [`docs/packaging.md`](packaging.md)). Ứng dụng kiểm tra kích thước
   91.736.251 byte và SHA-256
   `07263f416febecce10193dd648e950b22e397cf521eedab1a114ef77b2bc9587`
   trước khi nạp; thiếu/sai weight sẽ báo lỗi. Chạy CPU, xử lý trên canvas

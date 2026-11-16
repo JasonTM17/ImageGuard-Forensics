@@ -33,10 +33,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install project with dev extras
+      - name: Install project with dev + ONNX extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,lama]"
       - name: PyInstaller build
         run: python -m PyInstaller --noconfirm --clean ImageGuard.spec
       - name: Verify dist output
