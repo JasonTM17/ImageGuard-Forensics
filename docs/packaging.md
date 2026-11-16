@@ -37,8 +37,8 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 
 ## Giới hạn đã biết
 
-- Bản build kèm toàn bộ PySide6/Qt (~300 MB giải nén — số cũ, chưa đo lại
-  trong worktree này) — bình thường cho Qt desktop.
+- Bản build kèm toàn bộ PySide6/Qt (~410 MB giải nén, đo 2026-11-16) —
+  bình thường cho Qt desktop; thêm ~90 MB nữa nếu kèm weight NAFNet.
 - Lần QA ngày 2026-11-16: PyInstaller 6.22.3 + Python 3.13.12
   (Windows Server 2022) build thành công và `dist/ImageGuard/ImageGuard.exe`
   chạy trọn luồng: mở GUI, nạp PNG, phân tích keypoint+ELA đến 100%,
@@ -46,8 +46,14 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
   của bản QA 2026-11-04 (Python 3.14.2/3.13.7) không còn tái hiện — coi
   như đã được giải quyết bởi bộ deps hiện tại. Nếu lỗi xuất hiện lại
   trên máy khác, giữ cách 1 (chạy từ source) làm đường dự phòng.
-- Spec hiện chỉ bundle `configs/`, không chứa weight NAFNet. Lựa chọn AI
-  cần ONNX Runtime và weight cung cấp riêng theo
-  [`docs/user-guide.md`](user-guide.md); chưa xác minh NAFNet trong bản đóng
-  gói. Ba operator cổ điển (unsharp, CLAHE, non-local means) không cần weight
-  này.
+- **NAFNet trong bản đóng gói** (đã xác minh 2026-11-16): build với extra
+  `lama` — `pip install -e ".[dev,lama]"` trước khi chạy PyInstaller — để
+  spec gói kèm `onnxruntime`; copy thư mục `models/` chứa
+  `deblurring_nafnet_2025may.onnx` vào cạnh `ImageGuard.exe` (weight không
+  đi trong spec/git vì ~92 MB, tải từ OpenCV Zoo, MIT License). Exe nhận
+  weight, chạy deblur và xuất PNG kèm sidecar provenance ghi `method:
+  nafnet` + `model_sha256` đúng pin. Bundle đã mang sẵn VC++ runtime
+  (`msvcp140*`, `vcruntime140*`) từ PySide6 nên chạy được trên máy sạch;
+  môi trường dev cài `lama` trên Windows cũ thiếu redist có thể cần cập
+  nhật VC++ 2015-2022 Redistributable. Ba operator cổ điển (unsharp, CLAHE,
+  non-local means) không cần weight này.
