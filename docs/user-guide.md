@@ -11,11 +11,11 @@
 .\.venv\Scripts\python.exe -m imageguard gui    # tường minh
 ```
 
-**Bản đóng gói (`dist/ImageGuard/ImageGuard.exe`):** chỉ thử sau khi đọc
-[`docs/packaging.md`](packaging.md). Tài liệu đó ghi một lần QA: PyInstaller
-build thành công nhưng executable lỗi import `QtWidgets` (DLL); **chưa có**
-xác nhận bản `.exe` chạy trọn luồng phân tích. Đừng coi file exe là đường
-chạy chính cho demo đồ án trừ khi bạn tự verify lại trên máy mình.
+**Bản đóng gói (`dist/ImageGuard/ImageGuard.exe`):** bản build
+PyInstaller 6.22.3 + Python 3.13.12 đã được verify 2026-11-16 — mở GUI,
+nạp ảnh và chạy trọn luồng phân tích với verdict đúng. Chi tiết QA trong
+[`docs/packaging.md`](packaging.md). Nếu gặp lỗi import `QtWidgets` trên
+máy khác, quay lại cách chạy từ source ở trên.
 
 ## Phân tích qua CLI (báo cáo JSON)
 

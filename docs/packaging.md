@@ -39,12 +39,13 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 
 - Bản build kèm toàn bộ PySide6/Qt (~300 MB giải nén — số cũ, chưa đo lại
   trong worktree này) — bình thường cho Qt desktop.
-- Lần QA ngày 2026-11-04: PyInstaller 6.22.3 + PySide6 6.12.0 build
-  thành công với Python 3.14.2 và 3.13.7, nhưng executable mới lỗi import
-  `QtWidgets` (DLL procedure not found); Qt smoke tối giản cũng lỗi.
-  Đây là bằng chứng lịch sử, chưa có xác nhận bản đóng gói hiện tại chạy
-  trọn luồng. Dùng cách 1 khi cần chạy source; không suy ra bản `.exe`
-  hoạt động từ kết quả pytest hoặc exit code build.
+- Lần QA ngày 2026-11-16: PyInstaller 6.22.3 + Python 3.13.12
+  (Windows Server 2022) build thành công và `dist/ImageGuard/ImageGuard.exe`
+  chạy trọn luồng: mở GUI, nạp PNG, phân tích keypoint+ELA đến 100%,
+  banner verdict và thẻ kết quả hiển thị đúng. Lỗi import `QtWidgets`
+  của bản QA 2026-11-04 (Python 3.14.2/3.13.7) không còn tái hiện — coi
+  như đã được giải quyết bởi bộ deps hiện tại. Nếu lỗi xuất hiện lại
+  trên máy khác, giữ cách 1 (chạy từ source) làm đường dự phòng.
 - Spec hiện chỉ bundle `configs/`, không chứa weight NAFNet. Lựa chọn AI
   cần ONNX Runtime và weight cung cấp riêng theo
   [`docs/user-guide.md`](user-guide.md); chưa xác minh NAFNet trong bản đóng

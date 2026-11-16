@@ -92,13 +92,13 @@ Bảng: phương pháp cổ điển vs pipeline này (giải thích được, kh
 - ERD SQLite: [`docs/database.md`](../database.md).
 - UI 5 tab: [`docs/ui-design.md`](../ui-design.md).
 
-**Hình bắt buộc (tự vẽ, chưa có trong repo — liệt kê để sản xuất):**
+**Hình bắt buộc:**
 
 | ID | Nội dung hình | Nguồn / ghi chú |
 | --- | --- | --- |
-| H1 | Sơ đồ layer (UI → Services → Forensics → Storage) | Dựa diagram trong `architecture.md` |
-| H2 | Luồng một lần phân tích (file → report artifact) | Sequence hoặc flowchart |
-| H3 | Screenshot tab Phân tích (banner + overlay mask) | Chụp từ app thật, ảnh demo không nhạy cảm |
+| H1 | Sơ đồ layer (UI → Services → Forensics → Storage) | `figures/h1-layer-diagram.svg` (vector, đã có) |
+| H2 | Luồng một lần phân tích (file → report artifact) | `figures/h2-analysis-flow.svg` (vector, đã có) |
+| H3 | Screenshot tab Phân tích (banner + overlay mask) | `figures/gui_tab_analyze_verdict.png` (chụp từ bản `.exe` đóng gói chạy thật) hoặc `gui_tab_analyze.png` |
 | H4 | Ví dụ mask keypoint vs block trên cùng ảnh synth | Từ `data/synth_*` hoặc artifact lưu |
 | H5 | (Tùy chọn) Kiến trúc ingest / custody | Chỉ nếu báo cáo có mục ingest |
 

@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Desktop app phát hiện và định vị dấu hiệu giả mạo ảnh số (Copy-Move, ELA) — đồ án Xử lý ảnh"
 readme = "README.md"
 requires-python = ">=3.13"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "opencv-python>=4.10",
     "numpy>=2.0",

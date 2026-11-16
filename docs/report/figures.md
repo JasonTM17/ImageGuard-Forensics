@@ -66,3 +66,18 @@ Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 b
 - **Cách sinh:** Qt windows (default), QFont(Segoe UI), MainWindow 1280×800 grab; PNG 80205 byte
 - **Kích thước file:** 80205 byte
 
+### `gui_tab_analyze_verdict.png` — Giao diện — tab Phân tích từ bản đóng gói
+
+- **Nội dung:** Bản `.exe` PyInstaller chạy thật: phân tích ảnh synthetic copy-move đến 100%, banner "Có dấu hiệu nghi vấn" và thẻ kết quả từng method. Dùng cho hình H3.
+- **Cách sinh:** `dist/ImageGuard/ImageGuard.exe` (PyInstaller 6.22.3, Python 3.13.12), chụp màn hình Windows 2026-11-16
+
+### `h1-layer-diagram.svg` — Sơ đồ layer (hình H1)
+
+- **Nội dung:** Stack UI → Services → Forensics engine → Core domain và tầng hỗ trợ (Enhancement/Ingest/Evaluation/Persistence/IPKit), bám `architecture.md`.
+- **Cách sinh:** SVG vector viết tay
+
+### `h2-analysis-flow.svg` — Luồng một lần phân tích (hình H2)
+
+- **Nội dung:** file → safe_open → ImageDocument → method.analyze → fusion.combine → ForensicReport → artifacts + SQLite; nhánh ErrorResult.
+- **Cách sinh:** SVG vector viết tay
+
