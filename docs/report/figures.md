@@ -24,6 +24,12 @@ Seed cố định: `20261112`. Mỗi PNG được nén/resize để ≤ 307200 b
 - **Cách sinh:** synthforge + KeypointCopyMove; PNG 287320 byte
 - **Kích thước file:** 287320 byte
 
+### `copymove_masks_keypoint_vs_block.png` — Mask keypoint vs block-DCT (hình H4)
+
+- **Nội dung:** Ba khung: ảnh forge synthetic, mask union keypoint (SIFT/ORB qua RANSAC), mask shift-voted block-DCT trên cùng ảnh — so sánh vùng định vị hai method.
+- **Cách sinh:** synthforge + KeypointCopyMove + BlockCopyMove; PNG 242668 byte
+- **Kích thước file:** 242668 byte
+
 ### `freq_block_spectrum.png` — Block-DCT và phổ tần số
 
 - **Nội dung:** Ví dụ cue khám phá: heatmap block-DCT và phổ FFT trên cùng ảnh synthetic forge (không khẳng định độ chính xác).
