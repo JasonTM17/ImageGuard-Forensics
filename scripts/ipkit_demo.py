@@ -559,7 +559,7 @@ def run_all_demos(out_dir: Path, bgr: np.ndarray, seed: int = DEMO_SEED) -> list
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Điểm vào CLI: ``--out`` bắt buộc, ``--image`` tùy chọn.
+    """Điểm vào CLI: ``--out`` tùy chọn (mặc định ``data/ipkit_demo``), ``--image`` tùy chọn.
 
     Returns
     -------
@@ -572,8 +572,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        required=True,
-        help="Thu muc ghi PNG montage (duoc tao neu chua co).",
+        default=Path("data/ipkit_demo"),
+        help="Thu muc ghi PNG montage (mac dinh: data/ipkit_demo).",
     )
     parser.add_argument(
         "--image",
