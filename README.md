@@ -1,6 +1,6 @@
 # ImageGuard Forensics
 
-Ứng dụng **desktop** (Python + PySide6) phân tích **dấu hiệu nghi vấn** trên ảnh số — đồ án môn Xử lý ảnh. Trọng tâm: copy-move (keypoint SIFT/ORB, block DCT), ELA cho JPEG, tín hiệu phụ (noise/tần số/metadata), fusion verdict thận trọng và khung đánh giá có seed cố định.
+Ứng dụng **desktop** (Python + PySide6) phân tích **dấu hiệu nghi vấn** trên ảnh số và luồng thu nhận đa camera. Trọng tâm: phát hiện copy-move (keypoint SIFT/ORB, block DCT), ELA cho JPEG, các tín hiệu phụ (noise/local-MAD, tần số, splicing, và phát hiện dấu hiệu Deepfake/AI 6 trụ cột hỗ trợ Dual-Camera Cross-Sensor), thu nhận trực tiếp từ Webcam/USB/IoT Camera kèm chẩn đoán quang học, module Khôi phục & Hiệu chuẩn Camera (Super-Resolution, Match Histogram, lọc tần số FFT), fusion verdict 5 trạng thái thận trọng và khung đánh giá có seed cố định.
 
 > **Ranh giới khoa học:** Công cụ chỉ báo *dấu hiệu có thể liên quan tới chỉnh sửa copy-move hoặc bất thường nén/metadata* — **không** khẳng định ảnh giả, **không** chứng minh ảnh nguyên bản. ELA/EXIF/noise là bằng chứng khám phá; khi không đủ tín hiệu, verdict là `INCONCLUSIVE`. Báo cáo tổng hợp mang tính *gợi ý điều tra*, không thay thế phân tích chuyên gia.
 
@@ -64,12 +64,12 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/modelforge.md`](docs/modelforge.md) | Model-forge / ONNX (design) |
 | [`docs/ml-extension.md`](docs/ml-extension.md) | Hướng ML (design-only) |
 | [`docs/splicing-study.md`](docs/splicing-study.md) | Splicing cues (exploratory) |
-| [`docs/image-processing-toolkit.md`](docs/image-processing-toolkit.md) | Toán tử xử lý ảnh cơ bản (demo, không dùng cho verdict) |
+| [`docs/image-processing-toolkit.md`](docs/image-processing-toolkit.md) | Thư viện toán tử Xử lý ảnh số thuần NumPy (`ipkit`) phục vụ hiệu chuẩn & phân tích phụ trợ |
 | [`docs/keypoint-calibration-study.md`](docs/keypoint-calibration-study.md) | Nghiên cứu offline false-cue keypoint (không đổi ngưỡng shipped) |
 | [`docs/reading-list.md`](docs/reading-list.md) | Tài liệu tham khảo |
-| [`docs/course-coverage.md`](docs/course-coverage.md) | Bản đồ chủ đề môn Xử lý ảnh → mã nguồn, test |
-| [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md) | Khung báo cáo đồ án |
-| [`docs/report/capstone-draft.md`](docs/report/capstone-draft.md) | Bản nháp báo cáo đồ án chương 1–4 |
+| [`docs/course-coverage.md`](docs/course-coverage.md) | Bản đồ đối chiếu thuật toán → mã nguồn, kiểm thử |
+| [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md) | Khung báo cáo kỹ thuật |
+| [`docs/report/capstone-draft.md`](docs/report/capstone-draft.md) | Bản nháp báo cáo đầy đủ (Chương 1–7) |
 | [`docs/report/figures.md`](docs/report/figures.md) | Hình minh họa synthetic cho báo cáo |
 | [`docs/report/slides-outline.md`](docs/report/slides-outline.md) | Dàn ý slide thuyết trình |
 | [`docs/demo-script.md`](docs/demo-script.md) | Kịch bản demo trực tiếp và Q&A hội đồng |

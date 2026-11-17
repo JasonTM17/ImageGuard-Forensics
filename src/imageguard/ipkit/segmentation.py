@@ -1,19 +1,15 @@
-"""Các toán tử phân đoạn ảnh (Segmentation) — Chương 5 môn Xử lý ảnh.
+"""Các toán tử phân đoạn ảnh (Segmentation) triển khai thuần NumPy.
 
-Triển khai thuần NumPy (không `cv2`/`scipy`/`skimage`) các kỹ thuật mà bài
-giảng Chương 5 (Digital Image Processing, PGS.TS. Hoàng Văn Dũng — dunghv)
-giới thiệu:
+Bao gồm các nhóm thuật toán cốt lõi (không phụ thuộc ``cv2``/``scipy``/``skimage``):
 
-* Mục 5.2 — Phát hiện điểm, đường và biên: ``detect_points``, ``detect_lines``,
+* Phát hiện điểm, đường và biên: ``detect_points``, ``detect_lines``,
   ``canny_edges``, ``hough_lines``.
-* Mục 5.3 — Ngưỡng (thresholding): ``iterative_global_threshold``.
-* Mục 5.4 — Phân đoạn theo vùng: ``region_growing``.
-* Mục 5.5 — Phân đoạn bằng các tiếp cận mới (watershed): ``simple_watershed``,
-  và ``kmeans_segmentation`` (phân cụm theo mức xám/màu).
+* Ngưỡng toàn cục lặp (thresholding): ``iterative_global_threshold``.
+* Phân đoạn theo vùng: ``region_growing``.
+* Phân đoạn lưu vực & phân cụm màu: ``simple_watershed``, ``kmeans_segmentation``.
 
-Đây là mã học tập/demo: mỗi toán tử viết lại "từ gốc" để sinh viên đọc và giải
-thích được từng dòng trước giảng viên, không phải bản sao chính xác từng pixel
-của OpenCV.
+Mỗi toán tử được cài đặt tường minh bằng NumPy thuần để bảo đảm khả năng
+kiểm chứng từng bước và tính độc lập với thư viện ngoài.
 """
 
 from __future__ import annotations
