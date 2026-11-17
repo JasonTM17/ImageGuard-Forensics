@@ -5,6 +5,7 @@ from __future__ import annotations
 from imageguard.forensics.fusion import AUX_METHODS
 
 _LOCKED = [
+    "deepfake_cues",
     "ela",
     "exif_audit",
     "frequency_analysis",

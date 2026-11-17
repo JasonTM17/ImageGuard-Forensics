@@ -8,6 +8,8 @@ per-method cards, limitations, disclaimer, provenance — KHÔNG xác suất.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,9 +29,10 @@ class ReportService:
 
     def read_report_json(self, analysis_id: str) -> dict | None:
         try:
-            return json.loads(self.store.read(f"{analysis_id}/report.json"))
+            report = json.loads(self.store.read(f"{analysis_id}/report.json"))
         except (ValueError, OSError):
             return None
+        return report if isinstance(report, dict) else None
 
     def export_markdown(self, analysis_id: str,
                         out_path: Path | None = None) -> Path | None:
@@ -37,13 +40,43 @@ class ReportService:
         rep = self.read_report_json(analysis_id)
         if rep is None:
             return None
-        md = self._render(rep)
-        self.store.put_bytes(analysis_id, "report.md", md.encode("utf-8"))
+        canonical = self.store.root.resolve() / self.store.rel_path(analysis_id, "report.md")
+        self._guard_export_destination(canonical, canonical)
         if out_path is not None:
             out_path = Path(out_path)
-            out_path.write_text(md, encoding="utf-8")
+            self._guard_export_destination(out_path, canonical)
+        data = self._render(rep).encode("utf-8")
+        self.store.put_bytes(analysis_id, "report.md", data)
+        if out_path is not None:
+            if out_path.resolve() != canonical:
+                self._write_external(out_path, data, canonical)
             return out_path
         return self.store.abs_path(f"{analysis_id}/report.md")
+
+    def _guard_export_destination(self, destination: Path, canonical: Path) -> None:
+        target = destination.resolve()
+        if (canonical.resolve() != canonical
+                or target.is_relative_to(self.store.root.resolve()) and target != canonical):
+            raise ValueError("export destination would replace a stored artifact")
+
+    def _write_external(self, destination: Path, data: bytes, canonical: Path) -> None:
+        temporary: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".report-",
+                                             suffix=".tmp", delete=False) as stream:
+                temporary = Path(stream.name)
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            self._guard_export_destination(destination, canonical)
+            os.replace(temporary, destination)
+            temporary = None
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _render(self, rep: dict) -> str:
         v = rep.get("overall_verdict", "inconclusive")

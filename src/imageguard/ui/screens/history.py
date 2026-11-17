@@ -27,6 +27,7 @@ from imageguard.services.history_service import HistoryService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.widgets.image_canvas import ImageCanvas
+from imageguard.ui.widgets.verdict_panel import _format_evidence_summary
 
 
 def _table_cell(text: str) -> QTableWidgetItem:
@@ -233,9 +234,16 @@ class AnalysisDetailDialog(QDialog):
             score = (f" — score {m['score']:.4g} ({m['score_definition']})"
                      if m["score"] is not None else "")
             method_title = strings.METHOD_LABEL.get(m["method"], m["method"])
-            lbl = QLabel(f"• {method_title}: "
-                         f"{strings.VERDICT_LABEL.get(m['verdict'], m['verdict'])}"
-                         f"{score}")
+            dur = f" · {m['duration_ms']} ms" if m.get("duration_ms") is not None else ""
+            ev_str = _format_evidence_summary(m.get("evidence"))
+            ev_line = f"\n    Chỉ số: {ev_str}" if ev_str else ""
+            lims = m.get("limitations") or []
+            lim_line = f"\n    Lưu ý: {lims[0]}" if lims else ""
+            lbl = QLabel(
+                f"• {method_title}: "
+                f"{strings.VERDICT_LABEL.get(m['verdict'], m['verdict'])}"
+                f"{score}{dur}{ev_line}{lim_line}"
+            )
             lbl.setWordWrap(True)
             methods_lay.addWidget(lbl)
         methods_scroll = QScrollArea()
@@ -266,10 +274,10 @@ class AnalysisDetailDialog(QDialog):
         lay.addWidget(buttons)
 
     def _show_art(self) -> None:
+        self.canvas.clear_image()
         rel = self.combo.currentData()
         if not rel or not rel.lower().endswith((".png", ".jpg", ".bmp")):
             self.lbl_art_err.setText("")
-            self.canvas.clear_image()
             return
         try:
             data = self._svc.store.read(rel)

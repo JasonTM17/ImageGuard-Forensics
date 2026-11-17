@@ -45,6 +45,21 @@ class AnalysisRequest:
     include_exif: bool = True
 
 
+class _PersistRecoveryError(Exception):
+    """Persist fail VÀ cleanup không hoàn tất — KHÔNG phải save bình thường.
+
+    Chỉ mang report UUID + stage lỗi + loại exception — không đường dẫn
+    tuyệt đối, không raw filesystem/DB message (nằm trong ``__cause__``).
+    """
+
+    def __init__(self, report_id: str, failed_stages: list[str]) -> None:
+        self.report_id = report_id
+        self.failed_stages = tuple(failed_stages)
+        super().__init__(
+            f"cleanup persist không hoàn tất — report {report_id} cần "
+            f"recovery thủ công (stages lỗi: {', '.join(failed_stages)})")
+
+
 class AnalysisService:
     def __init__(self, cfg: ThresholdSet | None = None,
                  images: ImageRepository | None = None,
@@ -99,34 +114,73 @@ class AnalysisService:
 
     def _persist(self, report: ForensicReport, doc: ImageDocument,
                  results: list[AlgorithmResult], wall_ms: int) -> None:
-        asset = self.images.get_or_create(
-            doc.sha256, doc.file_name, doc.width, doc.height, doc.image_format)
-        rd = _report_dict(report)
-        # duration wall-clock (toàn pipeline) — không phải tổng method duration.
-        self.analyses.save_report(report.report_id, asset.id, rd,
-                                  self.cfg.snapshot_hash(), wall_ms)
-        for r in results:
-            if r.mask is not None:
-                rel = self.store.put_image(report.report_id,
-                                           f"{r.method.value}_mask.png", r.mask)
-                self.analyses.add_artifact(report.report_id, "mask",
-                                           r.method.value, rel)
-            if r.heatmap is not None:
-                hm = (np.clip(r.heatmap, 0, 1) * 255).astype(np.uint8)
-                rel = self.store.put_image(report.report_id,
-                                           f"{r.method.value}_heat.png", hm)
-                self.analyses.add_artifact(report.report_id, "heatmap",
-                                           r.method.value, rel)
-            if r.evidence.get("pairs_image") is not None:
-                rel = self.store.put_image(report.report_id,
-                                           f"{r.method.value}_pairs.png",
-                                           r.evidence["pairs_image"])
-                self.analyses.add_artifact(report.report_id, "pairs",
-                                           r.method.value, rel)
-        rel = self.store.put_bytes(
-            report.report_id, "report.json",
-            json.dumps(rd, ensure_ascii=False, default=str, indent=1).encode())
-        self.analyses.add_artifact(report.report_id, "report", "", rel)
+        rid = report.report_id
+        self._claim_report_id(rid)
+        try:
+            asset = self.images.get_or_create(
+                doc.sha256, doc.file_name, doc.width, doc.height,
+                doc.image_format)
+            rd = _report_dict(report)
+            # duration wall-clock (toàn pipeline) — không phải tổng method duration.
+            self.analyses.save_report(rid, asset.id, rd,
+                                      self.cfg.snapshot_hash(), wall_ms)
+            for r in results:
+                if r.mask is not None:
+                    rel = self.store.put_image(rid,
+                                               f"{r.method.value}_mask.png",
+                                               r.mask)
+                    self.analyses.add_artifact(rid, "mask",
+                                               r.method.value, rel)
+                if r.heatmap is not None:
+                    hm = (np.clip(r.heatmap, 0, 1) * 255).astype(np.uint8)
+                    rel = self.store.put_image(rid,
+                                               f"{r.method.value}_heat.png",
+                                               hm)
+                    self.analyses.add_artifact(rid, "heatmap",
+                                               r.method.value, rel)
+                if r.evidence.get("pairs_image") is not None:
+                    rel = self.store.put_image(rid,
+                                               f"{r.method.value}_pairs.png",
+                                               r.evidence["pairs_image"])
+                    self.analyses.add_artifact(rid, "pairs",
+                                               r.method.value, rel)
+            rel = self.store.put_bytes(
+                rid, "report.json",
+                json.dumps(rd, ensure_ascii=False, default=str,
+                           indent=1).encode())
+            self.analyses.add_artifact(rid, "report", "", rel)
+        except Exception as exc:  # noqa: BLE001 - compensation boundary: mọi persist fail thường đều phải dọn custody dở dang
+            self._compensate_owned(rid, exc)
+
+    def _claim_report_id(self, rid: str) -> None:
+        """Giành ownership độc quyền cho report UUID MỚI trước khi persist.
+
+        Reject khi đã có analysis row hoặc artifact dir — raise trước mọi ghi
+        nên compensation không bao giờ xoá dữ liệu có sẵn.
+        """
+        if self.analyses.get(rid) is not None:
+            raise ValueError(f"report id đã tồn tại trong lịch sử: {rid}")
+        self.store._reserve_dir(rid)
+
+    def _compensate_owned(self, rid: str, exc: Exception) -> None:
+        """Thu hồi persist dở dang của UUID đã claim — mỗi nhánh độc lập.
+
+        Cleanup sạch → re-raise lỗi gốc (analyze báo limitation như cũ).
+        Cleanup fail → _PersistRecoveryError nêu rõ recovery, không giả save
+        thường. Không đụng ImageAsset/source bytes/report khác.
+        """
+        failed: list[str] = []
+        try:
+            self.analyses.delete(rid)
+        except Exception as e:  # noqa: BLE001 - vẫn phải thử cleanup artifacts
+            failed.append(f"database:{type(e).__name__}")
+        try:
+            self.store.delete_analysis(rid)
+        except Exception as e:  # noqa: BLE001
+            failed.append(f"artifacts:{type(e).__name__}")
+        if failed:
+            raise _PersistRecoveryError(rid, failed) from exc
+        raise exc
 
 
 def _progress(cb: ProgressCB, frac: float, stage: str) -> None:
@@ -151,6 +205,7 @@ _SPEC_TO_METHOD: dict[str, MethodName] = {
     "noise_local": MethodName.NOISE_LOCAL,
     "freq": MethodName.FREQUENCY_ANALYSIS,
     "splicing": MethodName.SPLICING_CUES,
+    "deepfake": MethodName.DEEPFAKE_CUES,
     "exif": MethodName.EXIF_AUDIT,
 }
 

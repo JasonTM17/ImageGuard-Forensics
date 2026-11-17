@@ -11,6 +11,8 @@ import hashlib
 import json
 import os
 import secrets
+import tempfile
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,6 +20,8 @@ import cv2
 import numpy as np
 
 from imageguard.evaluation.enhance_ops import restore as restore_classical
+
+_PAIR_LOCK = threading.RLock()
 
 
 def derive(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict]:
@@ -121,6 +125,24 @@ def write_sibling(
 
     Không sửa file nguồn; ``overwrite`` phải bật mới thay file đích đã tồn tại.
     """
+    with _PAIR_LOCK:
+        return _write_sibling(
+            source, dest_png, image, method, params, parent_sha256,
+            overwrite=overwrite, model_sha256=model_sha256,
+        )
+
+
+def _write_sibling(
+    source: Path,
+    dest_png: Path,
+    image: np.ndarray,
+    method: str,
+    params: dict,
+    parent_sha256: str,
+    *,
+    overwrite: bool,
+    model_sha256: str | None,
+) -> Path:
     source_path = Path(source)
     dest = Path(dest_png)
     json_path = dest.with_suffix(".json")
@@ -162,9 +184,90 @@ def write_sibling(
     json_bytes = (
         json.dumps(record, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     ).encode("utf-8")
-    _write_exclusive_atomic(dest, payload, source_path, overwrite=overwrite)
-    _write_exclusive_atomic(json_path, json_bytes, source_path, overwrite=overwrite)
+    _publish_pair(dest, payload, json_path, json_bytes, source_path, overwrite=overwrite)
     return json_path
+
+
+def _optional_hash(path: Path) -> str | None:
+    try:
+        return _sha256_file(path)
+    except FileNotFoundError:
+        return None
+
+
+def _backup_png(dest: Path) -> tuple[Path | None, str | None]:
+    """Keep previous bytes on disk before either destination is published."""
+    try:
+        original = dest.open("rb")
+    except FileNotFoundError:
+        return None, None
+    backup = None
+    try:
+        with original, tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".enhance-", suffix=".bak", dir=dest.parent, delete=False
+        ) as stream:
+            backup = Path(stream.name)
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: original.read(1024 * 1024), b""):
+                stream.write(chunk)
+                digest.update(chunk)
+            stream.flush()
+            os.fsync(stream.fileno())
+        return backup, digest.hexdigest()
+    except BaseException:
+        original.close()
+        if backup is not None:
+            backup.unlink(missing_ok=True)
+        raise
+
+
+def _publish_pair(
+    dest: Path, payload: bytes, sidecar: Path, metadata: bytes, source: Path,
+    *, overwrite: bool,
+) -> None:
+    # The lock covers preflight as well as publication and recovery. It protects
+    # cooperating threads only; separate processes must use distinct outputs.
+    previous_sidecar = _optional_hash(sidecar)
+    backup, previous_png = _backup_png(dest)
+    png_published = False
+    try:
+        _write_exclusive_atomic(dest, payload, source, overwrite=overwrite)
+        png_published = True
+        _write_exclusive_atomic(sidecar, metadata, source, overwrite=overwrite)
+    except BaseException as publication_error:
+        if not png_published:
+            if backup is not None:
+                backup.unlink(missing_ok=True)
+            raise
+        try:
+            current_png = _optional_hash(dest)
+            if _optional_hash(sidecar) != previous_sidecar:
+                raise RuntimeError("sidecar changed during publication")
+            if current_png != previous_png:
+                if current_png != hashlib.sha256(payload).hexdigest():
+                    raise RuntimeError("PNG changed during publication")
+                if _same_as_source(dest, source) or _same_as_source(sidecar, source):
+                    raise RuntimeError("destination aliases the source")
+                if backup is None:
+                    dest.unlink()
+                else:
+                    if _sha256_file(backup) != previous_png:
+                        raise RuntimeError("recovery backup changed")
+                    os.replace(backup, dest)
+                    backup = None
+        except BaseException:  # noqa: BLE001 - keep recovery bytes even if interrupted
+            recovery = (
+                f"backup {backup.name}, SHA-256 {previous_png}"
+                if backup is not None else "no previous PNG existed"
+            )
+            raise RuntimeError(
+                f"incomplete derived export; recovery required for {dest.name}: {recovery}"
+            ) from publication_error
+        if backup is not None:
+            backup.unlink(missing_ok=True)
+        raise
+    if backup is not None:
+        backup.unlink(missing_ok=True)
 
 
 def _json_safe(value: object) -> object:

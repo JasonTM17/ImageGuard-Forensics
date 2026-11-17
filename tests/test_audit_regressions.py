@@ -124,6 +124,7 @@ def test_delete_analysis_only_removes_own_dir(tmp_path: Path) -> None:
     ("noise_local", MethodName.NOISE_LOCAL),
     ("freq", MethodName.FREQUENCY_ANALYSIS),
     ("splicing", MethodName.SPLICING_CUES),
+    ("deepfake", MethodName.DEEPFAKE_CUES),
 ])
 def test_error_result_preserves_method(spec: str, expected: MethodName) -> None:
     from imageguard.services.analysis_service import _cancelled_result, _error_result
@@ -434,7 +435,7 @@ def test_overlay_shape_mismatch_does_not_crash(qtbot, tmp_path, ts):
     screen.load_path(p)
 
     report = ForensicReport(
-        report_id="r", image_sha256="x", image_name="b.png",
+        report_id="r", image_sha256=screen._doc.sha256, image_name="b.png",
         image_width=128, image_height=128, created_at="t", tool_version="t",
         methods=[AlgorithmResult(
             method=MethodName.COPY_MOVE_KEYPOINT, verdict=Verdict.NO_INDICATION,

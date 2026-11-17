@@ -23,6 +23,7 @@ from imageguard.core.models import AlgorithmResult
 AUX_METHODS = {
     MethodName.ELA, MethodName.EXIF_AUDIT, MethodName.NOISE_INCONSISTENCY,
     MethodName.NOISE_LOCAL, MethodName.FREQUENCY_ANALYSIS, MethodName.SPLICING_CUES,
+    MethodName.DEEPFAKE_CUES,
 }
 
 

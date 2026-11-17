@@ -66,6 +66,7 @@ class ImageCanvas(QGraphicsView):
         self._scene.clear()
         self._base = None
         self._overlay = None
+        self.resetTransform()
         text_item = self._scene.addText(strings.CANVAS_PLACEHOLDER)
         text_item.setDefaultTextColor(Qt.GlobalColor.darkGray)
         font = text_item.font()
@@ -76,6 +77,7 @@ class ImageCanvas(QGraphicsView):
             -text_item.boundingRect().height() / 2,
         )
         self.setSceneRect(-250, -150, 500, 300)
+        self.centerOn(0, 0)
 
     def clear_image(self) -> None:
         self._show_placeholder()

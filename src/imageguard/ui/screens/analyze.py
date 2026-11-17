@@ -10,12 +10,15 @@ import threading
 from pathlib import Path
 
 import cv2
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -30,16 +33,20 @@ from imageguard.core.models import ForensicReport
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.widgets.camera_dialog import CameraCaptureDialog
 from imageguard.ui.widgets.image_canvas import (
     ImageCanvas,
     heat_to_qpixmap,
     ndarray_to_qpixmap,
 )
+from imageguard.ui.widgets.sample_dialog import SampleGeneratorDialog
 from imageguard.ui.widgets.verdict_panel import MethodCard, VerdictBanner
 from imageguard.ui.workers import AnalysisWorker, make_pool
 
 
 class AnalyzeScreen(QWidget):
+    send_to_enhance = Signal(Path)
+
     def __init__(self, service: AnalysisService, parent=None) -> None:
         super().__init__(parent)
         self._svc = service
@@ -62,10 +69,22 @@ class AnalyzeScreen(QWidget):
 
         right = QWidget()
         rl = QVBoxLayout(right)
+        file_row = QHBoxLayout()
         self.btn_open = QPushButton(strings.BTN_OPEN)
         apply_a11y(self.btn_open, strings.A11Y_ANALYZE_OPEN)
         self.btn_open.clicked.connect(self._pick_file)
-        rl.addWidget(self.btn_open)
+        self.btn_camera = QPushButton(strings.CAMERA_BTN_OPEN)
+        apply_a11y(self.btn_camera, strings.A11Y_CAMERA_OPEN)
+        self.btn_camera.clicked.connect(self._capture_camera)
+        file_row.addWidget(self.btn_open, 1)
+        file_row.addWidget(self.btn_camera, 1)
+        rl.addLayout(file_row)
+
+        self.btn_demo_sample = QPushButton(strings.BTN_DEMO_SAMPLE)
+        apply_a11y(self.btn_demo_sample, strings.A11Y_DEMO_SAMPLE)
+        self.btn_demo_sample.clicked.connect(self._open_demo_sample)
+        rl.addWidget(self.btn_demo_sample)
+
         self.lbl_file = QLabel(strings.FMT_HINT)
         self.lbl_file.setWordWrap(True)
         rl.addWidget(self.lbl_file)
@@ -74,7 +93,28 @@ class AnalyzeScreen(QWidget):
         rl.addWidget(self.lbl_meta)
 
         methods_box = QGroupBox(strings.LBL_METHODS)
-        methods_grid = QGridLayout(methods_box)
+        methods_outer = QVBoxLayout(methods_box)
+        preset_row = QHBoxLayout()
+        self.btn_preset_default = QPushButton(strings.BTN_PRESET_DEFAULT)
+        self.btn_preset_camera = QPushButton(strings.BTN_PRESET_CAMERA)
+        self.btn_preset_all = QPushButton(strings.BTN_PRESET_ALL)
+        self.btn_preset_default.clicked.connect(
+            lambda: self._apply_method_preset(["keypoint", "block", "ela"])
+        )
+        self.btn_preset_camera.clicked.connect(
+            lambda: self._apply_method_preset(["ela", "noise_local", "freq", "deepfake"])
+        )
+        self.btn_preset_all.clicked.connect(
+            lambda: self._apply_method_preset(
+                ["keypoint", "block", "ela", "noise", "noise_local", "freq", "splicing", "deepfake"]
+            )
+        )
+        preset_row.addWidget(self.btn_preset_default)
+        preset_row.addWidget(self.btn_preset_camera)
+        preset_row.addWidget(self.btn_preset_all)
+        methods_outer.addLayout(preset_row)
+
+        methods_grid = QGridLayout()
         self.chk_kp = QCheckBox(strings.METHOD_LABEL["copy_move_keypoint"])
         self.chk_kp.setChecked(True)
         self.chk_bl = QCheckBox(strings.METHOD_LABEL["copy_move_block"])
@@ -84,6 +124,8 @@ class AnalyzeScreen(QWidget):
         self.chk_nloc = QCheckBox(strings.METHOD_LABEL["noise_local"])
         self.chk_freq = QCheckBox(strings.METHOD_LABEL["frequency_analysis"])
         self.chk_spl = QCheckBox(strings.METHOD_LABEL["splicing_cues"])
+        self.chk_df = QCheckBox(strings.METHOD_LABEL["deepfake_cues"])
+        self.chk_df.setChecked(False)
         method_checks = (
             ("copy_move_keypoint", self.chk_kp),
             ("copy_move_block", self.chk_bl),
@@ -92,6 +134,7 @@ class AnalyzeScreen(QWidget):
             ("noise_local", self.chk_nloc),
             ("frequency_analysis", self.chk_freq),
             ("splicing_cues", self.chk_spl),
+            ("deepfake_cues", self.chk_df),
         )
         for i, (method_key, c) in enumerate(method_checks):
             label = strings.METHOD_LABEL[method_key]
@@ -101,6 +144,7 @@ class AnalyzeScreen(QWidget):
             )
             apply_a11y(c, a11y_name)
             methods_grid.addWidget(c, i // 2, i % 2)
+        methods_outer.addLayout(methods_grid)
         rl.addWidget(methods_box)
 
         self.btn_run = QPushButton(strings.BTN_RUN)
@@ -141,6 +185,11 @@ class AnalyzeScreen(QWidget):
         self.btn_export.hide()
         rl.addWidget(self.btn_export)
 
+        self.btn_send_enhance = QPushButton(strings.BTN_SEND_TO_ENHANCE)
+        self.btn_send_enhance.setEnabled(False)
+        self.btn_send_enhance.clicked.connect(self._emit_send_to_enhance)
+        rl.addWidget(self.btn_send_enhance)
+
         self.cards_area = QScrollArea()
         apply_a11y(self.cards_area, strings.A11Y_ANALYZE_CARDS)
         self.cards_area.setMinimumHeight(180)
@@ -168,6 +217,45 @@ class AnalyzeScreen(QWidget):
             "Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)")
         if f:
             self.load_path(Path(f))
+
+    def _capture_camera(self) -> None:
+        if self._worker is not None:
+            self._show_busy_open()
+            return
+        dlg = CameraCaptureDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.captured_path is not None:
+            # Nguyên tắc: khung hình gốc từ camera tự động kích hoạt nhánh kiểm tra Deepfake trước.
+            self.chk_df.setChecked(True)
+            self.load_path(dlg.captured_path)
+
+    def _open_demo_sample(self) -> None:
+        if self._worker is not None:
+            self._show_busy_open()
+            return
+        dlg = SampleGeneratorDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.generated_path is not None:
+            self.load_path(dlg.generated_path)
+            if dlg.recommended_methods:
+                self._apply_method_preset(dlg.recommended_methods)
+
+    def _apply_method_preset(self, method_specs: list[str]) -> None:
+        selected = set(method_specs)
+        mapping = {
+            "keypoint": self.chk_kp,
+            "block": self.chk_bl,
+            "ela": self.chk_ela,
+            "noise": self.chk_noise,
+            "noise_local": self.chk_nloc,
+            "freq": self.chk_freq,
+            "splicing": self.chk_spl,
+            "deepfake": self.chk_df,
+        }
+        for spec, chk in mapping.items():
+            chk.setChecked(spec in selected)
+
+    def _emit_send_to_enhance(self) -> None:
+        if self._path is not None and self._worker is None:
+            self.send_to_enhance.emit(self._path)
 
     def dragEnterEvent(self, e) -> None:
         if e.mimeData().hasUrls():
@@ -204,12 +292,19 @@ class AnalyzeScreen(QWidget):
 
     def _set_running(self, running: bool) -> None:
         self.btn_open.setEnabled(not running)
+        self.btn_camera.setEnabled(not running)
+        self.btn_demo_sample.setEnabled(not running)
+        self.btn_preset_default.setEnabled(not running)
+        self.btn_preset_camera.setEnabled(not running)
+        self.btn_preset_all.setEnabled(not running)
         self.btn_run.setEnabled(not running and self._path is not None)
+        self.btn_send_enhance.setEnabled(not running and self._path is not None)
         self.btn_cancel.setEnabled(running)
         if not running:
             self.progress.setFormat("%p%")
         for c in (self.chk_kp, self.chk_bl, self.chk_ela,
-                  self.chk_noise, self.chk_nloc, self.chk_freq, self.chk_spl):
+                  self.chk_noise, self.chk_nloc, self.chk_freq,
+                  self.chk_spl, self.chk_df):
             c.setEnabled(not running)
 
     def load_path(self, path: Path) -> None:
@@ -232,6 +327,7 @@ class AnalyzeScreen(QWidget):
             self.canvas.clear_image()
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             self.btn_run.setEnabled(False)
+            self.btn_send_enhance.setEnabled(False)
             return
         self._path = path
         self._doc = out
@@ -242,6 +338,7 @@ class AnalyzeScreen(QWidget):
             f"{out.width}×{out.height} · {out.image_format} · "
             f"{out.file_bytes // 1024} KB · EXIF: {ex_txt}")
         self.btn_run.setEnabled(True)
+        self.btn_send_enhance.setEnabled(True)
 
     # --- run ---
     def _methods(self) -> list[str]:
@@ -260,6 +357,8 @@ class AnalyzeScreen(QWidget):
             m.append("freq")
         if self.chk_spl.isChecked():
             m.append("splicing")
+        if self.chk_df.isChecked():
+            m.append("deepfake")
         return m
 
     def _run(self) -> None:
@@ -305,6 +404,18 @@ class AnalyzeScreen(QWidget):
         if isinstance(out, ErrorResult):
             self._clear_results()
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
+            return
+        doc = self._doc
+        if doc is None or getattr(out, "image_sha256", None) != doc.sha256:
+            # File đã đổi kể từ preview — không ghép report của ảnh khác lên canvas cũ.
+            self._clear_results()
+            self._doc = None
+            self._path = None
+            self.canvas.clear_image()
+            self.lbl_meta.setText("")
+            self.lbl_err.setText(strings.ERR_SOURCE_CHANGED_REOPEN)
+            self.btn_run.setEnabled(False)
+            self.btn_send_enhance.setEnabled(False)
             return
         self._clear_results()
         self._report = out

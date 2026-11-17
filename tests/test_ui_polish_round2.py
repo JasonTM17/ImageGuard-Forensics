@@ -47,7 +47,7 @@ def test_overlay_combo_no_raw_method_ids_or_english_mask(qtbot, services, tmp_pa
     pairs = np.zeros((64, 64, 3), dtype=np.uint8)
     report = ForensicReport(
         report_id="r",
-        image_sha256="x" * 64,
+        image_sha256=screen._doc.sha256,
         image_name="overlay.png",
         image_width=64,
         image_height=64,

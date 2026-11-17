@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
+import json
+
 from imageguard.storage.artifacts import ArtifactStore
 from imageguard.storage.repository import AnalysisRepository
+
+
+def _saved_json(value: str, empty: dict | list) -> dict | list:
+    """Legacy nullable or malformed fields must remain renderable in history."""
+    try:
+        decoded = json.loads(value)
+    except (ValueError, TypeError):
+        return empty
+    return decoded if isinstance(decoded, type(empty)) else empty
 
 
 class HistoryService:
@@ -32,6 +43,9 @@ class HistoryService:
             "methods": [{
                 "method": m.method, "verdict": m.verdict, "score": m.score,
                 "score_definition": m.score_definition,
+                "evidence": _saved_json(m.evidence_json, {}),
+                "limitations": _saved_json(m.limitations_json, []),
+                "duration_ms": m.duration_ms,
             } for m in a.method_results],
             "artifacts": [{"kind": x.kind, "method": x.method,
                            "rel_path": x.rel_path} for x in a.artifacts],

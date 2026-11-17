@@ -155,7 +155,7 @@ def test_analyze_on_result_missing_mask_heatmap_evidence(qtbot, services, tmp_pa
     w.analyze.load_path(img)
     report = ForensicReport(
         report_id="rid-long-" + "a" * 32,
-        image_sha256="x" * 64,
+        image_sha256=w.analyze._doc.sha256,
         image_name=_UNICODE_RTL,
         image_width=128,
         image_height=128,
