@@ -99,17 +99,24 @@ def extract_features(
     q = (1.0 + (uu + vv) / 4.0).astype(np.float32)
 
     win = np.lib.stride_tricks.sliding_window_view(gray.astype(np.float32), (B, B))
-    n_rows, n_cols = win.shape[0], win.shape[1]
+    n_rows = win.shape[0]
     stds = block_std_map(gray, B)  # (H-B+1, W-B+1) align với top-left
-    feats = np.empty((n_rows * n_cols, n_coeffs), np.int32)
+    keep_mask = stds >= flat_std_eps
+    pos = np.argwhere(keep_mask).astype(np.int32)
+    if len(pos) == 0:
+        return np.empty((0, n_coeffs), dtype=np.int32), pos
+
+    feats = np.empty((len(pos), n_coeffs), np.int32)
+    offset = 0
     for r in range(n_rows):
-        blocks = win[r]  # (n_cols, B, B) view — không copy
+        keep_r = keep_mask[r]
+        cnt = int(keep_r.sum())
+        if cnt == 0:
+            continue
+        blocks = win[r][keep_r]  # chỉ trích DCT trên block đủ texture
         F = np.einsum("ux,cxy,vy->cuv", D, blocks, D, optimize=True)
-        feats[r * n_cols : (r + 1) * n_cols] = np.rint(
-            F.reshape(n_cols, B * B)[:, zz] / q
+        feats[offset : offset + cnt] = np.rint(
+            F.reshape(cnt, B * B)[:, zz] / q
         ).astype(np.int32)
-    pos = np.array(
-        [(r, c) for r in range(n_rows) for c in range(n_cols)], dtype=np.int32
-    )
-    keep = stds.ravel() >= flat_std_eps
-    return feats[keep], pos[keep]
+        offset += cnt
+    return feats, pos
