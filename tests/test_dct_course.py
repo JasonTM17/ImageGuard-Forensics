@@ -72,3 +72,30 @@ def test_one_level_high_frequency_change_preserves_quantized_dc_value() -> None:
 
     assert int(before[0, 0]) == 1020
     assert int(after[0, 0]) == 1020
+
+
+def test_extract_features_mixed_flat_and_textured_rows() -> None:
+    rng = np.random.default_rng(7)
+    gray = np.full((24, 24), 120, dtype=np.uint8)
+    # Đặt một vùng có texture rõ rệt ở nửa dưới để một số hàng phẳng bị bỏ qua hoàn toàn.
+    gray[12:22, 6:18] = rng.integers(0, 256, size=(10, 12), dtype=np.uint8)
+
+    B, n_coeffs = 8, 12
+    feats, pos = extract_features(gray, B=B, n_coeffs=n_coeffs, flat_std_eps=5.0)
+
+    assert feats.shape == (len(pos), n_coeffs)
+    assert len(pos) > 0
+    assert pos.dtype == np.int32
+    assert feats.dtype == np.int32
+    # Các hàng trên hoàn toàn phẳng (top-left r < 5 không chạm vùng texture 12:22).
+    assert np.all(pos[:, 0] >= 5)
+
+    # Đối chiếu trực tiếp vector đặc trưng với công thức D @ block @ D.T trên một block giữ lại.
+    r0, c0 = int(pos[0, 0]), int(pos[0, 1])
+    D = dct_basis(B).astype(np.float32)
+    zz = zigzag_indices(B, n_coeffs)
+    uu, vv = np.divmod(zz, B)
+    q = (1.0 + (uu + vv) / 4.0).astype(np.float32)
+    block = gray[r0 : r0 + B, c0 : c0 + B].astype(np.float32)
+    expected = np.rint((D @ block @ D.T).ravel()[zz] / q).astype(np.int32)
+    np.testing.assert_array_equal(feats[0], expected)
