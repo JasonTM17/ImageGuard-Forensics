@@ -11,11 +11,13 @@ import re
 import threading
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -35,9 +37,11 @@ from PySide6.QtWidgets import (
 )
 
 from imageguard.core.errors import ErrorResult
+from imageguard.evaluation.enhance_metrics import psnr, ssim
 from imageguard.evaluation.enhance_study import RESTORER_PARAMS
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.widgets.camera_dialog import CameraCaptureDialog
 from imageguard.ui.widgets.image_canvas import ImageCanvas, ndarray_to_qpixmap
 from imageguard.ui.workers import EnhanceWorker, make_pool
 
@@ -45,6 +49,9 @@ _OPERATORS = (
     ("unsharp", "Unsharp mask"),
     ("clahe", "CLAHE"),
     ("nlm", "Non-local means"),
+    ("super_res", strings.ENHANCE_OP_SUPER_RES),
+    ("cam_calibrate", strings.ENHANCE_OP_CAM_CALIBRATE),
+    ("freq_sharpen", strings.ENHANCE_OP_FREQ_SHARPEN),
     ("nafnet", "NAFNet (AI)"),
 )
 
@@ -72,6 +79,21 @@ _FIELD_SPECS = {
          _NLM["templateWindowSize"]),
         ("searchWindowSize", "Cửa sổ tìm kiếm", "int", 1, 99, 2,
          _NLM["searchWindowSize"]),
+    ),
+    "super_res": (
+        ("scale", "Hệ số nội suy (2–4)", "int", 2, 4, 1, 2),
+        ("iterations", "Số vòng chiếu ngược IBP (1–15)", "int", 1, 15, 1, 3),
+        ("amount", "Cường độ chi tiết tần số cao", "float", 0.0, 3.0, 0.1, 0.8),
+    ),
+    "cam_calibrate": (
+        ("gamma", "Hiệu chỉnh Gamma đơn cam", "float", 0.3, 2.5, 0.05, 0.85),
+        ("clip_limit", "Giới hạn cân bằng cục bộ", "float", 0.01, 1.0, 0.01, 0.04),
+        ("boost_k", "Độ nét Highboost", "float", 0.0, 3.0, 0.1, 1.3),
+    ),
+    "freq_sharpen": (
+        ("d0", "Tần số cắt Butterworth D0", "int", 8, 200, 5, 35),
+        ("strength", "Hệ số làm nét cao tần (k)", "float", 0.0, 4.0, 0.1, 1.4),
+        ("median_k", "Lọc hạt cảm biến (Median)", "int", 1, 5, 2, 3),
     ),
 }
 
@@ -119,6 +141,25 @@ def _sanitize_exception_text(exc: BaseException) -> str:
     if _RE_PATH_LIKE.search(sanitized):
         return f"{type(exc).__name__}: {strings.MSG_EXCEPTION_PATH_REDACTED}"
     return f"{type(exc).__name__}: {sanitized}"
+
+
+def _compute_quality_metrics(orig: np.ndarray, derived: np.ndarray) -> str:
+    """Đo định lượng chất lượng ảnh sau xử lý: PSNR, SSIM, Độ nét Laplacian & Độ tương phản."""
+    p_val = psnr(derived, orig)
+    s_val = ssim(derived, orig)
+    g0 = orig if orig.ndim == 2 else cv2.cvtColor(orig[:, :, :3], cv2.COLOR_BGR2GRAY)
+    g1 = derived if derived.ndim == 2 else cv2.cvtColor(derived[:, :, :3], cv2.COLOR_BGR2GRAY)
+    sharp0 = float(cv2.Laplacian(g0, cv2.CV_64F).var())
+    sharp1 = float(cv2.Laplacian(g1, cv2.CV_64F).var())
+    std0 = float(np.std(g0))
+    std1 = float(np.std(g1))
+    p_txt = f"{p_val:.2f} dB" if p_val is not None else "—"
+    s_txt = f"{s_val:.4f}" if s_val is not None else "—"
+    return (
+        f"Chỉ số chất lượng (so với gốc): PSNR={p_txt} · SSIM={s_txt} | "
+        f"Độ nét (Laplacian): {sharp0:.1f} → {sharp1:.1f} · "
+        f"Độ tương phản (Std): {std0:.1f} → {std1:.1f}"
+    )
 
 
 class EnhanceScreen(QWidget):
@@ -176,10 +217,17 @@ class EnhanceScreen(QWidget):
         self.ai_banner.hide()
         rl.addWidget(self.ai_banner)
 
+        file_row = QHBoxLayout()
         self.btn_open = QPushButton(strings.BTN_OPEN)
         apply_a11y(self.btn_open, strings.A11Y_ENHANCE_OPEN)
         self.btn_open.clicked.connect(self._pick_file)
-        rl.addWidget(self.btn_open)
+        self.btn_camera = QPushButton(strings.CAMERA_BTN_OPEN)
+        apply_a11y(self.btn_camera, strings.A11Y_CAMERA_OPEN)
+        self.btn_camera.clicked.connect(self._capture_camera)
+        file_row.addWidget(self.btn_open, 1)
+        file_row.addWidget(self.btn_camera, 1)
+        rl.addLayout(file_row)
+
         self.lbl_file = QLabel(strings.FMT_HINT)
         self.lbl_file.setWordWrap(True)
         rl.addWidget(self.lbl_file)
@@ -256,6 +304,14 @@ class EnhanceScreen(QWidget):
         blend_row.addWidget(QLabel(strings.LBL_BLEND_ENHANCED))
         rl.addLayout(blend_row)
 
+        self.lbl_metrics = QLabel("")
+        self.lbl_metrics.setWordWrap(True)
+        self.lbl_metrics.setStyleSheet(
+            "color:#1e3a8a; background:#eff6ff; padding:6px; border-radius:4px; font-size:12px;"
+        )
+        self.lbl_metrics.hide()
+        rl.addWidget(self.lbl_metrics)
+
         self.btn_export = QPushButton(strings.BTN_EXPORT_ENHANCED)
         apply_a11y(self.btn_export, strings.A11Y_ENHANCE_EXPORT)
         self.btn_export.clicked.connect(self._export)
@@ -289,6 +345,14 @@ class EnhanceScreen(QWidget):
             "Images (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp)")
         if f:
             self.load_path(Path(f))
+
+    def _capture_camera(self) -> None:
+        if self._worker is not None:
+            self._show_busy_open()
+            return
+        dlg = CameraCaptureDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.captured_path is not None:
+            self.load_path(dlg.captured_path)
 
     def dragEnterEvent(self, e) -> None:
         if e.mimeData().hasUrls():
@@ -367,6 +431,24 @@ class EnhanceScreen(QWidget):
                     self._field(kind, "tile_y").value(),
                 ],
             }
+        if kind == "super_res":
+            return {
+                "scale": self._field(kind, "scale").value(),
+                "iterations": self._field(kind, "iterations").value(),
+                "amount": self._field(kind, "amount").value(),
+            }
+        if kind == "cam_calibrate":
+            return {
+                "gamma": self._field(kind, "gamma").value(),
+                "clip_limit": self._field(kind, "clip_limit").value(),
+                "boost_k": self._field(kind, "boost_k").value(),
+            }
+        if kind == "freq_sharpen":
+            return {
+                "d0": self._field(kind, "d0").value(),
+                "strength": self._field(kind, "strength").value(),
+                "median_k": self._field(kind, "median_k").value(),
+            }
         return {
             "h": self._field(kind, "h").value(),
             "hColor": self._field(kind, "hColor").value(),
@@ -377,6 +459,8 @@ class EnhanceScreen(QWidget):
     def _validate_params(self, kind: str, params: dict) -> str:
         if kind == "unsharp" and params["ksize"] % 2 == 0:
             return "Kích thước kernel phải là số lẻ."
+        if kind == "freq_sharpen" and params["median_k"] % 2 == 0:
+            return "Kích thước nhân lọc median phải là số lẻ."
         if kind == "nlm" and (
             params["templateWindowSize"] % 2 == 0
             or params["searchWindowSize"] % 2 == 0
@@ -397,10 +481,13 @@ class EnhanceScreen(QWidget):
         self.slider_blend.blockSignals(False)
         self._set_blend_readout(100)
         self.slider_blend.setEnabled(False)
+        self.lbl_metrics.setText("")
+        self.lbl_metrics.hide()
         self.btn_export.hide()
 
     def _set_running(self, running: bool) -> None:
         self.btn_open.setEnabled(not running)
+        self.btn_camera.setEnabled(not running)
         self.btn_run.setEnabled(not running and self._path is not None)
         self.btn_cancel.setEnabled(running)
         self.combo_op.setEnabled(not running)
@@ -461,6 +548,9 @@ class EnhanceScreen(QWidget):
         self.slider_blend.blockSignals(False)
         self._set_blend_readout(100)
         self.slider_blend.setEnabled(True)
+        if self._doc is not None:
+            self.lbl_metrics.setText(_compute_quality_metrics(self._doc.array, image))
+            self.lbl_metrics.show()
         self.btn_export.show()
 
     def _on_failed(self, msg: str) -> None:

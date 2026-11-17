@@ -8,6 +8,7 @@ from imageguard.forensics.registry import METHOD_SPECS, load_method
 
 _LOCKED_SPECS = [
     "block",
+    "deepfake",
     "ela",
     "freq",
     "keypoint",

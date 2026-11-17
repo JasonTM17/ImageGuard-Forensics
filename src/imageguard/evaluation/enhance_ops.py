@@ -1,7 +1,8 @@
 """Toán tử suy giảm và khôi phục cổ điển phục vụ đánh giá thực nghiệm.
 
 Mô-đun này tạo các biến thể ảnh có kiểm soát (mờ, nhiễu, nén JPEG, v.v.) và
-các bước khôi phục tương ứng (Wiener, Richardson–Lucy, unsharp, CLAHE, NLM).
+các bước khôi phục tương ứng (Wiener, Richardson–Lucy, unsharp, CLAHE, NLM,
+siêu phân giải cổ điển Bicubic + Iterative Back-Projection).
 Đầu ra chỉ là đầu vào cho pipeline đo PSNR/SSIM và bootstrap — không chứng minh
 ảnh đã trở lại trạng thái gốc.
 
@@ -293,8 +294,43 @@ def _wiener(source: np.ndarray, kernel: np.ndarray, nsr: float) -> np.ndarray:
     return _uint8(restored)
 
 
+def _super_res_ibp(
+    source: np.ndarray, scale: int, iterations: int, amount: float
+) -> np.ndarray:
+    """Siêu phân giải cổ điển: nội suy Bicubic + chiếu ngược lặp IBP (C2).
+
+    Mô phỏng tái tạo chi tiết sub-pixel ở độ phân giải nhân ``scale`` lần rồi
+    chiếu chi tiết tần số cao về đúng lưới ``(H, W)`` để giữ đồng bộ khung xem.
+    """
+    h, w = source.shape[:2]
+    base_f = source.astype(np.float32)
+    hr_size = (w * scale, h * scale)
+    lr_size = (w, h)
+    ksize = 2 * scale + 1
+    sigma = 0.45 * scale
+
+    hr = cv2.resize(base_f, hr_size, interpolation=cv2.INTER_CUBIC)
+    for _ in range(iterations):
+        blurred = cv2.GaussianBlur(hr, (ksize, ksize), sigmaX=sigma)
+        sim_lr = cv2.resize(blurred, lr_size, interpolation=cv2.INTER_AREA)
+        if sim_lr.ndim == 2 and base_f.ndim == 3:
+            sim_lr = sim_lr[:, :, np.newaxis]
+        err = base_f - sim_lr
+        err_up = cv2.resize(err, hr_size, interpolation=cv2.INTER_CUBIC)
+        if err_up.ndim == 2 and hr.ndim == 3:
+            err_up = err_up[:, :, np.newaxis]
+        hr = hr + float(amount) * err_up
+
+    refined = cv2.resize(hr, lr_size, interpolation=cv2.INTER_LANCZOS4)
+    if refined.ndim == 2 and base_f.ndim == 3:
+        refined = refined[:, :, np.newaxis]
+    smooth = cv2.GaussianBlur(base_f, (3, 3), sigmaX=0.8)
+    reconstructed = base_f + float(amount) * (refined - smooth)
+    return _uint8(reconstructed)
+
+
 def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dict]:
-    """Khôi phục/cải biên cổ điển: unsharp, CLAHE, NLM, Richardson–Lucy, Wiener."""
+    """Khôi phục/cải biên cổ điển: unsharp, CLAHE, NLM, Richardson–Lucy, Wiener, super_res."""
     source = _image_copy(image)
 
     if kind == "unsharp":
@@ -385,6 +421,95 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
             )
         _preserve_wrong_delta(params, metadata)
         return output, metadata
+
+    if kind == "super_res":
+        scale = _integer(params.get("scale", 2), "scale", minimum=2)
+        if scale > 4:
+            raise ValueError("scale must be in [2, 4]")
+        iterations = _integer(params.get("iterations", 3), "iterations", minimum=1)
+        if iterations > 15:
+            raise ValueError("iterations must be at most 15")
+        amount = _real(params.get("amount", 0.8), "amount", minimum=0.0)
+        output = _super_res_ibp(source, scale, iterations, amount)
+        return output, _metadata(
+            kind, scale=scale, iterations=iterations, amount=amount
+        )
+
+    if kind == "cam_calibrate":
+        from imageguard.ipkit import histogram as ip_hist
+        from imageguard.ipkit import intensity as ip_int
+        from imageguard.ipkit import spatial as ip_spat
+
+        gamma = _real(params.get("gamma", 0.85), "gamma", minimum=0.1)
+        clip_limit = _real(params.get("clip_limit", 0.04), "clip_limit", minimum=0.005)
+        if clip_limit > 1.0:
+            raise ValueError("clip_limit must be in [0.005, 1.0]")
+        boost_k = _real(params.get("boost_k", 1.3), "boost_k", minimum=0.0)
+
+        h, w = source.shape[:2]
+        if source.ndim == 2:
+            y_ch = source.astype(np.uint8)
+        else:
+            ycrcb = cv2.cvtColor(_bgr_uint8(source, "cam_calibrate"), cv2.COLOR_BGR2YCrCb)
+            y_ch = ycrcb[:, :, 0]
+
+        dual_matched = w >= int(2.1 * h) and w >= 64
+        if dual_matched:
+            mid = w // 2
+            left_y, right_y = y_ch[:, :mid], y_ch[:, mid:]
+            if abs(float(left_y.mean()) - 128.0) <= abs(float(right_y.mean()) - 128.0):
+                right_y = ip_hist.match_histogram(right_y, left_y)
+            else:
+                left_y = ip_hist.match_histogram(left_y, right_y)
+            merged_y = np.hstack([left_y, right_y])
+            stretched = ip_int.contrast_stretch(merged_y, low=1.0, high=99.0)
+            y_out = ip_spat.highboost(stretched, k=boost_k, size=3, sigma=0.9)
+        else:
+            gam_y = ip_int.gamma_transform(y_ch, gamma=gamma)
+            tile = max(4, min(h, w, max(16, min(h, w) // 8)))
+            eq_y = ip_hist.local_equalize(gam_y, tile=tile, clip_limit=clip_limit)
+            y_out = ip_spat.highboost(eq_y, k=boost_k, size=3, sigma=0.9)
+
+        if source.ndim == 2:
+            output = y_out
+        else:
+            ycrcb[:, :, 0] = y_out
+            output = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+        return output, _metadata(
+            kind,
+            gamma=gamma,
+            clip_limit=clip_limit,
+            boost_k=boost_k,
+            dual_matched=dual_matched,
+        )
+
+    if kind == "freq_sharpen":
+        from imageguard.ipkit import frequency as ip_freq
+        from imageguard.ipkit import spatial as ip_spat
+
+        d0 = _real(params.get("d0", 35.0), "d0", minimum=8.0)
+        strength = _real(params.get("strength", 1.4), "strength", minimum=0.0)
+        median_k = _integer(params.get("median_k", 3), "median_k", minimum=1)
+        if median_k % 2 == 0:
+            raise ValueError("median_k must be odd")
+
+        if source.ndim == 2:
+            y_ch = source.astype(np.uint8)
+        else:
+            ycrcb = cv2.cvtColor(_bgr_uint8(source, "freq_sharpen"), cv2.COLOR_BGR2YCrCb)
+            y_ch = ycrcb[:, :, 0]
+
+        y_clean = ip_spat.median_filter(y_ch, median_k) if median_k > 1 else y_ch
+        y_out = ip_freq.sharpen_frequency(y_clean, d0=d0, k=strength)
+
+        if source.ndim == 2:
+            output = y_out
+        else:
+            ycrcb[:, :, 0] = y_out
+            output = cv2.cvtColor(ycrcb, cv2.COLOR_YCrCb2BGR)
+        return output, _metadata(
+            kind, d0=d0, strength=strength, median_k=median_k
+        )
 
     raise ValueError(f"unsupported restoration kind: {kind}")
 

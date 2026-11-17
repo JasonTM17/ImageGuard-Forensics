@@ -115,6 +115,25 @@ class ArtifactStore:
     def read(self, rel: str) -> bytes:
         return self.abs_path(rel).read_bytes()
 
+    def _reserve_dir(self, analysis_id: str) -> None:
+        """Tạo độc quyền <root>/<analysis_id> trước persist.
+
+        Dùng chung guards với put/delete; mkdir không exist_ok → raise
+        FileExistsError khi dir đã có (không bao giờ đụng dữ liệu có sẵn).
+        """
+        _check_name(analysis_id)
+        root = self.root.resolve()
+        d = (root / analysis_id).resolve()
+        if d == root or not _contained(root, d):
+            raise ValueError(
+                f"analysis_id thoát khỏi artifact root: {analysis_id!r}")
+        d.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            d.mkdir()
+        except FileExistsError:
+            raise FileExistsError(
+                f"artifact dir cho report {analysis_id} đã tồn tại") from None
+
     def delete_analysis(self, analysis_id: str) -> None:
         _check_name(analysis_id)  # chặn "..", path separator, absolute path
         root = self.root.resolve()

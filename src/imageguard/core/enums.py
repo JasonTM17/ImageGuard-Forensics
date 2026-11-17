@@ -25,3 +25,4 @@ class MethodName(str, Enum):
     NOISE_LOCAL = "noise_local"
     FREQUENCY_ANALYSIS = "frequency_analysis"
     SPLICING_CUES = "splicing_cues"
+    DEEPFAKE_CUES = "deepfake_cues"

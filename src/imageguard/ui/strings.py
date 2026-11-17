@@ -42,7 +42,35 @@ METHOD_LABEL = {
     "noise_local": "Noise local-MAD (vùng lạ cục bộ)",
     "frequency_analysis": "Frequency-domain cues",
     "splicing_cues": "Splicing cues (noise×ELA)",
+    "deepfake_cues": "Dấu hiệu Deepfake / AI (biên khuôn mặt & phổ)",
+    "deepfake": "Dấu hiệu Deepfake / AI",
 }
+
+ENHANCE_OP_SUPER_RES = "Siêu phân giải cổ điển (Bicubic + IBP)"
+ENHANCE_OP_CAM_CALIBRATE = "Hiệu chuẩn Cảm biến & Khớp màu Camera"
+ENHANCE_OP_FREQ_SHARPEN = "Khử nhiễu & Làm nét Miền tần số (FFT)"
+CAMERA_BTN_OPEN = "Chụp từ Camera…"
+CAMERA_DIALOG_TITLE = "Thu nhận khung hình từ Camera"
+CAMERA_SOURCE_WEBCAM = "Webcam máy tính (Thiết bị 0)"
+CAMERA_SOURCE_USB = "Camera USB ngoài (Thiết bị 1..5)"
+CAMERA_SOURCE_DUAL = "Chụp song song cả 2 Camera (Webcam 0 + Camera ngoài IoT/USB)"
+CAMERA_SOURCE_IOT = "Camera IP / IoT ngoài (HTTP Snapshot URL)"
+CAMERA_FORENSIC_RULE_NOTE = (
+    "Nguyên tắc xử lý ảnh: Luôn đưa khung hình gốc từ cảm biến vào nhánh "
+    "Phân tích (Forensics / Deepfake) trước; nhánh Khôi phục / Siêu phân giải "
+    "chỉ dùng để hỗ trợ quan sát."
+)
+CAMERA_BTN_PROBE = "Quét cổng Camera"
+A11Y_CAMERA_OPEN = "Chụp khung hình trực tiếp từ webcam hoặc camera ngoài"
+
+BTN_DEMO_SAMPLE = "Tạo kịch bản ảnh mẫu…"
+DEMO_DIALOG_TITLE = "Bộ tạo kịch bản kiểm thử Forensics & Deepfake"
+A11Y_DEMO_SAMPLE = "Tạo ảnh mẫu tổng hợp để kiểm chứng phát hiện thao túng"
+
+BTN_PRESET_DEFAULT = "Mặc định (3)"
+BTN_PRESET_CAMERA = "Chế độ Camera / AI"
+BTN_PRESET_ALL = "Tất cả (8)"
+BTN_SEND_TO_ENHANCE = "Đưa sang Tăng cường / Siêu phân giải →"
 
 BTN_OPEN = "Mở ảnh…"
 BTN_RUN = "Phân tích"
@@ -112,6 +140,9 @@ MSG_HISTORY_NO_SELECTION = "Chọn một dòng trong bảng lịch sử trước
 MSG_BUSY_CANNOT_OPEN = "Đang xử lý — chưa thể mở ảnh khác."
 
 ERR_SELECT_METHOD = "Vui lòng chọn ít nhất một phương pháp phân tích."
+ERR_SOURCE_CHANGED_REOPEN = (
+    "File ảnh đã thay đổi kể từ khi mở — mở lại ảnh để phân tích."
+)
 
 SETTINGS_THRESHOLDS_INTRO = (
     "Ngưỡng thuật toán (configs/thresholds.yaml) — mỗi giá trị kèm "

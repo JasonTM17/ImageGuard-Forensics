@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.stats, strings.TAB_STATS)
         self.tabs.addTab(self.settings, strings.TAB_SETTINGS)
         apply_a11y(self.tabs, strings.A11Y_MAIN_TABS)
+        self.analyze.send_to_enhance.connect(self._open_in_enhance)
 
         def _refresh(i):
             cur = self.tabs.currentWidget()
@@ -50,6 +51,13 @@ class MainWindow(QMainWindow):
 
         self.tabs.currentChanged.connect(_refresh)
         lay.addWidget(self.tabs, 1)
+
+    def _open_in_enhance(self, path: Path) -> None:
+        self.tabs.setCurrentWidget(self.enhance)
+        self.enhance.load_path(path)
+        idx = self.enhance.combo_op.findData("super_res")
+        if idx >= 0:
+            self.enhance.combo_op.setCurrentIndex(idx)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():

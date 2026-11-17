@@ -1,0 +1,300 @@
+"""CameraCaptureDialog — chọn nguồn Webcam, Camera USB ngoài, Dual Camera hoặc Camera IP/IoT."""
+
+from __future__ import annotations
+
+import tempfile
+import threading
+from collections.abc import Callable
+from functools import partial
+from pathlib import Path
+
+import cv2
+import numpy as np
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QRadioButton,
+    QSpinBox,
+    QVBoxLayout,
+)
+
+from imageguard.ingest.camera import (
+    DEFAULT_CAPTURE_DIR,
+    capture_device_frame,
+    capture_dual_device_frames,
+    capture_iot_http_frame,
+    probe_camera_indices,
+)
+from imageguard.ui import strings
+from imageguard.ui.a11y import apply_a11y
+
+
+def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
+    """Chẩn đoán quang học thời gian thực bằng ipkit (Chương 2, 3, 4, 6)."""
+    from imageguard.ipkit import edges, features_basic, histogram, threshold
+
+    h, w = bgr.shape[:2]
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    mean_luma = float(np.mean(gray))
+    otsu_t = int(threshold.otsu_threshold(gray))
+    hist_counts = histogram.histogram(gray)
+    total_px = max(int(np.sum(hist_counts)), 1)
+    p_dark = 100.0 * float(np.sum(hist_counts[:30])) / total_px
+    p_clip = 100.0 * float(np.sum(hist_counts[240:])) / total_px
+    sharpness = float(np.var(edges.laplacian(gray)))
+
+    if (is_dual or w >= int(2.1 * h)) and w >= 64:
+        mid = w // 2
+        left_g = gray[:, :mid]
+        right_g = gray[:, mid:]
+        dluma = abs(float(np.mean(left_g)) - float(np.mean(right_g)))
+        sharp_l = float(np.var(edges.laplacian(left_g)))
+        sharp_r = float(np.var(edges.laplacian(right_g)))
+        left_s = cv2.resize(left_g, (96, 96), interpolation=cv2.INTER_AREA)
+        right_s = cv2.resize(right_g, (96, 96), interpolation=cv2.INTER_AREA)
+        h_l = features_basic.lbph(left_s, grid=(4, 4), uniform=True)
+        h_r = features_basic.lbph(right_s, grid=(4, 4), uniform=True)
+        chi2_raw = float(features_basic.chi_square_distance(h_l, h_r))
+        matched_l = histogram.match_histogram(left_s, right_s)
+        h_m = features_basic.lbph(matched_l, grid=(4, 4), uniform=True)
+        chi2_matched = float(features_basic.chi_square_distance(h_m, h_r))
+        return (
+            f"Đồng bộ 2 Camera ({w}×{h}) · Độ sáng TB: {mean_luma:.1f}/255 · "
+            f"Độ nét Trái/Phải: {sharp_l:.0f}/{sharp_r:.0f} · Chênh sáng: {dluma:.1f} · "
+            f"Sai biệt kết cấu χ²: {chi2_raw:.2f} → sau hiệu chuẩn: {chi2_matched:.2f}"
+        )
+
+    return (
+        f"Chẩn đoán cảm biến: {w}×{h} · Độ sáng TB: {mean_luma:.1f}/255 · "
+        f"Ngưỡng tách nền: {otsu_t} · Độ nét tiêu cự: {sharpness:.0f} · "
+        f"Vùng tối/cháy sáng: {p_dark:.1f}%/{p_clip:.1f}%"
+    )
+
+
+def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[bytes, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        preview_path = capture(Path(tmp))
+        raw = preview_path.read_bytes()
+        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError("Không đọc được ảnh xem trước từ camera.")
+        diagnostics = analyze_camera_frame_ipkit(frame, is_dual=is_dual)
+    return raw, diagnostics
+
+
+class _CameraSignals(QObject):
+    completed = Signal(object, str)
+
+
+class _CameraWorker(QRunnable):
+    """Native camera I/O can finish after cancellation. Always signal cleanup."""
+
+    def __init__(self, task: Callable[[], object]) -> None:
+        super().__init__()
+        self.task = task
+        self.cancelled = threading.Event()
+        self.signals = _CameraSignals()
+
+    def run(self) -> None:
+        value, error = None, ""
+        try:
+            if not self.cancelled.is_set():
+                value = self.task()
+        except Exception as exc:  # noqa: BLE001 - surface device/decode failures through Qt signals
+            error = str(exc) or type(exc).__name__
+        finally:
+            self.signals.completed.emit(value, error)
+
+
+class CameraCaptureDialog(QDialog):
+    """Hộp thoại chụp một khung hình thô từ webcam máy tính hoặc camera ngoài."""
+
+    def __init__(self, parent=None, *, out_dir: Path = DEFAULT_CAPTURE_DIR) -> None:
+        super().__init__(parent)
+        self._out_dir = Path(out_dir)
+        self._worker: _CameraWorker | None = None
+        self._operation: str | None = None
+        self._closed = False
+        self.captured_path: Path | None = None
+        self.setWindowTitle(strings.CAMERA_DIALOG_TITLE)
+        self.setMinimumWidth(480)
+        self._build()
+
+    def _build(self) -> None:
+        lay = QVBoxLayout(self)
+
+        note_box = QFrame()
+        note_box.setFrameShape(QFrame.Shape.StyledPanel)
+        note_box.setStyleSheet("background:#eff6ff; color:#1e3a8a; padding:6px;")
+        note_lay = QVBoxLayout(note_box)
+        note_lay.setContentsMargins(8, 6, 8, 6)
+        self.lbl_note = QLabel(strings.CAMERA_FORENSIC_RULE_NOTE)
+        self.lbl_note.setWordWrap(True)
+        note_lay.addWidget(self.lbl_note)
+        lay.addWidget(note_box)
+
+        self.rad_webcam = QRadioButton(strings.CAMERA_SOURCE_WEBCAM)
+        self.rad_webcam.setChecked(True)
+        lay.addWidget(self.rad_webcam)
+
+        usb_row = QHBoxLayout()
+        self.rad_usb = QRadioButton(strings.CAMERA_SOURCE_USB)
+        self.spin_usb = QSpinBox()
+        self.spin_usb.setRange(1, 5)
+        self.spin_usb.setValue(1)
+        self.spin_usb.setEnabled(False)
+        usb_row.addWidget(self.rad_usb, 1)
+        usb_row.addWidget(self.spin_usb)
+        lay.addLayout(usb_row)
+
+        self.rad_dual = QRadioButton(strings.CAMERA_SOURCE_DUAL)
+        lay.addWidget(self.rad_dual)
+
+        self.rad_iot = QRadioButton(strings.CAMERA_SOURCE_IOT)
+        lay.addWidget(self.rad_iot)
+        self.edit_url = QLineEdit()
+        self.edit_url.setPlaceholderText("http://192.168.1.100:8080/shot.jpg")
+        self.edit_url.setEnabled(False)
+        lay.addWidget(self.edit_url)
+
+        for rad in (self.rad_webcam, self.rad_usb, self.rad_dual, self.rad_iot):
+            rad.toggled.connect(self._sync_inputs)
+
+        self.lbl_preview = QLabel("Chưa có ảnh xem trước")
+        self.lbl_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_preview.setMinimumHeight(140)
+        self.lbl_preview.setStyleSheet(
+            "border:1px solid #d1d5db; background:#f9fafb; color:#6b7280;"
+        )
+        lay.addWidget(self.lbl_preview)
+
+        self.lbl_err = QLabel("")
+        self.lbl_err.setWordWrap(True)
+        self.lbl_err.setStyleSheet("color:#b91c1c;")
+        lay.addWidget(self.lbl_err)
+
+        self.lbl_probe_info = QLabel("")
+        self.lbl_probe_info.setWordWrap(True)
+        self.lbl_probe_info.setStyleSheet("color:#1e40af; font-size:12px;")
+        lay.addWidget(self.lbl_probe_info)
+
+        btn_row = QHBoxLayout()
+        self.btn_probe = QPushButton(strings.CAMERA_BTN_PROBE)
+        self.btn_probe.clicked.connect(self.probe_ports)
+        self.btn_preview = QPushButton("Xem thử thiết bị")
+        self.btn_preview.clicked.connect(self.preview_now)
+        self.btn_capture = QPushButton("Chụp khung hình")
+        apply_a11y(self.btn_capture, strings.A11Y_CAMERA_OPEN)
+        self.btn_capture.clicked.connect(self.capture_now)
+        self.btn_cancel = QPushButton(strings.BTN_CANCEL)
+        self.btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(self.btn_probe)
+        btn_row.addWidget(self.btn_preview)
+        btn_row.addStretch(1)
+        btn_row.addWidget(self.btn_capture)
+        btn_row.addWidget(self.btn_cancel)
+        lay.addLayout(btn_row)
+
+    def probe_ports(self) -> None:
+        """Start a port probe and update the suggestion when it completes."""
+        self._start_job("probe", partial(probe_camera_indices, max_index=4))
+
+    def _show_ports(self, found: list[int]) -> None:
+        if not found:
+            self.lbl_probe_info.setText("Không tìm thấy thiết bị camera cục bộ (index 0..3).")
+            return
+        ext = [idx for idx in found if idx >= 1]
+        if ext:
+            self.spin_usb.setValue(int(ext[0]))
+        self.lbl_probe_info.setText(
+            f"Thiết bị phát hiện: {found}"
+            + (f" · Cổng camera ngoài gợi ý: {ext[0]}" if ext else " · Chỉ thấy Webcam 0")
+        )
+
+    def _sync_inputs(self) -> None:
+        idle = self._worker is None
+        self.spin_usb.setEnabled(idle and (self.rad_usb.isChecked() or self.rad_dual.isChecked()))
+        self.edit_url.setEnabled(idle and self.rad_iot.isChecked())
+
+    def _capture_request(self) -> Callable[[Path], Path]:
+        """Snapshot Qt inputs on the GUI thread before dispatching native I/O."""
+        if self.rad_webcam.isChecked():
+            return partial(capture_device_frame, 0)
+        if self.rad_usb.isChecked():
+            return partial(capture_device_frame, int(self.spin_usb.value()))
+        if self.rad_dual.isChecked():
+            return partial(capture_dual_device_frames, 0, int(self.spin_usb.value()))
+        return partial(capture_iot_http_frame, self.edit_url.text())
+
+    def _set_busy(self, busy: bool) -> None:
+        for control in (self.btn_probe, self.btn_preview, self.btn_capture,
+                        self.rad_webcam, self.rad_usb, self.rad_dual, self.rad_iot):
+            control.setEnabled(not busy)
+        self._sync_inputs()
+
+    def _start_job(self, operation: str, task: Callable[[], object]) -> None:
+        if self._worker is not None or self._closed:
+            return
+        self.lbl_err.setText("")
+        worker = _CameraWorker(task)
+        self._worker, self._operation = worker, operation
+        worker.signals.completed.connect(self._on_completed)
+        self._set_busy(True)
+        # The application pool outlives a cancelled/deleted modal dialog.
+        QThreadPool.globalInstance().start(worker)
+
+    @Slot(object, str)
+    def _on_completed(self, value: object, error: str) -> None:
+        worker, operation = self._worker, self._operation
+        self._worker, self._operation = None, None
+        if self._closed:
+            return
+        self._set_busy(False)
+        if worker is None or worker.cancelled.is_set():
+            return
+        if error:
+            self.lbl_err.setText(error)
+            return
+        if operation == "probe":
+            self._show_ports(value)
+        elif operation == "preview":
+            raw, diagnostics = value
+            pix = QPixmap()
+            if not pix.loadFromData(raw):
+                self.lbl_err.setText("Không hiển thị được ảnh xem trước từ camera.")
+                return
+            self.lbl_probe_info.setText(diagnostics)
+            self.lbl_preview.setPixmap(
+                pix.scaled(420, 180, Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation))
+        elif operation == "capture":
+            self.captured_path = value
+            self.accept()
+
+    def preview_now(self) -> None:
+        self._start_job("preview", partial(_preview_result, self._capture_request(),
+                                           self.rad_dual.isChecked()))
+
+    def capture_now(self) -> None:
+        if self._worker is not None or self._closed:
+            return
+        self.captured_path = None
+        self._start_job("capture", partial(self._capture_request(), self._out_dir))
+
+    def done(self, result: int) -> None:
+        self._closed = True
+        if self._worker is not None:
+            self._worker.cancelled.set()
+        super().done(result)
+
+    def showEvent(self, event) -> None:
+        self._closed = False
+        self.captured_path = None
+        self._set_busy(self._worker is not None)
+        super().showEvent(event)

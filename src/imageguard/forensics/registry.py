@@ -18,6 +18,7 @@ METHOD_SPECS = {
     "noise_local": "imageguard.forensics.auxiliary.noise_local:NoiseLocal",
     "freq": "imageguard.forensics.auxiliary.freq_view:FreqView",
     "splicing": "imageguard.forensics.auxiliary.splicing:SplicingCues",
+    "deepfake": "imageguard.forensics.auxiliary.deepfake_cues:DeepfakeCues",
 }
 
 

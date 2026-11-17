@@ -44,7 +44,7 @@ class VerdictBanner(QFrame):
 
 class MethodCard(QFrame):
     """Evidence card cho một AlgorithmResult: verdict + score + definition +
-    limitations — score luôn đi kèm định nghĩa."""
+    duration + chỉ số evidence + limitations — score luôn đi kèm định nghĩa."""
 
     def __init__(self, result: AlgorithmResult, parent=None) -> None:
         super().__init__(parent)
@@ -54,7 +54,7 @@ class MethodCard(QFrame):
         title = strings.METHOD_LABEL.get(result.method.value, result.method.value)
         verdict_txt = strings.VERDICT_LABEL.get(result.verdict.value,
                                                 result.verdict.value)
-        head = QLabel(f"<b>{title}</b> — {verdict_txt}")
+        head = QLabel(f"<b>{title}</b> — {verdict_txt} · {result.duration_ms} ms")
         head.setWordWrap(True)
         lay.addWidget(head)
         apply_a11y(self, strings.FMT_A11Y_METHOD_CARD.format(title=title))
@@ -63,8 +63,36 @@ class MethodCard(QFrame):
                                f"({result.score_definition})")
             score_lbl.setWordWrap(True)
             lay.addWidget(score_lbl)
+        ev_items = _format_evidence_summary(result.evidence)
+        if ev_items:
+            ev_lbl = QLabel(f"Chỉ số: {ev_items}")
+            ev_lbl.setWordWrap(True)
+            ev_lbl.setStyleSheet("color:#1f2937; font-size:12px;")
+            lay.addWidget(ev_lbl)
         for lim in result.limitations[:4]:
             lim_lbl = QLabel(f"• {lim}")
             lim_lbl.setWordWrap(True)
             lim_lbl.setStyleSheet("color:#555;")
             lay.addWidget(lim_lbl)
+
+
+def _format_evidence_summary(evidence: dict | None) -> str:
+    """Tóm tắt tối đa 6 trường scalar từ ``evidence`` (bỏ ảnh/khóa nội bộ)."""
+    if not evidence:
+        return ""
+    skip_keys = {"variant", "pairs_image", "block", "scale"}
+    parts: list[str] = []
+    for k, v in evidence.items():
+        if k in skip_keys:
+            continue
+        if isinstance(v, (bool, int, str)):
+            parts.append(f"{k}={v}")
+        elif isinstance(v, float):
+            parts.append(f"{k}={v:.4g}")
+        elif isinstance(v, (list, tuple)) and len(v) <= 4 and all(
+            isinstance(x, (int, float)) for x in v
+        ):
+            parts.append(f"{k}={list(v)}")
+        if len(parts) >= 6:
+            break
+    return " · ".join(parts)
