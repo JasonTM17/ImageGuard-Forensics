@@ -46,3 +46,11 @@ implement sau mà không phá kiến trúc hiện tại.
 
 - Không dùng API ngoài (vi phạm mục tiêu học DIP + offline).
 - Không claim "độ chính xác X%" — mọi số đo qua `evaluation/` hiện có.
+
+## Hướng mở rộng: Thu nhận từ Camera (Webcam máy tính & Camera ngoài) + Phát hiện Deepfake
+
+- **Nguồn camera đa dạng:** Kết hợp hai luồng đầu vào song song: (1) camera ngoài (IoT / IP Camera) qua `ingest/http_pull.py` và `ingest/camera.py` (`capture_iot_http_frame`), và (2) webcam tích hợp / USB camera ngoài trên máy tính (`cv2.VideoCapture`, chế độ chụp song song 2 camera) qua `CameraCaptureDialog` chạy ở luồng nền (`QThread`), trích khung hình tĩnh đưa vào `ImageDocument`.
+- **Pipeline phát hiện Deepfake cổ điển đã tích hợp (`forensics/auxiliary/deepfake_cues.py`):**
+  1. **Định vị ROI khuôn mặt 3 tầng:** Haar Cascade (nếu có) $\rightarrow$ Phân đoạn màu da `YCrCb + HSV` kết hợp hình thái học và kiểm chứng cấu trúc mắt/đối xứng bằng ảnh tích phân SAT (`skin_haar_dip`) $\rightarrow$ fallback trung tâm với cơ chế đồng thuận đa tín hiệu (`corroborated`).
+  2. **4 trụ cột trích đặc trưng Xử lý ảnh thuần NumPy + OpenCV:** (i) nhiễu phần dư cảm biến `σ_in` vs `σ_out` & vòng biên `seam_ring`, (ii) vi kết cấu LBP 8 lân cận vector hóa & khoảng cách $\chi^2$, (iii) đỉnh tuần hoàn + suy hao hướng tâm phổ 2D FFT, (iv) hợp nhất thành điểm khám phá và `heatmap` đa lớp theo contract `AUX_METHODS`.
+  3. **Hướng nâng cấp ML/ONNX (chưa implement):** Có thể dùng chính vector đặc trưng (LBP, HOG, FFT radial profile, noise $\sigma$) hoặc crop khuôn mặt đưa vào bộ phân loại ONNX nhẹ trả `AlgorithmResult` 5 trạng thái mà không phá luật `fusion.py`; luôn giữ nguyên tắc chỉ chạy forensics trên khung hình gốc từ cảm biến (Super-Resolution `"super_res"` chỉ áp dụng trên nhánh hiển thị `enhancement/`).

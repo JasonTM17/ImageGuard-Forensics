@@ -1,9 +1,10 @@
-"""Image processing toolkit (demo/view only — not used by forensic detectors)."""
+"""Thư viện toán tử Xử lý ảnh số thuần NumPy (`imageguard.ipkit`)."""
 
-# Các module theo chương của môn học (mỗi module là một chủ đề thầy dạy):
-#   C2 intensity/histogram/spatial, C3 frequency, C4 morphology + morph_algos,
-#   C5 edges/threshold/segmentation, C6 features_*, C7 classifiers.
-# Chỉ xuất tên module (không tách hàm) để tránh trùng tên, ví dụ `laplacian`.
+# Cấu trúc mô-đun theo từng nhóm kỹ thuật xử lý ảnh cốt lõi:
+#   intensity / histogram / spatial (không gian), frequency (miền tần số),
+#   morphology + morph_algos (hình thái học), edges / threshold / segmentation,
+#   features_* (đặc trưng & giảm chiều), classifiers (phân lớp mẫu).
+# Xuất theo tên module (tránh xung đột tên hàm dùng chung như `laplacian`).
 from imageguard.ipkit import (
     classifiers,
     edges,

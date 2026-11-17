@@ -17,6 +17,10 @@ nạp ảnh và chạy trọn luồng phân tích với verdict đúng. Chi ti�
 [`docs/packaging.md`](packaging.md). Nếu gặp lỗi import `QtWidgets` trên
 máy khác, quay lại cách chạy từ source ở trên.
 
+Mốc QA của bản đóng gói là bằng chứng cho bản được kiểm tra tại thời điểm đó.
+Các sửa lỗi mới cần bản build và QA tương ứng; khi chưa có receipt cho bản
+mới, dùng source hiện tại thay vì mặc định executable cũ đã chứa các sửa lỗi này.
+
 ## Phân tích qua CLI (báo cáo JSON)
 
 ```powershell
@@ -32,22 +36,27 @@ byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
 
 ## Quy trình phân tích
 
-1. **Mở ảnh** — kéo-thả vào canvas hoặc nút "Mở ảnh…". Định dạng: JPEG,
+1. **Mở ảnh hoặc Chụp từ Camera…** — kéo-thả vào canvas, dùng nút "Mở ảnh…", hoặc nút **"Chụp từ Camera…"** (`CameraCaptureDialog`) để thu khung hình thô từ Webcam máy tính (`index 0`), Camera USB ngoài (`index 1..5`), hoặc Camera IP/IoT (`HTTP Snapshot URL`). Định dạng ảnh mở: JPEG,
    PNG, BMP, TIFF, WebP (≤100MB, ≤80MP, cạnh ≥64px — ảnh quá lớn/corrupt
    báo lỗi thân thiện, không crash).
 2. **Xem preview + metadata** — kích thước, định dạng, dung lượng, EXIF.
+   Nếu file bị thay đổi sau khi mở, kết quả có hash khác preview sẽ bị từ
+   chối hiển thị; mở lại ảnh rồi phân tích để bảo đảm đúng ảnh/kết quả.
 3. **Chọn phương pháp** —
    - *Copy-Move keypoint (SIFT/ORB)*: tìm vùng nhân đôi trong cùng ảnh.
    - *Copy-Move block (DCT)*: baseline kinh điển, chậm hơn nhưng độc lập.
    - *ELA*: chỉ có ý nghĩa với JPEG; PNG/BMP sẽ hiện "Không áp dụng".
-   - *Noise inconsistency / Frequency / Splicing cues* (L2): bằng chứng
-     khám phá — KHÔNG BAO GIỜ tự kết luận.
+   - *Noise inconsistency / Frequency / Splicing cues / Dấu hiệu Deepfake / AI (biên khuôn mặt & phổ)* (L2 — `deepfake`): bằng chứng
+     khám phá (`AUX_METHODS`) — KHÔNG BAO GIỜ tự kết luận. Khi chụp khung hình mới từ Camera trong tab Phân tích, hệ thống tự bật ô kiểm *Dấu hiệu Deepfake / AI* để kiểm tra trực tiếp trên ảnh cảm biến gốc.
 4. **Phân tích** — thanh progress theo stage; nút "Hủy" dừng mềm giữa
    stages (cooperative cancel).
 5. **Đọc kết quả** —
    - Banner verdict 3 trạng thái chính: *Có dấu hiệu nghi vấn* (cam),
      *Không thấy dấu hiệu* (xám), *Không đủ bằng chứng* (vàng trung tính).
-   - Cards từng method: score + định nghĩa score + limitations.
+   - Cards từng method: verdict + thời gian chạy (ms) + score + định nghĩa score + chỉ số evidence + limitations.
+   - **Công cụ hỗ trợ thuyết trình & kiểm thử ngay trên GUI:**
+     - *Tạo kịch bản ảnh mẫu…*: sinh nhanh 4 kịch bản tổng hợp (`Copy-Move`, `Splicing`, `Deepfake / AI`, `Ảnh đối chứng sạch`) và tự động chọn nhóm method phù hợp.
+     - Các nút chọn nhanh (*Mặc định (3)*, *Chế độ Camera / AI*, *Tất cả (8)*) và nút *Đưa sang Tăng cường / Siêu phân giải →* chuyển ảnh gốc sang tab Tăng cường.
    - Dropdown overlay: mask đỏ / heatmap trên ảnh gốc (zoom: lăn chuột,
      pan: kéo).
    - Kết quả là *dấu hiệu*, không phải kết luận; câu lưu ý nằm trong báo cáo xuất ra.
@@ -58,13 +67,29 @@ byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
    xóa cả artifacts. Chọn một dòng → *Xuất báo cáo* (cùng định dạng Markdown).
    Tab "Thống kê" tổng hợp phiên làm việc.
 
+Nếu lưu lịch sử/artifact thất bại, kết quả tính toán vẫn được trả về kèm
+cảnh báo trong limitations, nhưng lượt lưu chưa hoàn tất được thu hồi.
+Nếu cảnh báo ghi cleanup không hoàn tất hoặc cần `recovery`, giữ mã báo cáo
+được nêu để kiểm tra và phục hồi trước khi tin vào lịch sử hay bản xuất còn sót.
+
+Nhánh Deepfake/AI nhận diện khung ghép dual-camera bằng heuristic tỷ lệ ảnh
+rộng; đó không phải xác nhận ảnh đến từ hai camera. Khi không có đủ nền cùng
+cảm biến quanh ROI được chọn, method trả *Không đủ bằng chứng*, không chấm
+điểm và không mượn nền của nửa ảnh còn lại.
+
 ## Tab Tăng cường (xem, không phân tích)
 
-Tab "Tăng cường" có ba operator cổ điển — *Unsharp mask*, *CLAHE*,
-*Non-local means* — và lựa chọn tùy chọn *NAFNet (AI)* để xem thử hiệu ứng
-trên ảnh. Tab này **không phân
+Tab "Tăng cường" có sáu operator cổ điển — *Unsharp mask*, *CLAHE*,
+*Non-local means*, *Siêu phân giải cổ điển (Bicubic + IBP)* (`super_res`),
+*Hiệu chuẩn Cảm biến & Khớp màu Camera* (`cam_calibrate`: cân bằng ánh sáng cục bộ /
+khớp histogram song song 2 camera) và *Khử nhiễu & Làm nét Miền tần số (FFT)* (`freq_sharpen`:
+lọc trung vị kết hợp khuếch đại cao tần Butterworth trên kênh độ chói) — và lựa chọn tùy chọn
+*NAFNet (AI)* để xem thử hiệu ứng
+trên ảnh (hỗ trợ cả mở file và nút *"Chụp từ Camera…"*). Tab này **không phân
 tích**, không gọi `AnalysisService`, không ghi lịch sử hay database, và
-không kết luận điều gì về ảnh.
+không kết luận điều gì về ảnh. Khi dùng ảnh từ camera, luôn chạy phân tích
+Deepfake/Forensics trên khung hình gốc từ cảm biến trước khi dùng *Siêu phân giải*
+cho mục đích quan sát.
 
 - **Banner cố định**: "Ảnh đã tăng cường bằng thuật toán hoặc mô hình AI.
   Đây là bản xem, không phải bằng chứng. Phân tích dấu hiệu chỉ gắn với
@@ -90,6 +115,15 @@ không kết luận điều gì về ảnh.
   `model_sha256` (null với operator cổ điển, hash weight với NAFNet) và
   `created_utc`. Hộp thoại thành công hiển thị cả PNG và JSON. File gốc không bao giờ bị ghi đè;
   đích trùng file gốc bị từ chối, đích đã tồn tại phải xác nhận ghi đè.
+- Nếu ghi JSON thất bại sau khi ghi PNG, ứng dụng phục hồi PNG trước đó
+  hoặc xóa PNG vừa tạo nếu trước đó chưa có. Nếu phục hồi thất bại hoặc
+  phát hiện file đích đã bị thay đổi, lỗi `recovery required` chỉ rõ bản
+  sao `.enhance-*.bak` và SHA-256 cũ (nếu có). Giữ bản sao này, ngừng ghi
+  vào cùng đích và đối chiếu hash trước khi phục hồi thủ công; cặp xuất
+  đang lỗi chưa đủ điều kiện sử dụng. Đừng phân tích bản xem như ảnh gốc.
+  Các lượt xuất trong cùng tiến trình được tuần tự hóa. Các tiến trình
+  khác phải chọn đích riêng. Cơ chế này xử lý lỗi ghi thông thường;
+  không bảo đảm phục hồi khi tiến trình bị dừng hoặc máy mất điện giữa hai lần ghi.
 - Tab này không khôi phục dấu vết camera và không phục hồi ảnh về trạng
   thái gốc.
 

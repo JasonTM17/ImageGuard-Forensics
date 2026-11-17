@@ -59,11 +59,15 @@ src/imageguard/
   forensics/   base.py registry.py fusion.py
                keypoint/   detectors.py matchers.py pipeline.py …
                block/      dct_blocks.py pipeline.py voting.py …
-               auxiliary/  ela.py noise_map.py freq_view.py splicing.py …
+               auxiliary/  ela.py noise_map.py noise_local.py freq_view.py
+                           splicing.py deepfake_cues.py meta_report.py
                localize/   fusion_masks.py heatmap.py
   enhancement/ derive.py nafnet.py
-  ingest/      folder.py commands.py config.py custody.py http_pull.py
-  ipkit/       edges.py morphology.py noise.py threshold.py _util.py
+  ingest/      folder.py commands.py config.py custody.py http_pull.py camera.py
+  ipkit/       intensity.py histogram.py spatial.py frequency.py
+               morphology.py morph_algos.py edges.py threshold.py
+               segmentation.py noise.py features_basic.py features_hog.py
+               features_projection.py classifiers.py _util.py
   services/    analysis_service.py history_service.py
                evaluation_service.py report_service.py
   storage/     db.py artifacts.py repository.py models.py
@@ -74,7 +78,7 @@ src/imageguard/
                splicing_study.py
   ui/          app.py main_window.py workers.py strings.py a11y.py
                screens/  analyze.py enhance.py history.py stats.py settings.py
-               widgets/  image_canvas.py verdict_panel.py
+               widgets/  image_canvas.py verdict_panel.py camera_dialog.py
 configs/thresholds.yaml
 tests/
 docs/      xem README.md — chỉ mục đầy đủ

@@ -24,14 +24,24 @@ svc.analyze(AnalysisRequest(
 - `progress_cb` được gọi từ worker thread — UI phải marshal qua signal.
 - Lỗi persistence (DB/artifact) không huỷ kết quả: service thêm cảnh báo vào
   `report.limitations` và vẫn trả `ForensicReport`.
+  Mỗi lượt lưu giành quyền sở hữu UUID/thư mục artifact mới trước khi ghi.
+  Khi ghi thất bại, service thử dọn cả rows của UUID và thư mục artifact,
+  giữ `ImageAsset`, ảnh nguồn và các báo cáo trước. Nếu cleanup không hoàn
+  tất, limitation nêu UUID, stage lỗi và loại exception để phục hồi thủ công.
+  Đây là compensation cho lỗi thông thường, không phải giao dịch nguyên tử
+  xuyên SQLite/filesystem hay bảo đảm khi tiến trình bị dừng. Khi dọn file
+  thất bại, `report.json` còn sót có thể vẫn được ReportService đọc; không
+  coi đó là bằng chứng lượt lưu đã hoàn tất.
 
 ## HistoryService
 
 - `list(limit=100) -> [{id, created_at, verdict, duration_ms, image_name,
   n_methods}]`
 - `get(id) -> {id, created_at, verdict, duration_ms, image_name, config_hash,
-  methods[{method, verdict, score, score_definition}],
+  methods[{method, verdict, score, score_definition, evidence, limitations, duration_ms}],
   artifacts[{kind, method, rel_path}]} | None`
+  — `evidence` và `limitations` đọc lại từ SQLite. Trường JSON cũ rỗng,
+  sai dạng hoặc không đọc được có giá trị hiển thị mặc định `{}` / `[]`.
 - `delete(id) -> bool` — xoá rows (cascade) và gọi
   `ArtifactStore.delete_analysis` để dọn file artifacts. Hiện luôn trả `True`,
   kể cả khi id không tồn tại.
@@ -52,4 +62,9 @@ svc.analyze(AnalysisRequest(
   `data/artifacts/<analysis_id>/report.json`; trả `None` nếu thiếu/không đọc được.
 - `export_markdown(analysis_id, out_path=None) -> Path | None` — render
   Markdown từ `report.json`, ghi `report.md` vào thư mục artifact và (nếu có)
-  bản sao tại `out_path`.
+  bản sao tại `out_path`. Trong artifact store, đích được phép là `report.md`
+  của chính phân tích đang xuất. Các đích artifact khác bị từ chối trước khi
+  ghi. Bản sao ngoài store được ghi qua file tạm cùng thư mục và thay thế
+  nguyên tử để giữ file đích cũ nếu lỗi ghi hoặc publish. Hai bản dùng cùng
+  dữ liệu UTF-8. Nếu ghi ra ngoài thất bại, bản `report.md` trong store có thể
+  đã được cập nhật và có thể dùng để xuất lại.

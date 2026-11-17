@@ -166,7 +166,7 @@ def hu_moments(gray: np.ndarray) -> np.ndarray:
         n30 - 3.0 * n12
     ) * (n21 + n03) * (3.0 * (n30 + n12) ** 2 - (n21 + n03) ** 2)
 
-    # Trả về φ_k trực tiếp (OpenCV 4 HuMoments trên môi trường đồ án).
+    # Trả về φ_k trực tiếp (khớp chuẩn 7 bất biến HuMoments của OpenCV 4).
     return np.array((phi1, phi2, phi3, phi4, phi5, phi6, phi7), dtype=np.float64)
 
 
@@ -369,7 +369,7 @@ def _lbp_code_at(img: np.ndarray, row: int, col: int) -> int:
     for bit, (dr, dc) in enumerate(_LBP_OFFSETS):
         nr, nc = row + dr, col + dc
         neighbor = int(img[nr, nc])
-        # Quy tắc bài giảng (theo yêu cầu đồ án): bit=1 khi láng giềng >= tâm.
+        # Quy tắc mã hóa LBP chuẩn: bit = 1 khi pixel láng giềng >= tâm.
         if neighbor >= center:
             # Gán bit thứ ``bit`` (chiều kim đồng hồ) trong mã nhị phân 8-bit.
             code |= 1 << bit

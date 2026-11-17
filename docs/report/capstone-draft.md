@@ -588,6 +588,14 @@ cohort).
   không gộp chúng thành “sai”
   ([`README.md`](../../README.md), [`docs/evaluation-methodology.md`](../evaluation-methodology.md)).
 
+**Bảng 6.1b** — Minh họa 3 tình huống điển hình trả về `INCONCLUSIVE` / `NOT_APPLICABLE` (khóa bởi bộ kiểm thử).
+
+| Mẫu | Tình huống đầu vào | Method & Verdict | Nguyên nhân kỹ thuật / Xử lý ảnh | Kiểm thử khóa hành vi |
+| --- | --- | --- | --- | --- |
+| **L1** | Ảnh phẳng / ít chi tiết (tường trơn, ảnh mờ nặng) | `copy_move_keypoint`: `INCONCLUSIVE`; `copy_move_block`: `INCONCLUSIVE` | Số keypoint SIFT `< k_min` (50) hoặc không có block $16 \times 16$ nào đạt $\sigma \ge 5.0$ (`flat_std_eps`) → không đủ texture để so khớp | `test_low_texture_inconclusive`, `test_flat_image_insufficient_texture_is_inconclusive` |
+| **L2** | Ảnh có kết cấu lặp tự nhiên diện tích lớn (gạch, cửa sổ) | `copy_move_keypoint`: hạ xuống `INCONCLUSIVE` | Dù `n_verified ≥ 10`, diện tích mask phủ `> 50%` khung hình (`coverage > 0.5`) → hệ thống chủ động hạ verdict để tránh báo nhầm vùng lặp tự nhiên | `src/imageguard/forensics/keypoint/pipeline.py` (dòng 110–116) |
+| **L3** | Ảnh PNG không qua nén JPEG hoặc số cặp khớp ở vùng biên | `ela`: `NOT_APPLICABLE`; `copy_move_keypoint`: `INCONCLUSIVE` | ELA cần lịch sử lượng tử hóa JPEG $8 \times 8$ nên bỏ qua ảnh PNG; hoặc số cặp inlier RANSAC rơi vào khoảng giữa `[t_clean=4, t_susp=10)` | `test_png_not_applicable`, `keypoint/pipeline.py` (dòng 94–99) |
+
 ### 6.3 Recall của block và cái giá của bảo thủ
 
 Block chỉ gọi `SUSPICIOUS` trên **37/103** ảnh chỉnh (0.273–0.455), với **63**
@@ -789,6 +797,26 @@ Hướng mở rộng khác đã có khung thiết kế (chưa cài đặt, khôn
 splicing study ([`docs/splicing-study.md`](../splicing-study.md)), ML/ONNX
 ([`docs/ml-extension.md`](../ml-extension.md)), đóng gói `.exe`
 ([`docs/packaging.md`](../packaging.md)).
+
+#### 7.3.4 Hướng mở rộng thực tiễn: Kết hợp Camera ngoài & Webcam máy tính, Siêu phân giải và Phát hiện Deepfake
+
+Kiến trúc phân lớp hiện tại cho phép mở rộng sang các bài toán thực tế ngoài phạm vi môn học mà không phá vỡ pipeline forensics cốt lõi. Phiên bản hiện tại trong mã nguồn đã tích hợp sẵn **prototype gọn nhẹ thuần NumPy + OpenCV** cho 3 bước sau (chi tiết hơn về hướng DL nặng xem [`docs/ml-extension.md`](../ml-extension.md)):
+
+1. **Thu nhận đa nguồn từ Camera ngoài (IoT / USB / IP Camera) và Camera máy tính (Webcam nội bộ):**
+   - **Camera ngoài (IoT / IP Camera như ESP32-CAM, Raspberry Pi Camera):** Mô-đun `src/imageguard/ingest/camera.py` (`capture_iot_http_frame`) gọi qua `src/imageguard/ingest/http_pull.py` (`pull_due`) và `custody.py` hỗ trợ kéo ảnh JPEG snapshot qua HTTP với danh sách host cho phép (`allowlist`), kiểm tra magic bytes, băm SHA-256 và ghi nhật ký hành trình dữ liệu (`custody.jsonl`), hoặc đồng bộ qua thư mục giám sát (`ingest watch`). Nếu triển khai thực tế, có thể bổ sung chữ ký số phần cứng tại thiết bị biên để xác thực nguồn gốc ảnh ngay lúc chụp.
+   - **Camera máy tính (Webcam tích hợp), USB Camera ngoài & Chế độ Kép (Dual Camera):** Hàm `capture_device_frame` và `capture_dual_device_frames` trong `src/imageguard/ingest/camera.py` kết nối `cv2.VideoCapture(0)` / `cv2.VideoCapture(index)` và lưu khung hình PNG không mất dữ liệu (lossless), gắn với hộp thoại `CameraCaptureDialog` (`src/imageguard/ui/widgets/camera_dialog.py`) ngay trên hai tab Phân tích và Tăng cường kèm mô-đun chẩn đoán quang học theo thời gian thực (`Otsu`, độ nét tiêu cự `Laplacian` và sai biệt kết cấu `LBPH χ²` giữa 2 cảm biến).
+2. **Làm rõ độ phân giải & Hiệu chuẩn Camera (Super-Resolution, Match Histogram & Lọc miền tần số):**
+   - Khung hình từ webcam hoặc camera IoT trong điều kiện thiếu sáng thường bị mờ, nhiễu hoặc lệch cân bằng sáng giữa 2 mắt camera. Trong `src/imageguard/evaluation/enhance_ops.py`, bên cạnh toán tử siêu phân giải cổ điển **`"super_res"`** (`_super_res_ibp`: Bicubic + Iterative Back-Projection), hệ thống tích hợp trực tiếp 2 bộ lọc chuyên dụng cho luồng camera: **`"cam_calibrate"`** (hiệu chuẩn cảm biến đơn cam bằng `Gamma + Local Equalize + Highboost` hoặc đồng bộ màu sắc 2 mắt camera bằng `Match Histogram + Contrast Stretch`) và **`"freq_sharpen"`** (khử nhiễu hạt bằng lọc trung vị kết hợp làm nét trong miền tần số FFT Butterworth); trong tương lai có thể bổ sung thêm mô hình siêu phân giải nhẹ dưới dạng ONNX tương tự `nafnet.py`.
+   - **Nguyên tắc xử lý ảnh bắt buộc:** Quá trình kiểm tra dấu hiệu forensics/deepfake phải luôn chạy trên **khung hình gốc từ cảm biến trước**, tuyệt đối không chạy detector trên ảnh đã tăng độ phân giải hoặc hiệu chuẩn, vì các phép biến đổi đó tự sinh/thay đổi phân bố tần số cao làm sai lệch hệ số DCT, biểu đồ ELA và nhiễu dư (`noise residual`). Ảnh sau tăng cường chỉ dùng ở tab *Tăng cường* để người vận hành quan sát rõ chi tiết đối chứng.
+3. **Phát hiện dấu hiệu Deepfake / AI (Face-swap / Reenactment / Virtual Camera) theo kiến trúc 6 trụ cột & Dual-Camera Cross-Sensor:**
+   - Mô-đun `src/imageguard/forensics/auxiliary/deepfake_cues.py` (`DeepfakeCues`, `MethodName.DEEPFAKE_CUES`, spec `"deepfake"`) hiện thực pipeline **6 trụ cột xử lý ảnh số** kết hợp hỗ trợ ghép đôi 2 camera:
+     - **Trụ cột 1 — Định vị vùng khuôn mặt đa tầng (`_detect_face_roi`):** Dùng OpenCV Haar Cascade nếu có sẵn, hoặc tự động chuyển sang phân đoạn màu da `YCrCb + HSV` + lọc hình thái học + kiểm chứng đối xứng mắt bằng ảnh tích phân SAT (`_verify_face_candidate_sat`); hỗ trợ **Dual-Camera Cross-Sensor** khi nhận ảnh ghép ($W \ge 2.1H$), tự đối chiếu mật độ nhiễu `dual_sigma_left` vs `dual_sigma_right` và hiệu chuẩn nền riêng từng mắt camera để chọn vùng bất thường chính xác ngay cả khi 2 cảm biến khác Gain.
+     - **Trụ cột 2 — Nhiễu phần dư cảm biến, Biên ghép & Phân đoạn Otsu (`seam_ring`):** Đo suy giảm nhiễu cảm biến $\sigma_{\text{in}}$ vs $\sigma_{\text{out}}$ qua `medianBlur` + `integral`, kiểm tra bất liên tục trên vòng biên ghép `seam_ring`, và gom vùng bất thường bằng ngưỡng thích nghi Otsu + thành phần liên thông 8-lân cận.
+     - **Trụ cột 3 — Vi cấu trúc Texture LBP vector hóa:** Tính mã LBP 8 lân cận (`_LBP_OFFSETS`), tỷ lệ mất vi cấu trúc (`lbp_flat_in`) và khoảng cách histogram 16-bin $\chi^2$ (`lbp_chi2`) giữa ROI với nền ngoài (`_lbp_texture_cues`).
+     - **Trụ cột 4 — Phổ tần số 2D FFT:** Áp cửa sổ Hann 2D lên ROI để đo đỉnh tuần hoàn upsampling (`fft_hf_peak_ratio` trên vành $0.45..0.95$ Nyquist) và tỷ lệ suy hao phổ hướng tâm (`spectral_rolloff`, `_fft_highfreq_cue`).
+     - **Trụ cột 5 — Đường biên ghép hình học quanh ROI (`_seam_canny_hough_cue`):** Áp dụng dò biên Canny + trích biên hình thái học (`boundary_extraction`) trên viền ngoài ROI và chạy biến đổi Hough tìm các đoạn biên thẳng ngang/dọc của hộp mặt nạ ghép (`seam_hough_lines`).
+     - **Trụ cột 6 — Đối xứng cấu trúc khuôn mặt trái–phải (`_facial_hog_symmetry_cue`):** Tính độ lệch đặc trưng gradient HOG và 7 bất biến Hu giữa nửa khuôn mặt trái và nửa phải lật ngang (`hog_asym`).
+   - **Contract & Hợp nhất 5 trạng thái:** `DeepfakeCues` nằm trong nhóm `AUX_METHODS` của `fusion.py` — chỉ trả `INCONCLUSIVE`, `NO_INDICATION` hoặc `NOT_APPLICABLE`, tuyệt đối không overclaim hay trả `SUSPICIOUS_INDICATION` đơn lẻ; toàn bộ chỉ số thành phần và nguồn ROI (`roi_source`) được lưu vào `evidence` kèm `heatmap` đa lớp để đối chiếu trên GUI.
 
 ### 7.4 Kết luận
 
