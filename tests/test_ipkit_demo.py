@@ -84,3 +84,15 @@ def test_synthetic_image_shape() -> None:
     mod = _load_ipkit_demo_module()
     img = mod.synthetic_demo_image(0)
     assert img.shape == (mod.DEMO_H, mod.DEMO_W, 3)
+
+
+def test_ipkit_demo_default_out(monkeypatch, tmp_path: Path) -> None:
+    mod = _load_ipkit_demo_module()
+    monkeypatch.chdir(tmp_path)
+    rc = mod.main([])
+    assert rc == 0
+    out_dir = tmp_path / "data" / "ipkit_demo"
+    for name in EXPECTED_PNGS:
+        p = out_dir / name
+        assert p.is_file(), f"missing default output {name}"
+        assert p.stat().st_size > 100
