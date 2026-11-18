@@ -38,10 +38,31 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,lama]"
       - name: PyInstaller build
-        run: python -m PyInstaller --noconfirm --clean ImageGuard.spec
-      - name: Verify dist output
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_app.ps1
+      - name: Smoke-test packaged startup
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
-          if (!(Test-Path "dist/ImageGuard/ImageGuard.exe")) { exit 1 }
+          $exe = Get-Item -LiteralPath 'dist/ImageGuard/ImageGuard.exe'
+          $db = Join-Path $exe.DirectoryName 'data/imageguard.db'
+          if (Test-Path -LiteralPath $db) { throw 'Expected a fresh package database.' }
+          $process = Start-Process -FilePath $exe.FullName -WorkingDirectory $exe.DirectoryName -WindowStyle Hidden -PassThru
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+            do {
+              if ($process.HasExited) { throw "ImageGuard exited during startup (code $($process.ExitCode))." }
+              if (Test-Path -LiteralPath $db) { break }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+            if (!(Test-Path -LiteralPath $db)) { throw 'ImageGuard did not create its database within 30 seconds.' }
+            if ($process.HasExited) { throw "ImageGuard exited during startup (code $($process.ExitCode))." }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -InputObject $process -ErrorAction SilentlyContinue
+              if (!$process.WaitForExit(5000)) { throw 'The packaged startup process did not stop.' }
+            }
+            $process.Dispose()
+          }
 
   test-py313:
     runs-on: windows-latest
