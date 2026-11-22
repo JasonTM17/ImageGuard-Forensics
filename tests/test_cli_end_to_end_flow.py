@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import json
 import os
@@ -145,7 +146,7 @@ def test_analyze_persist_stays_under_tmp_path_data(tmp_path: Path) -> None:
     assert art_root.is_dir()
     assert list(art_root.rglob("*.json"))
 
-    with sqlite3.connect(db) as conn:
+    with contextlib.closing(sqlite3.connect(db)) as conn:
         n = conn.execute("SELECT count(*) FROM analyses").fetchone()[0]
     assert n == 1
 
@@ -188,7 +189,7 @@ def test_ingest_once_counts_custody_and_second_run_is_quiet(tmp_path: Path) -> N
         blob = json.dumps(record, ensure_ascii=False)
         assert str(tmp_path) not in blob
 
-    with sqlite3.connect(tmp_path / "data" / "imageguard.db") as conn:
+    with contextlib.closing(sqlite3.connect(tmp_path / "data" / "imageguard.db")) as conn:
         count_after_first = conn.execute(
             "SELECT count(*) FROM analyses"
         ).fetchone()[0]
@@ -203,7 +204,7 @@ def test_ingest_once_counts_custody_and_second_run_is_quiet(tmp_path: Path) -> N
     # corrupt.jpg is retried each scan (error is not a completed custody event)
     assert "errors=" in second.stdout
 
-    with sqlite3.connect(tmp_path / "data" / "imageguard.db") as conn:
+    with contextlib.closing(sqlite3.connect(tmp_path / "data" / "imageguard.db")) as conn:
         count_after_second = conn.execute(
             "SELECT count(*) FROM analyses"
         ).fetchone()[0]

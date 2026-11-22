@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -225,7 +226,7 @@ def test_cli_once_scans_and_returns_zero_when_one_image_errors(tmp_path: Path) -
     assert "Traceback" not in result.stderr
     data_dir = tmp_path / "data"
     assert (data_dir / "ingest" / "custody.jsonl").is_file()
-    with sqlite3.connect(data_dir / "imageguard.db") as connection:
+    with contextlib.closing(sqlite3.connect(data_dir / "imageguard.db")) as connection:
         analysis_count = connection.execute(
             "SELECT count(*) FROM analyses"
         ).fetchone()[0]
