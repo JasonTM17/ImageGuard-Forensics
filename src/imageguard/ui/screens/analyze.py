@@ -9,7 +9,6 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-import cv2
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -30,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from imageguard.core.errors import ErrorResult
 from imageguard.core.models import ForensicReport
+from imageguard.forensics.localize.heatmap import overlay_mask
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
@@ -491,14 +491,16 @@ class AnalyzeScreen(QWidget):
         kind, m = data
         shape = self._doc.array.shape[:2]
         if kind == "mask" and m.mask is not None:
-            if m.mask.shape != shape:
+            if (
+                m.mask.shape[:2] != shape
+                or m.mask.ndim not in (2, 3)
+                or (m.mask.ndim == 3 and m.mask.shape[2] != 1)
+            ):
                 self.canvas.set_overlay(None)
                 self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
                     kind="mask", dims=m.mask.shape, shape=shape))
                 return
-            bgr = self._doc.array.copy()
-            bgr[m.mask > 0] = (0, 0, 255)
-            blend = cv2.addWeighted(self._doc.array, 0.6, bgr, 0.4, 0)
+            blend = overlay_mask(self._doc.array, m.mask, color=(0, 0, 255), alpha=0.4)
             self.canvas.set_overlay(ndarray_to_qpixmap(blend), alpha=1.0)
         elif kind == "heat" and m.heatmap is not None:
             if m.heatmap.shape[:2] != shape:

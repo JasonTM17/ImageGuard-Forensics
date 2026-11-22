@@ -76,7 +76,9 @@ def convolve2d(
     return out.astype(np.float32)
 
 
-def sobel(img: np.ndarray, padding: PaddingMode = "replicate") -> np.ndarray:
+def sobel(
+    img: np.ndarray, padding: PaddingMode = "replicate"
+) -> tuple[np.ndarray, np.ndarray]:
     """Gradient Sobel: ``(gx, gy)`` float32; ảnh RGB thì từng kênh.
 
     gx đạo hàm theo x, gy theo y — độ lớn biên thường lấy sqrt(gx²+gy²).
@@ -101,7 +103,9 @@ def sobel(img: np.ndarray, padding: PaddingMode = "replicate") -> np.ndarray:
     return np.stack(gxs, axis=2), np.stack(gys, axis=2)
 
 
-def prewitt(img: np.ndarray, padding: PaddingMode = "replicate") -> np.ndarray:
+def prewitt(
+    img: np.ndarray, padding: PaddingMode = "replicate"
+) -> tuple[np.ndarray, np.ndarray]:
     """Gradient Prewitt: cặp ``(gx, gy)`` như Sobel với kernel đều trọng số.
 
     Liên quan C2 — biên; so sánh với Sobel khi giảng viên hỏi độ mịn vs nhiễu.

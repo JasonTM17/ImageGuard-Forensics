@@ -132,7 +132,11 @@ class AnalysisService:
                     self.analyses.add_artifact(rid, "mask",
                                                r.method.value, rel)
                 if r.heatmap is not None:
-                    hm = (np.clip(r.heatmap, 0, 1) * 255).astype(np.uint8)
+                    clean_hm = np.nan_to_num(
+                        np.asarray(r.heatmap, dtype=np.float32),
+                        nan=0.0, posinf=1.0, neginf=0.0,
+                    )
+                    hm = (np.clip(clean_hm, 0.0, 1.0) * 255).astype(np.uint8)
                     rel = self.store.put_image(rid,
                                                f"{r.method.value}_heat.png",
                                                hm)

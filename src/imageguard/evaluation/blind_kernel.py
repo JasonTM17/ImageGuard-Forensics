@@ -41,7 +41,12 @@ def _as_gray_u8(image: np.ndarray) -> np.ndarray | None:
     values = source.astype(np.float64, copy=False)
     if not np.all(np.isfinite(values)):
         return None
-    if values.size and float(values.min()) >= 0.0 and float(values.max()) <= 1.0:
+    if (
+        np.issubdtype(source.dtype, np.floating)
+        and values.size
+        and float(values.min()) >= 0.0
+        and float(values.max()) <= 1.0
+    ):
         values = values * 255.0
     bgr = np.clip(np.rint(values), 0, 255).astype(np.uint8)
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)

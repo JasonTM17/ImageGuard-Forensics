@@ -143,12 +143,20 @@ def _sanitize_exception_text(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {sanitized}"
 
 
+def _to_gray_2d(img: np.ndarray) -> np.ndarray:
+    if img.ndim == 2:
+        return img
+    if img.ndim == 3 and img.shape[2] == 1:
+        return img[:, :, 0]
+    return cv2.cvtColor(img[:, :, :3], cv2.COLOR_BGR2GRAY)
+
+
 def _compute_quality_metrics(orig: np.ndarray, derived: np.ndarray) -> str:
     """Đo định lượng chất lượng ảnh sau xử lý: PSNR, SSIM, Độ nét Laplacian & Độ tương phản."""
     p_val = psnr(derived, orig)
     s_val = ssim(derived, orig)
-    g0 = orig if orig.ndim == 2 else cv2.cvtColor(orig[:, :, :3], cv2.COLOR_BGR2GRAY)
-    g1 = derived if derived.ndim == 2 else cv2.cvtColor(derived[:, :, :3], cv2.COLOR_BGR2GRAY)
+    g0 = _to_gray_2d(orig)
+    g1 = _to_gray_2d(derived)
     sharp0 = float(cv2.Laplacian(g0, cv2.CV_64F).var())
     sharp1 = float(cv2.Laplacian(g1, cv2.CV_64F).var())
     std0 = float(np.std(g0))

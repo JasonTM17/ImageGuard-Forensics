@@ -286,13 +286,15 @@ class AnalysisDetailDialog(QDialog):
             self.lbl_art_err.setText(
                 f"Không hiển thị artifact '{rel}': {type(e).__name__}: {e}")
             return
-        if img is None:
+        if img is None or img.size == 0:
             self.lbl_art_err.setText(f"Artifact '{rel}' hỏng hoặc không đọc được.")
             return
         self.lbl_art_err.setText("")
         if img.ndim == 2:
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        elif img.shape[2] == 4:
+        elif img.ndim == 3 and img.shape[2] == 1:
+            img = cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
+        elif img.ndim == 3 and img.shape[2] == 4:
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
         self.canvas.set_image(img)
 

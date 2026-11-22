@@ -75,13 +75,16 @@ class SplicingCues:
                 [f"cue suy giảm: {why} — không đủ cặp tín hiệu để đối chiếu"]
                 + lim, evidence=ev, params_hash=cfg.snapshot_hash())
 
-        inter = np.logical_and(noise.mask > 0, ela.mask > 0).sum()
-        hot = max(int((ela.mask > 0).sum()), 1)
-        frac = float(inter / hot)
-        mask = np.zeros_like(ela.mask)
-        mask[np.logical_and(noise.mask > 0, ela.mask > 0)] = 255
+        overlap = np.logical_and(noise.mask > 0, ela.mask > 0)
+        inter = int(overlap.sum())
+        hot = int((ela.mask > 0).sum())
+        frac = float(inter / hot) if hot > 0 else 0.0
+        mask: np.ndarray | None = None
+        if inter > 0:
+            mask = np.zeros_like(ela.mask)
+            mask[overlap] = 255
         ev.update({"overlap_frac": round(frac, 4),
-                   "overlap_px": int(inter), "ela_hot_px": int(hot)})
+                   "overlap_px": inter, "ela_hot_px": hot})
 
         t = float(cfg.value("splicing", "overlap_frac"))
         verdict = Verdict.INCONCLUSIVE if frac >= t else Verdict.NO_INDICATION

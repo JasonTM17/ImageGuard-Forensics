@@ -75,7 +75,11 @@ def apply_per_channel(img: np.ndarray, fn) -> np.ndarray:
     """
     if img.ndim == 2:
         return fn(img)
-    out = np.empty_like(img)
-    for c in range(img.shape[2]):
+    if img.shape[2] == 0:
+        return img.copy()
+    first = fn(img[:, :, 0])
+    out = np.empty((*first.shape, img.shape[2]), dtype=first.dtype)
+    out[:, :, 0] = first
+    for c in range(1, img.shape[2]):
         out[:, :, c] = fn(img[:, :, c])
     return out

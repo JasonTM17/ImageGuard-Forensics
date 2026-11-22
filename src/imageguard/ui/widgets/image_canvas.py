@@ -31,18 +31,48 @@ from imageguard.ui.a11y import apply_a11y
 
 
 def ndarray_to_qpixmap(bgr: np.ndarray) -> QPixmap:
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    arr = np.asarray(bgr)
+    if np.iscomplexobj(arr) or arr.dtype.kind not in "biuf":
+        raise ValueError(f"Unsupported image dtype for QPixmap: {arr.dtype}")
+    if arr.size == 0:
+        return QPixmap()
+    if arr.dtype == np.bool_:
+        arr = arr.astype(np.uint8) * 255
+    elif arr.dtype != np.uint8:
+        if np.issubdtype(arr.dtype, np.floating):
+            arr = np.nan_to_num(arr, nan=0.0, posinf=255.0, neginf=0.0)
+        arr = np.clip(arr, 0, 255).astype(np.uint8)
+    if arr.ndim == 2:
+        rgb = cv2.cvtColor(arr, cv2.COLOR_GRAY2RGB)
+        fmt = QImage.Format.Format_RGB888
+    elif arr.ndim == 3 and arr.shape[2] == 1:
+        rgb = cv2.cvtColor(arr[:, :, 0], cv2.COLOR_GRAY2RGB)
+        fmt = QImage.Format.Format_RGB888
+    elif arr.ndim == 3 and arr.shape[2] == 3:
+        rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+        fmt = QImage.Format.Format_RGB888
+    elif arr.ndim == 3 and arr.shape[2] == 4:
+        rgb = cv2.cvtColor(arr, cv2.COLOR_BGRA2RGBA)
+        fmt = QImage.Format.Format_RGBA8888
+    else:
+        raise ValueError(f"Unsupported image shape for QPixmap: {arr.shape}")
+    rgb = np.ascontiguousarray(rgb)
     h, w, ch = rgb.shape
-    img = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888).copy()
+    img = QImage(rgb.data, w, h, ch * w, fmt).copy()
     return QPixmap.fromImage(img)
 
 
 def heat_to_qpixmap(heat: np.ndarray, base_shape: tuple[int, int]) -> QPixmap:
     from imageguard.forensics.localize.heatmap import render_heatmap
 
+    target_h, target_w = int(base_shape[0]), int(base_shape[1])
+    if target_h <= 0 or target_w <= 0:
+        return QPixmap()
     hm = render_heatmap(heat)
-    if hm.shape[:2] != base_shape:
-        hm = cv2.resize(hm, (base_shape[1], base_shape[0]))
+    if hm.size == 0:
+        return QPixmap()
+    if hm.shape[:2] != (target_h, target_w):
+        hm = cv2.resize(hm, (target_w, target_h))
     return ndarray_to_qpixmap(hm)
 
 
@@ -83,8 +113,12 @@ class ImageCanvas(QGraphicsView):
         self._show_placeholder()
 
     def set_image(self, bgr: np.ndarray) -> None:
+        pm = ndarray_to_qpixmap(bgr)
+        if pm.isNull():
+            self.clear_image()
+            return
         self._scene.clear()
-        self._base = self._scene.addPixmap(ndarray_to_qpixmap(bgr))
+        self._base = self._scene.addPixmap(pm)
         self._overlay = None
         self.setSceneRect(self._base.boundingRect())
         self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
@@ -120,8 +154,10 @@ class ImageCanvas(QGraphicsView):
             self.fitInView(self._base, Qt.AspectRatioMode.KeepAspectRatio)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        if self._base is not None:
-            self._zoom_step(event.angleDelta().y() > 0)
+        dy = event.angleDelta().y()
+        if self._base is not None and dy != 0:
+            self._zoom_step(dy > 0)
+            event.accept()
         else:
             super().wheelEvent(event)
 
