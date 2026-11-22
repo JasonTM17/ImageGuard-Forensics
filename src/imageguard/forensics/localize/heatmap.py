@@ -8,8 +8,9 @@ import numpy as np
 
 def normalize_map(evidence: np.ndarray) -> np.ndarray:
     """Mọi evidence map → float32 [0,1]. max=0 → toàn 0 (không nhiễu NaN)."""
-    e = evidence.astype(np.float32)
-    m = e.max()
+    e = np.nan_to_num(evidence.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    e = np.maximum(e, 0.0)
+    m = float(e.max()) if e.size else 0.0
     return e / m if m > 0 else e
 
 
