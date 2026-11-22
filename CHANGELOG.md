@@ -31,6 +31,11 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Fixed
 
+- 2026-11-22 (vòng 3):
+  - `ingest/http_pull.py`: kiểm tra `response.length > 0` sau khi EOF trong `_stream_jpeg` để từ chối/retry (`connection_error`) các phản hồi `Content-Length` bị cắt cụt thay vì lưu file JPEG dở dang.
+  - `ui/screens/analyze.py` & `forensics/localize/heatmap.py`: xóa `lbl_err` cũ khi áp dụng overlay hợp lệ trong `_apply_overlay`, bảo vệ kiểm tra kích thước/kênh/dtype (`heatmap` & `pairs_image`) khỏi `ValueError` chưa bắt, và từ chối mảng complex/không phải số trong `normalize_map`/`_to_2d`.
+  - `forensics/keypoint/viz.py`: ủy quyền `overlay_mask` sang `forensics/localize/heatmap.py` để hỗ trợ an toàn ảnh xám 2D, `(H, W, 1)`, BGRA 4 kênh và tự resize mask lệch kích thước.
+  - `evaluation/robustness.py`: dùng `tempfile.NamedTemporaryFile` trong `run_battery` để tên distortion chứa `:`, `/`, `\` không gây `OSError` trên Windows.
 - 2026-11-22 (vòng 2):
   - `storage/db.py`: dựng URL SQLite bằng `sqlalchemy.engine.URL.create(...)` (tránh lỗi path chứa `#`/`%`), giải quyết động `data_root()` khi `db_path=None`, giải phóng `Engine` trong nhánh lỗi WAL/schema (`eng.dispose()`) và gắn `weakref.finalize` tránh khóa file Windows; `cli.py` & `ingest/commands.py` đóng `Engine` trong khối `finally`.
   - Runtime đóng gói (`FROZEN=True`): giải quyết động `config_path()` / `data_root()` trong `core/config.py`, `storage/artifacts.py`, `ingest/camera.py`, `ui/widgets/camera_dialog.py`, `ui/widgets/sample_dialog.py`, và `cli.py`.
@@ -54,6 +59,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Documentation
 
+- 2026-11-22 (vòng 3): đồng bộ số liệu kiểm thử mới nhất (**1627 passed, 5 skipped**, `0` warnings, độ phủ **94%** trên `9979` statements) trong `docs/testing-strategy.md`.
 - 2026-11-22 (vòng 2): cập nhật số liệu kiểm thử mới nhất (**1623 passed, 5 skipped**, 0 warnings, độ phủ **94%** trên `9944` statements) trong `docs/testing-strategy.md`.
 - 2026-11-22: bổ sung `deepfake_cues` vào danh sách enum `MethodName` và bảng evidence trong `docs/forensic-report-schema.md`, thêm tóm tắt `deepfake_cues` vào `docs/algorithms.md`, và ghi nhận số liệu độ phủ kiểm thử (92%, 1598 passed) trong `docs/testing-strategy.md`.
 - Ghi nhận study enhancement N=24 (cổ điển); NAFNet arm NOT_RUN trên cohort dễ (`docs/enhancement-study.md`).
@@ -70,6 +76,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Tests
 
+- 2026-11-22 (vòng 3): mở rộng `tests/test_adversarial_fixes_and_coverage.py` kiểm thử từ chối/retry phản hồi HTTP `Content-Length` bị cắt cụt, xóa lỗi cũ & chặn mảng heatmap/pairs không hợp lệ trong `AnalyzeScreen._apply_overlay`, `keypoint.viz.overlay_mask` đa kênh/resize, và tên distortion có ký tự đặc biệt Windows trong `robustness.run_battery` (**1627 passed, 5 skipped**, `0` warnings).
 - 2026-11-22 (vòng 2): bổ sung `tests/test_pixel_and_ui_canvas_fixes.py`, `tests/test_adversarial_fixes_and_coverage.py`, và `tests/test_low_coverage_modules.py` (bao phủ hợp đồng điểm ảnh/kênh, `ImageCanvas` wheel ngang & drag-drop `QPointF`, `splicing` zero-ELA, dynamic frozen paths, dọn `Engine` SQLite, HTTP chunked/keep-alive/SSRF, đường dẫn Unicode/`cp1252`, và các module ít phủ như `nafnet_arm`, `blind_kernel`, `modelforge`, `enhance_study`, `derive`, `folder`, `http_pull`, `cli`); đóng kết nối `sqlite3` trong `test_cli_end_to_end_flow.py` và `test_ingest_folder.py` để đạt `0` warnings.
 - 2026-11-22: bổ sung kiểm thử mức điểm ảnh (`tests/test_pixel_overlays.py`: overlay/heatmap math, copy-move downscale/coverage safeguard, ELA tampered patch), custody & determinism khôi phục (`tests/test_restoration_custody.py`), hợp đồng kênh/độ sâu bit của `safe_open` (`tests/test_safe_open_channel_contract.py`), hợp đồng JSON subprocess CLI `analyze --no-persist` (`tests/test_cli_analyze_subprocess.py`), drift lock `MethodName` trong `tests/test_report_schema_doc.py`, edge cases camera/EXIF/ImageCanvas/EnhanceScreen (`tests/test_camera_and_canvas_edges.py`), và phủ `__main__`, `ingest watch`, `nafnet`, `haar_feature`, sanitization `heatmap` (`tests/test_remaining_coverage_edges.py`).
 - End-to-end CLI: analyze, ingest và eval.
