@@ -8,6 +8,7 @@ traditional vs DL sau này) và capstone report — số đo THẬT, không gi�
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -69,12 +70,20 @@ def run_battery(
                 ok, buf = cv2.imencode(".png", warped)
                 if not ok:
                     continue
-                tmp = p.parent / f".__rob_{dname}.png"
+                tmp: Path | None = None
                 try:
-                    tmp.write_bytes(buf.tobytes())
+                    with tempfile.NamedTemporaryFile(
+                        dir=p.parent,
+                        prefix=".__rob_",
+                        suffix=".png",
+                        delete=False,
+                    ) as fh:
+                        tmp = Path(fh.name)
+                        fh.write(buf.tobytes())
                     doc = safe_open(tmp, cfg)
                 finally:
-                    tmp.unlink(missing_ok=True)
+                    if tmp is not None:
+                        tmp.unlink(missing_ok=True)
                 if hasattr(doc, "code"):
                     continue
                 r = m.analyze(doc, cfg)

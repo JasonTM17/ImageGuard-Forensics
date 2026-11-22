@@ -8,7 +8,10 @@ import numpy as np
 
 def normalize_map(evidence: np.ndarray) -> np.ndarray:
     """Mọi evidence map → float32 [0,1]. max=0 → toàn 0 (không nhiễu NaN)."""
-    e = np.nan_to_num(evidence.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    arr = np.asarray(evidence)
+    if np.iscomplexobj(arr) or arr.dtype.kind not in "biuf":
+        raise ValueError(f"Unsupported evidence dtype: {arr.dtype}")
+    e = np.nan_to_num(arr.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
     e = np.maximum(e, 0.0)
     m = float(e.max()) if e.size else 0.0
     return e / m if m > 0 else e
@@ -16,6 +19,8 @@ def normalize_map(evidence: np.ndarray) -> np.ndarray:
 
 def _to_2d(arr: np.ndarray) -> np.ndarray:
     a = np.asarray(arr)
+    if np.iscomplexobj(a) or a.dtype.kind not in "biuf":
+        raise ValueError(f"Unsupported map dtype: {a.dtype}")
     if a.ndim == 2:
         return a
     if a.ndim == 3:

@@ -500,21 +500,57 @@ class AnalyzeScreen(QWidget):
                 self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
                     kind="mask", dims=m.mask.shape, shape=shape))
                 return
-            blend = overlay_mask(self._doc.array, m.mask, color=(0, 0, 255), alpha=0.4)
-            self.canvas.set_overlay(ndarray_to_qpixmap(blend), alpha=1.0)
-        elif kind == "heat" and m.heatmap is not None:
-            if m.heatmap.shape[:2] != shape:
+            try:
+                blend = overlay_mask(
+                    self._doc.array, m.mask, color=(0, 0, 255), alpha=0.4
+                )
+                pix = ndarray_to_qpixmap(blend)
+            except ValueError:
                 self.canvas.set_overlay(None)
                 self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
-                    kind="heatmap", dims=m.heatmap.shape[:2], shape=shape))
+                    kind="mask", dims=m.mask.shape, shape=shape))
                 return
-            self.canvas.set_overlay(
-                heat_to_qpixmap(m.heatmap, shape), alpha=0.55)
+            self.lbl_err.setText("")
+            self.canvas.set_overlay(pix, alpha=1.0)
+        elif kind == "heat" and m.heatmap is not None:
+            if (
+                m.heatmap.shape[:2] != shape
+                or m.heatmap.ndim not in (2, 3)
+                or (m.heatmap.ndim == 3 and m.heatmap.shape[2] <= 0)
+            ):
+                self.canvas.set_overlay(None)
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="heatmap", dims=m.heatmap.shape, shape=shape))
+                return
+            try:
+                pix = heat_to_qpixmap(m.heatmap, shape)
+            except ValueError:
+                self.canvas.set_overlay(None)
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="heatmap", dims=m.heatmap.shape, shape=shape))
+                return
+            self.lbl_err.setText("")
+            self.canvas.set_overlay(pix, alpha=0.55)
         elif kind == "pairs" and m.evidence.get("pairs_image") is not None:
             pi = m.evidence["pairs_image"]
-            if pi.shape[:2] == shape:
-                self.canvas.set_overlay(ndarray_to_qpixmap(pi), alpha=1.0)
-            else:
+            if (
+                pi.shape[:2] != shape
+                or pi.ndim not in (2, 3)
+                or (pi.ndim == 3 and pi.shape[2] not in (1, 3, 4))
+            ):
                 self.canvas.set_overlay(None)
                 self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
-                    kind="pairs", dims=pi.shape[:2], shape=shape))
+                    kind="pairs", dims=pi.shape, shape=shape))
+                return
+            try:
+                pix = ndarray_to_qpixmap(pi)
+            except ValueError:
+                self.canvas.set_overlay(None)
+                self.lbl_err.setText(strings.FMT_OVERLAY_SKIP_DIMS.format(
+                    kind="pairs", dims=pi.shape, shape=shape))
+                return
+            self.lbl_err.setText("")
+            self.canvas.set_overlay(pix, alpha=1.0)
+        else:
+            self.lbl_err.setText("")
+            self.canvas.set_overlay(None)

@@ -523,6 +523,13 @@ def _stream_jpeg(
                 output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
+        remaining_bytes = getattr(response, "length", None)
+        if (
+            isinstance(remaining_bytes, int)
+            and not isinstance(remaining_bytes, bool)
+            and remaining_bytes > 0
+        ):
+            raise _AttemptFailure("connection_error", retryable=True)
         if bytes(prefix) != b"\xff\xd8\xff":
             raise _Refusal("invalid_jpeg")
         return _publish_temp(temp_path, base_name, secret_values)

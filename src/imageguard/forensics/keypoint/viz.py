@@ -36,6 +36,6 @@ def draw_pairs(
 
 def overlay_mask(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """Pha mask đỏ mờ lên ảnh gốc (alpha blend) để người xem thấy vùng nghi vấn."""
-    out = bgr.copy()
-    out[mask > 0] = (0, 0, 255)
-    return cv2.addWeighted(bgr, 0.6, out, 0.4, 0)
+    from imageguard.forensics.localize.heatmap import overlay_mask as _overlay_mask
+
+    return _overlay_mask(bgr, mask, color=(0, 0, 255), alpha=0.4)
