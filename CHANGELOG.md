@@ -31,6 +31,16 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Fixed
 
+- 2026-11-22 (vòng 2):
+  - `storage/db.py`: dựng URL SQLite bằng `sqlalchemy.engine.URL.create(...)` (tránh lỗi path chứa `#`/`%`), giải quyết động `data_root()` khi `db_path=None`, giải phóng `Engine` trong nhánh lỗi WAL/schema (`eng.dispose()`) và gắn `weakref.finalize` tránh khóa file Windows; `cli.py` & `ingest/commands.py` đóng `Engine` trong khối `finally`.
+  - Runtime đóng gói (`FROZEN=True`): giải quyết động `config_path()` / `data_root()` trong `core/config.py`, `storage/artifacts.py`, `ingest/camera.py`, `ui/widgets/camera_dialog.py`, `ui/widgets/sample_dialog.py`, và `cli.py`.
+  - `forensics/localize/heatmap.py` & `services/analysis_service.py`: xử lý an toàn mảng rỗng, không phải `uint8`, `bool`, `NaN`/`Inf`, `(H, W, 1)`, BGRA và kênh `0` trong `render_heatmap`/`overlay_heatmap`/`overlay_mask` và khi xuất artifact `*_heat.png`.
+  - `forensics/auxiliary/splicing.py`: trả `mask=None` thay vì mask toàn 0 khi `ela_hot_px == 0` hoặc `overlap_px == 0`.
+  - `ui/widgets/image_canvas.py` & `ui/screens/` (`analyze.py`, `enhance.py`, `history.py`): bỏ qua cuộn chuột ngang (`angleDelta().y() == 0`) thay vì zoom nhầm; hỗ trợ BGRA, `(H, W, 1)`, `bool`, `float` có `NaN`/`Inf`, ảnh rỗng và từ chối `complex`/`object` trong `ndarray_to_qpixmap`/`heat_to_qpixmap`; chuẩn hóa kiểm tra kích thước mask/ảnh chi tiết lịch sử.
+  - `ipkit/_util.py` & `ipkit/edges.py`: `apply_per_channel` bảo toàn dtype đầu ra (như `float32`) và xử lý trục kênh rỗng; sửa annotation kiểu trả về `tuple[np.ndarray, np.ndarray]` cho `sobel`/`prewitt`.
+  - `evaluation/blind_kernel.py`: chỉ nhân 255 cho ảnh float trong `[0, 1]`, tránh làm sai ảnh `uint8` tối (`max == 1`).
+  - `ingest/http_pull.py`: đọc phản hồi qua `response.read1` thay vì `response.fp.read1` để giải mã đúng `Transfer-Encoding: chunked` và kết thúc đúng `Content-Length` trên kết nối `Connection: keep-alive`.
+  - Đường dẫn Unicode / `cp1252` trên Windows: thay `cv2.imread`/`cv2.imwrite` bằng `Path` bytes + `cv2.imdecode`/`cv2.imencode` trong `evaluation/robustness.py`, `evaluation/synthforge.py`, `scripts/ipkit_demo.py`, và `scripts/make_report_figures.py`; thêm kiểm tra tên file rỗng/`"."` và in UTF-8 an toàn trong `scripts/ipkit_demo.py`.
 - 2026-11-22: `heatmap.py`: lọc `NaN`/`Inf` và giá trị âm trong `normalize_map` trước khi chia `max` để tránh tạo bản đồ nhiệt lỗi.
 - 2026-11-22: `enhance_ops.py`: bảo toàn trục kênh cuối cho ảnh `H×W×1` trong `_super_res_ibp` (tránh lỗi broadcast khi `GaussianBlur`/`resize` ép 3D xuống 2D), kiểm tra `dtype == uint8` nhất quán ở nhánh xám 2D của `cam_calibrate`/`freq_sharpen` và kẹp `tile` theo kích thước ảnh nhỏ.
 - Forensics: abstain block khi texture không đủ; cancel cooperative; splicing cue thiếu → inconclusive.
@@ -44,6 +54,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Documentation
 
+- 2026-11-22 (vòng 2): cập nhật số liệu kiểm thử mới nhất (**1623 passed, 5 skipped**, 0 warnings, độ phủ **94%** trên `9944` statements) trong `docs/testing-strategy.md`.
 - 2026-11-22: bổ sung `deepfake_cues` vào danh sách enum `MethodName` và bảng evidence trong `docs/forensic-report-schema.md`, thêm tóm tắt `deepfake_cues` vào `docs/algorithms.md`, và ghi nhận số liệu độ phủ kiểm thử (92%, 1598 passed) trong `docs/testing-strategy.md`.
 - Ghi nhận study enhancement N=24 (cổ điển); NAFNet arm NOT_RUN trên cohort dễ (`docs/enhancement-study.md`).
 - Tài liệu ingest HTTP, frozen comparison studies, giới hạn đo trên README; làm rõ file ingest bị hoãn và các trường báo cáo dễ biến động.
@@ -59,6 +70,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Tests
 
+- 2026-11-22 (vòng 2): bổ sung `tests/test_pixel_and_ui_canvas_fixes.py`, `tests/test_adversarial_fixes_and_coverage.py`, và `tests/test_low_coverage_modules.py` (bao phủ hợp đồng điểm ảnh/kênh, `ImageCanvas` wheel ngang & drag-drop `QPointF`, `splicing` zero-ELA, dynamic frozen paths, dọn `Engine` SQLite, HTTP chunked/keep-alive/SSRF, đường dẫn Unicode/`cp1252`, và các module ít phủ như `nafnet_arm`, `blind_kernel`, `modelforge`, `enhance_study`, `derive`, `folder`, `http_pull`, `cli`); đóng kết nối `sqlite3` trong `test_cli_end_to_end_flow.py` và `test_ingest_folder.py` để đạt `0` warnings.
 - 2026-11-22: bổ sung kiểm thử mức điểm ảnh (`tests/test_pixel_overlays.py`: overlay/heatmap math, copy-move downscale/coverage safeguard, ELA tampered patch), custody & determinism khôi phục (`tests/test_restoration_custody.py`), hợp đồng kênh/độ sâu bit của `safe_open` (`tests/test_safe_open_channel_contract.py`), hợp đồng JSON subprocess CLI `analyze --no-persist` (`tests/test_cli_analyze_subprocess.py`), drift lock `MethodName` trong `tests/test_report_schema_doc.py`, edge cases camera/EXIF/ImageCanvas/EnhanceScreen (`tests/test_camera_and_canvas_edges.py`), và phủ `__main__`, `ingest watch`, `nafnet`, `haar_feature`, sanitization `heatmap` (`tests/test_remaining_coverage_edges.py`).
 - End-to-end CLI: analyze, ingest và eval.
 - End-to-end UI: analyze, export và history.
