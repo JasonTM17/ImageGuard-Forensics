@@ -20,7 +20,7 @@ Tài liệu cho **bảo vệ đồ án** môn Xử lý ảnh: người trình b�
 | Sinh ảnh synthforge (CLI hoặc Python) | **PASS** |
 | `imageguard analyze` (CLI) | **PASS** (≈2,2 s wall-clock ảnh 512×512 keypoint+block; xem [`docs/performance.md`](performance.md)) |
 | Xuất Markdown qua `ReportService` (tương đương nút GUI) | **PASS** |
-| Smoke GUI 4 s (process không thoát sớm) | **PASS** — quan sát smoke **chưa lưu receipt** (một phiên tay; không archive trong repo) |
+| Smoke GUI 4 s (process không thoát sớm) | **PASS** — 2026-11-12: quan sát smoke chưa lưu receipt; **2026-11-21: PASS offscreen (`alive_at_4s=true`), receipt đã lưu cục bộ tại `plans/261121-2135-hoan-thien-du-an-va-cac-gate-con-thieu/reports/demo-receipt-261121/` (gitignored — chỉ có trên máy tác giả)** |
 | Demo `ipkit` (CLI) | **PASS** |
 | Thao tác GUI có màn hình (overlay, lịch sử, Tăng cường) | **NOT_RUN** trong phiên tự động — presenter chạy tay khi máy chiếu |
 
@@ -150,7 +150,7 @@ Quan sát: thư mục `data\artifacts\<analysis_id>\` chứa `copy_move_keypoint
 
 ## Phần 4 — GUI: mở ảnh, phân tích, overlay (≈2,5 phút) — thao tác trực tiếp
 
-> **Trạng thái ghi nhận:** **NOT_RUN** (cần màn hình). Đã **PASS** smoke: process `python -m imageguard <ảnh>` chạy ≥4 s không thoát sớm (offscreen).
+> **Trạng thái ghi nhận:** **NOT_RUN** (cần màn hình). Đã **PASS** smoke: process `python -m imageguard <ảnh>` chạy ≥4 s không thoát sớm (offscreen) — từ 2026-11-21 smoke này **đã có receipt** lưu cục bộ (xem ma trận bên trên).
 
 ```powershell
 cd <repo>

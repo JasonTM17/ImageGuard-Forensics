@@ -31,6 +31,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Fixed
 
+- 2026-11-22: `heatmap.py`: lọc `NaN`/`Inf` và giá trị âm trong `normalize_map` trước khi chia `max` để tránh tạo bản đồ nhiệt lỗi.
 - 2026-11-22: `enhance_ops.py`: bảo toàn trục kênh cuối cho ảnh `H×W×1` trong `_super_res_ibp` (tránh lỗi broadcast khi `GaussianBlur`/`resize` ép 3D xuống 2D), kiểm tra `dtype == uint8` nhất quán ở nhánh xám 2D của `cam_calibrate`/`freq_sharpen` và kẹp `tile` theo kích thước ảnh nhỏ.
 - Forensics: abstain block khi texture không đủ; cancel cooperative; splicing cue thiếu → inconclusive.
 - Evaluation: loại trừ ground truth không dùng được; tách study theo scene gốc; enhancement không ghi đè tập nguồn.
@@ -43,7 +44,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Documentation
 
-- 2026-11-22: bổ sung `deepfake_cues` vào danh sách enum `MethodName` và bảng evidence trong `docs/forensic-report-schema.md`, thêm tóm tắt `deepfake_cues` vào `docs/algorithms.md`, và ghi nhận số liệu độ phủ kiểm thử (91%, 1593 passed) trong `docs/testing-strategy.md`.
+- 2026-11-22: bổ sung `deepfake_cues` vào danh sách enum `MethodName` và bảng evidence trong `docs/forensic-report-schema.md`, thêm tóm tắt `deepfake_cues` vào `docs/algorithms.md`, và ghi nhận số liệu độ phủ kiểm thử (92%, 1598 passed) trong `docs/testing-strategy.md`.
 - Ghi nhận study enhancement N=24 (cổ điển); NAFNet arm NOT_RUN trên cohort dễ (`docs/enhancement-study.md`).
 - Tài liệu ingest HTTP, frozen comparison studies, giới hạn đo trên README; làm rõ file ingest bị hoãn và các trường báo cáo dễ biến động.
 - Thêm `CONTRIBUTING.md`, `SECURITY.md`, mẫu GitHub issue/PR, `docs/limitations.md`.
@@ -58,7 +59,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Tests
 
-- 2026-11-22: bổ sung kiểm thử mức điểm ảnh (`tests/test_pixel_overlays.py`: overlay/heatmap math, copy-move downscale/coverage safeguard, ELA tampered patch), custody & determinism khôi phục (`tests/test_restoration_custody.py`), hợp đồng kênh/độ sâu bit của `safe_open` (`tests/test_safe_open_channel_contract.py`), hợp đồng JSON subprocess CLI `analyze --no-persist` (`tests/test_cli_analyze_subprocess.py`), drift lock `MethodName` trong `tests/test_report_schema_doc.py`, và edge cases camera/EXIF/ImageCanvas/EnhanceScreen (`tests/test_camera_and_canvas_edges.py`).
+- 2026-11-22: bổ sung kiểm thử mức điểm ảnh (`tests/test_pixel_overlays.py`: overlay/heatmap math, copy-move downscale/coverage safeguard, ELA tampered patch), custody & determinism khôi phục (`tests/test_restoration_custody.py`), hợp đồng kênh/độ sâu bit của `safe_open` (`tests/test_safe_open_channel_contract.py`), hợp đồng JSON subprocess CLI `analyze --no-persist` (`tests/test_cli_analyze_subprocess.py`), drift lock `MethodName` trong `tests/test_report_schema_doc.py`, edge cases camera/EXIF/ImageCanvas/EnhanceScreen (`tests/test_camera_and_canvas_edges.py`), và phủ `__main__`, `ingest watch`, `nafnet`, `haar_feature`, sanitization `heatmap` (`tests/test_remaining_coverage_edges.py`).
 - End-to-end CLI: analyze, ingest và eval.
 - End-to-end UI: analyze, export và history.
 - Hợp đồng help/exit code của CLI; eval thiếu phương thức, phương thức lạ và trùng.

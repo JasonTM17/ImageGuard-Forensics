@@ -38,6 +38,12 @@ lỗi nếu PyInstaller trả exit code khác 0.
 dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 ```
 
+## Trạng thái bằng chứng 2026-11-21
+
+- Journey offscreen trên source của commit pin `main @ 5ec332e` **PASS** (analyze keypoint+block+ELA → verdict, persist, reopen, export Markdown thành công; số liệu chi tiết trong receipt cục bộ tại `plans/261121-2135-.../reports/packaged-runtime-261121/`, gitignored) và UI smoke pytest-qt offscreen **PASS / exit 0** (số test chạy được ghi trong receipt).
+- Build stock exe từ `5ec332e` trong lần chạy này **BLOCKED** do preflight RAM free < 4 GiB (4 lần lấy mẫu đều dưới ngưỡng) — chưa có startup smoke trên exe mới ở lần này; CI `package-smoke` vẫn chỉ là signal `continue-on-error`.
+- Native GUI journey (có màn hình) trên exe vẫn là **NOT_RUN** (chưa được cấp Computer Use). Không claim "packaged-ready" vượt quá các bằng chứng trên; khởi động trên máy sạch vẫn cần kiểm tra riêng.
+
 ## Giới hạn đã biết
 
 - Bản build kèm toàn bộ PySide6/Qt (~410 MB giải nén, đo 2026-11-16) —
