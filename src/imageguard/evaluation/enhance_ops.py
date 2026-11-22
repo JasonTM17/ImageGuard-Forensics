@@ -61,6 +61,23 @@ def _bgr_uint8(image: np.ndarray, kind: str) -> np.ndarray:
     return image
 
 
+def _luma_channel(source: np.ndarray, kind: str) -> tuple[np.ndarray, np.ndarray | None]:
+    """Trích kênh độ chói Y uint8 từ ảnh xám 2D hoặc ảnh BGR 3 kênh."""
+    if source.ndim == 2:
+        if source.dtype != np.uint8:
+            raise ValueError(f"{kind} expects a uint8 image, got {source.dtype}")
+        return source, None
+    ycrcb = cv2.cvtColor(_bgr_uint8(source, kind), cv2.COLOR_BGR2YCrCb)
+    return ycrcb[:, :, 0], ycrcb
+
+
+def _match_ndim(arr: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """Khôi phục trục kênh cuối khi OpenCV trả về 2D cho ảnh H×W×1."""
+    if arr.ndim == 2 and ref.ndim == 3:
+        return arr[:, :, np.newaxis]
+    return arr
+
+
 def _normalized_kernel(kernel: np.ndarray) -> np.ndarray:
     """Chuẩn hóa kernel 2D sao tổng = 1 — bảo toàn năng lượng khi conv (C2)."""
     result = np.asarray(kernel, dtype=np.float32)
@@ -309,22 +326,16 @@ def _super_res_ibp(
     ksize = 2 * scale + 1
     sigma = 0.45 * scale
 
-    hr = cv2.resize(base_f, hr_size, interpolation=cv2.INTER_CUBIC)
+    hr = _match_ndim(cv2.resize(base_f, hr_size, interpolation=cv2.INTER_CUBIC), base_f)
     for _ in range(iterations):
-        blurred = cv2.GaussianBlur(hr, (ksize, ksize), sigmaX=sigma)
-        sim_lr = cv2.resize(blurred, lr_size, interpolation=cv2.INTER_AREA)
-        if sim_lr.ndim == 2 and base_f.ndim == 3:
-            sim_lr = sim_lr[:, :, np.newaxis]
+        blurred = _match_ndim(cv2.GaussianBlur(hr, (ksize, ksize), sigmaX=sigma), hr)
+        sim_lr = _match_ndim(cv2.resize(blurred, lr_size, interpolation=cv2.INTER_AREA), base_f)
         err = base_f - sim_lr
-        err_up = cv2.resize(err, hr_size, interpolation=cv2.INTER_CUBIC)
-        if err_up.ndim == 2 and hr.ndim == 3:
-            err_up = err_up[:, :, np.newaxis]
+        err_up = _match_ndim(cv2.resize(err, hr_size, interpolation=cv2.INTER_CUBIC), hr)
         hr = hr + float(amount) * err_up
 
-    refined = cv2.resize(hr, lr_size, interpolation=cv2.INTER_LANCZOS4)
-    if refined.ndim == 2 and base_f.ndim == 3:
-        refined = refined[:, :, np.newaxis]
-    smooth = cv2.GaussianBlur(base_f, (3, 3), sigmaX=0.8)
+    refined = _match_ndim(cv2.resize(hr, lr_size, interpolation=cv2.INTER_LANCZOS4), base_f)
+    smooth = _match_ndim(cv2.GaussianBlur(base_f, (3, 3), sigmaX=0.8), base_f)
     reconstructed = base_f + float(amount) * (refined - smooth)
     return _uint8(reconstructed)
 
@@ -447,11 +458,7 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         boost_k = _real(params.get("boost_k", 1.3), "boost_k", minimum=0.0)
 
         h, w = source.shape[:2]
-        if source.ndim == 2:
-            y_ch = source.astype(np.uint8)
-        else:
-            ycrcb = cv2.cvtColor(_bgr_uint8(source, "cam_calibrate"), cv2.COLOR_BGR2YCrCb)
-            y_ch = ycrcb[:, :, 0]
+        y_ch, ycrcb = _luma_channel(source, "cam_calibrate")
 
         dual_matched = w >= int(2.1 * h) and w >= 64
         if dual_matched:
@@ -466,11 +473,11 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
             y_out = ip_spat.highboost(stretched, k=boost_k, size=3, sigma=0.9)
         else:
             gam_y = ip_int.gamma_transform(y_ch, gamma=gamma)
-            tile = max(4, min(h, w, max(16, min(h, w) // 8)))
+            tile = max(1, min(h, w, max(16, min(h, w) // 8)))
             eq_y = ip_hist.local_equalize(gam_y, tile=tile, clip_limit=clip_limit)
             y_out = ip_spat.highboost(eq_y, k=boost_k, size=3, sigma=0.9)
 
-        if source.ndim == 2:
+        if ycrcb is None:
             output = y_out
         else:
             ycrcb[:, :, 0] = y_out
@@ -493,16 +500,12 @@ def restore(image: np.ndarray, kind: str, params: dict) -> tuple[np.ndarray, dic
         if median_k % 2 == 0:
             raise ValueError("median_k must be odd")
 
-        if source.ndim == 2:
-            y_ch = source.astype(np.uint8)
-        else:
-            ycrcb = cv2.cvtColor(_bgr_uint8(source, "freq_sharpen"), cv2.COLOR_BGR2YCrCb)
-            y_ch = ycrcb[:, :, 0]
+        y_ch, ycrcb = _luma_channel(source, "freq_sharpen")
 
         y_clean = ip_spat.median_filter(y_ch, median_k) if median_k > 1 else y_ch
         y_out = ip_freq.sharpen_frequency(y_clean, d0=d0, k=strength)
 
-        if source.ndim == 2:
+        if ycrcb is None:
             output = y_out
         else:
             ycrcb[:, :, 0] = y_out
