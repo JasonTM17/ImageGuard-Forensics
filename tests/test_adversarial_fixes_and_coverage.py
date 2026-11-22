@@ -701,3 +701,249 @@ def test_http_pull_supports_chunked_transfer_and_keepalive_responses(
     finally:
         stop_ev.set()
         ka_th.join(timeout=2)
+
+
+def test_http_pull_rejects_and_retries_truncated_content_length(tmp_path: Path) -> None:
+    """Truncated Content-Length body must NOT be published as written; it must retry/refuse."""
+    jpg_bytes = cv2.imencode(
+        ".jpg",
+        np.full((32, 32, 3), 90, dtype=np.uint8),
+    )[1].tobytes()
+    assert len(jpg_bytes) > 64
+
+    request_count = 0
+    ready: list[int] = []
+    stop_ev = threading.Event()
+
+    def _truncated_then_ok_server() -> None:
+        nonlocal request_count
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(8)
+        srv.settimeout(0.1)
+        ready.append(srv.getsockname()[1])
+        try:
+            while not stop_ev.is_set():
+                try:
+                    conn, _ = srv.accept()
+                except TimeoutError:
+                    continue
+                with conn:
+                    conn.settimeout(1.0)
+                    buf = b""
+                    while b"\r\n\r\n" not in buf:
+                        part = conn.recv(4096)
+                        if not part:
+                            break
+                        buf += part
+                    request_count += 1
+                    if request_count <= 2:
+                        # Request 1 (max_retries=0) & Request 2 (attempt 0 of max_retries=1):
+                        # advertise huge Content-Length then close after JPEG SOI + prefix.
+                        headers = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: image/jpeg\r\n"
+                            f"Content-Length: {len(jpg_bytes) + 4096}\r\n"
+                            "Connection: close\r\n\r\n"
+                        ).encode("ascii")
+                        conn.sendall(headers + jpg_bytes[:16])
+                    else:
+                        headers = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: image/jpeg\r\n"
+                            f"Content-Length: {len(jpg_bytes)}\r\n"
+                            "Connection: close\r\n\r\n"
+                        ).encode("ascii")
+                        conn.sendall(headers + jpg_bytes)
+        finally:
+            srv.close()
+
+    th = threading.Thread(target=_truncated_then_ok_server, daemon=True)
+    th.start()
+    while not ready:
+        pass
+    try:
+        dest_no_retry = tmp_path / "no_retry"
+        dest_no_retry.mkdir()
+        res0 = http_pull.pull_due(
+            {
+                "enabled": True,
+                "urls": [f"http://127.0.0.1:{ready[0]}/trunc.jpg"],
+                "hosts": ["127.0.0.1"],
+                "interval_s": 5,
+                "timeout_s": 1.0,
+                "max_retries": 0,
+                "allow_loopback": True,
+            },
+            dest_no_retry,
+            now=100.0,
+        )
+        assert res0 == [{"status": "refused", "reason": "connection_error"}]
+        assert list(dest_no_retry.iterdir()) == []
+
+        dest_retry = tmp_path / "with_retry"
+        dest_retry.mkdir()
+        res1 = http_pull.pull_due(
+            {
+                "enabled": True,
+                "urls": [f"http://127.0.0.1:{ready[0]}/trunc.jpg"],
+                "hosts": ["127.0.0.1"],
+                "interval_s": 5,
+                "timeout_s": 1.0,
+                "max_retries": 1,
+                "allow_loopback": True,
+            },
+            dest_retry,
+            now=200.0,
+        )
+        assert res1 == [{"status": "written", "basename": "trunc.jpg"}]
+        assert (dest_retry / "trunc.jpg").read_bytes() == jpg_bytes
+        assert request_count == 3
+    finally:
+        stop_ev.set()
+        th.join(timeout=2)
+
+
+def test_analyze_screen_apply_overlay_clears_stale_error_and_guards_invalid_arrays(
+    qapp, tmp_path: Path
+) -> None:
+    """Switching overlays clears stale errors and safely handles invalid heat/pairs arrays."""
+    from imageguard.core.enums import MethodName
+    from imageguard.core.models import AlgorithmResult
+    from imageguard.services.analysis_service import AnalysisService
+    from imageguard.ui.screens.analyze import AnalyzeScreen
+
+    svc = AnalysisService(store=artifacts_mod.ArtifactStore(tmp_path / "artifacts"))
+    screen = AnalyzeScreen(svc)
+    try:
+        img = np.full((32, 40, 3), 100, dtype=np.uint8)
+        screen._doc = ImageDocument(
+            array=img,
+            width=40,
+            height=32,
+            channels=3,
+            image_format="png",
+            sha256="0" * 64,
+            file_bytes=128,
+            file_name="sample.png",
+        )
+        screen.canvas.set_image(img)
+
+        bad_mask = AlgorithmResult(
+            method=MethodName.COPY_MOVE_KEYPOINT,
+            verdict=Verdict.INCONCLUSIVE,
+            score=0.5,
+            score_definition="test",
+            mask=np.ones((32, 40, 3), dtype=np.uint8),
+        )
+        good_mask = AlgorithmResult(
+            method=MethodName.COPY_MOVE_KEYPOINT,
+            verdict=Verdict.INCONCLUSIVE,
+            score=0.5,
+            score_definition="test",
+            mask=np.ones((32, 40), dtype=np.uint8),
+        )
+        bad_heat_zero_ch = AlgorithmResult(
+            method=MethodName.ELA,
+            verdict=Verdict.INCONCLUSIVE,
+            score=0.5,
+            score_definition="test",
+            heatmap=np.zeros((32, 40, 0), dtype=np.float32),
+        )
+        bad_heat_complex = AlgorithmResult(
+            method=MethodName.ELA,
+            verdict=Verdict.INCONCLUSIVE,
+            score=0.5,
+            score_definition="test",
+            heatmap=np.ones((32, 40), dtype=np.complex64),
+        )
+        bad_pairs_ch5 = AlgorithmResult(
+            method=MethodName.COPY_MOVE_KEYPOINT,
+            verdict=Verdict.INCONCLUSIVE,
+            score=0.5,
+            score_definition="test",
+            evidence={"pairs_image": np.zeros((32, 40, 5), dtype=np.uint8)},
+        )
+
+        screen.overlay_box.blockSignals(True)
+        screen.overlay_box.addItem("bad mask", ("mask", bad_mask))
+        screen.overlay_box.addItem("good mask", ("mask", good_mask))
+        screen.overlay_box.addItem("bad heat ch0", ("heat", bad_heat_zero_ch))
+        screen.overlay_box.addItem("bad heat cplx", ("heat", bad_heat_complex))
+        screen.overlay_box.addItem("bad pairs ch5", ("pairs", bad_pairs_ch5))
+        screen.overlay_box.blockSignals(False)
+
+        screen.overlay_box.setCurrentIndex(1)  # bad mask
+        screen._apply_overlay()
+        assert screen.lbl_err.text() != ""
+        assert screen.canvas._overlay is None
+
+        screen.overlay_box.setCurrentIndex(2)  # good mask -> clears stale error
+        screen._apply_overlay()
+        assert screen.lbl_err.text() == ""
+        assert screen.canvas._overlay is not None
+
+        for idx in (3, 4, 5):
+            screen.overlay_box.setCurrentIndex(idx)
+            screen._apply_overlay()
+            assert screen.lbl_err.text() != ""
+            assert screen.canvas._overlay is None
+
+        screen.overlay_box.setCurrentIndex(2)
+        screen._apply_overlay()
+        assert screen.lbl_err.text() == ""
+        assert screen.canvas._overlay is not None
+    finally:
+        screen._pool.waitForDone()
+        screen.close()
+        screen.deleteLater()
+        qapp.processEvents()
+
+
+def test_keypoint_viz_overlay_mask_handles_gray_bgra_and_resizing() -> None:
+    """keypoint.viz.overlay_mask delegates safely across 2D, 1-ch, 4-ch BGRA, and resized masks."""
+    from imageguard.forensics.keypoint.viz import overlay_mask as kp_overlay_mask
+
+    gray = np.full((24, 32), 100, dtype=np.uint8)
+    one_ch = np.full((24, 32, 1), 100, dtype=np.uint8)
+    bgra = np.dstack(
+        [
+            np.full((24, 32, 3), 100, dtype=np.uint8),
+            np.full((24, 32), 255, dtype=np.uint8),
+        ]
+    )
+    small_mask = np.zeros((12, 16, 1), dtype=np.uint8)
+    small_mask[3:9, 4:12, 0] = 255
+
+    for img in (gray, one_ch, bgra):
+        out = kp_overlay_mask(img, small_mask)
+        assert out.shape == (24, 32, 3) and out.dtype == np.uint8
+        assert out[0, 0].tolist() == [100, 100, 100]
+        assert out[12, 16, 2] > out[12, 16, 0]
+
+    with pytest.raises(ValueError, match="dtype"):
+        kp_overlay_mask(gray, np.ones((24, 32), dtype=np.complex64))
+
+
+def test_robustness_run_battery_handles_unsafe_distortion_names(tmp_path: Path) -> None:
+    """Distortion keys with ':', '/', or '..' must not cause Windows OSError or leftover temps."""
+    from imageguard.forensics.auxiliary.ela import ELA
+
+    img = np.full((64, 64, 3), 120, dtype=np.uint8)
+    sample_path = _write_png(tmp_path / "sample.png", img)
+
+    ela = ELA()
+    battery = robustness.run_battery(
+        [sample_path],
+        methods=[ela],
+        distortions={
+            "jpeg:70": lambda x: x,
+            "scale/0.9\\edge": lambda x: x,
+        },
+        cfg=cfg_mod.load_thresholds(),
+    )
+    assert set(battery[ela.name]) == {"jpeg:70", "scale/0.9\\edge"}
+    assert battery[ela.name]["jpeg:70"]["n"] == 1
+    assert battery[ela.name]["scale/0.9\\edge"]["n"] == 1
+    assert all(p.name == "sample.png" for p in tmp_path.iterdir())
