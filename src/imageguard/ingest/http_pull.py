@@ -218,10 +218,8 @@ def _set_response_read_timeout(response: Any, timeout_s: float) -> None:
 
 
 def _read_response_chunk(response: Any, read_size: int, *, deadline: float | None) -> bytes:
-    if deadline is not None:
-        transport = getattr(response, "fp", None)
-        if transport is not None and hasattr(transport, "read1"):
-            return transport.read1(read_size)
+    if deadline is not None and hasattr(response, "read1"):
+        return response.read1(read_size)
     return response.read(read_size)
 
 

@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from imageguard.core.config import ThresholdSet
 from imageguard.core.enums import Verdict
@@ -54,7 +55,12 @@ def run_battery(
         for dname, fn in distortions.items():
             n = n_sus = n_inc = 0
             for p in forged_paths:
-                img = cv2.imread(str(p))
+                p = Path(p)
+                try:
+                    raw = np.frombuffer(p.read_bytes(), dtype=np.uint8)
+                except OSError:
+                    continue
+                img = cv2.imdecode(raw, cv2.IMREAD_COLOR) if raw.size else None
                 if img is None:
                     continue
                 warped = fn(img)
@@ -64,9 +70,11 @@ def run_battery(
                 if not ok:
                     continue
                 tmp = p.parent / f".__rob_{dname}.png"
-                tmp.write_bytes(buf.tobytes())
-                doc = safe_open(tmp, cfg)
-                tmp.unlink(missing_ok=True)
+                try:
+                    tmp.write_bytes(buf.tobytes())
+                    doc = safe_open(tmp, cfg)
+                finally:
+                    tmp.unlink(missing_ok=True)
                 if hasattr(doc, "code"):
                     continue
                 r = m.analyze(doc, cfg)

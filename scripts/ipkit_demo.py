@@ -100,7 +100,12 @@ def resolve_output_file(out_dir: Path, filename: str) -> Path:
     ValueError
         Nếu tên file hoặc đường dẫn resolve trượt ra ngoài ``out_dir``.
     """
-    if Path(filename).name != filename or ".." in Path(filename).parts:
+    if (
+        not filename
+        or filename in (".", "..")
+        or Path(filename).name != filename
+        or ".." in Path(filename).parts
+    ):
         raise ValueError(f"unsafe output filename: {filename!r}")
     target = (out_dir / filename).resolve()
     base = out_dir.resolve()
@@ -264,9 +269,10 @@ def write_png_safe(out_dir: Path, filename: str, bgr: np.ndarray) -> Path:
     path = resolve_output_file(out_dir, filename)
     if bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("write_png_safe expects BGR HxWx3")
-    ok = cv2.imwrite(str(path), bgr)
+    ok, buf = cv2.imencode(".png", bgr)
     if not ok:
-        raise OSError(f"cv2.imwrite failed: {path}")
+        raise OSError(f"cv2.imencode failed: {path}")
+    path.write_bytes(buf.tobytes())
     return path
 
 
@@ -531,7 +537,8 @@ def load_input_image(path: Path | None) -> np.ndarray:
         return synthetic_demo_image(DEMO_SEED)
     if not path.is_file():
         raise FileNotFoundError(f"image not found: {path}")
-    bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
+    bgr = cv2.imdecode(raw, cv2.IMREAD_COLOR) if raw.size else None
     if bgr is None or bgr.size == 0:
         raise ValueError(f"could not decode image: {path}")
     # Thu nhỏ nếu quá lớn để demo không chậm khi trình chiếu.
@@ -556,6 +563,17 @@ def run_all_demos(out_dir: Path, bgr: np.ndarray, seed: int = DEMO_SEED) -> list
     written.append(demo_chapter_c6(out_dir, bgr))
     written.append(demo_chapter_c7(out_dir, seed))
     return written
+
+
+def _safe_print(text: str, *, stream=None) -> None:
+    """In chuỗi đường dẫn UTF-8 an toàn ngay cả khi console dùng cp1252."""
+    target = sys.stdout if stream is None else stream
+    try:
+        print(text, file=target)
+    except UnicodeEncodeError:
+        enc = getattr(target, "encoding", None) or "ascii"
+        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        print(safe, file=target)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -587,12 +605,15 @@ def main(argv: list[str] | None = None) -> int:
         bgr = load_input_image(args.image)
         paths = run_all_demos(out_dir, bgr)
         for p in paths:
-            print(f"wrote {p}")
+            _safe_print(f"wrote {p}")
         return 0
     except (FileNotFoundError, ValueError, OSError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _safe_print(f"error: {exc}", stream=sys.stderr)
         return 1
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     raise SystemExit(main())

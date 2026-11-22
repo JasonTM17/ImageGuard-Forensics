@@ -179,9 +179,11 @@ def generate_set(
         forged, mask = forge(base, spec)
         forged = _postproc(forged, spec.postproc, rng)
         stem = f"{tier}_{i:04d}"
-        cv2.imwrite(str(out_dir / f"{stem}_O.png"), base)
-        cv2.imwrite(str(out_dir / f"{stem}_F.png"), forged)
-        cv2.imwrite(str(out_dir / f"{stem}_M.png"), mask)
+        for suffix, arr in (("_O.png", base), ("_F.png", forged), ("_M.png", mask)):
+            ok, buf = cv2.imencode(".png", arr)
+            if not ok:
+                raise OSError(f"cv2.imencode failed: {out_dir / f'{stem}{suffix}'}")
+            (out_dir / f"{stem}{suffix}").write_bytes(buf.tobytes())
         entries.append({"id": stem, "seed": seed, "spec": _spec_dict(spec)})
     manifest = out_dir / "meta.json"
     manifest.write_text(json.dumps(entries, indent=1), encoding="utf-8")

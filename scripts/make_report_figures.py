@@ -556,8 +556,10 @@ def _capture_gui_tabs(
         (0, 0),
         sigmaX=2.6,
     )
-    if not cv2.imwrite(str(blur_png), blurred):
+    ok, buf = cv2.imencode(".png", blurred)
+    if not ok:
         raise RuntimeError("could not write blurred synthetic PNG")
+    blur_png.write_bytes(buf.tobytes())
     enhance = window.enhance
     window.tabs.setCurrentWidget(enhance)
     enhance.load_path(blur_png)
