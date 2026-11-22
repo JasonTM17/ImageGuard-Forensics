@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from imageguard.core.enums import MethodName
 from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.services.analysis_service import (
     AnalysisRequest,
@@ -86,3 +87,15 @@ def test_doc_error_result_contract_keys_match_cli_payload() -> None:
     doc_keys = _error_keys(blocks["error-result-contract"])
     live_keys = _error_keys(cli_shape)
     assert live_keys == doc_keys, f"ErrorResult: doc {doc_keys ^ live_keys}"
+
+
+def test_doc_method_name_enum_matches_code() -> None:
+    md = _DOC.read_text(encoding="utf-8")
+    m = re.search(
+        r"## Enum `MethodName`[^\n]*\n\s*\n([^\n]+)",
+        md,
+    )
+    assert m is not None, "thiếu mục Enum MethodName trong forensic-report-schema.md"
+    doc_methods = set(re.findall(r"`([^`]+)`", m.group(1)))
+    code_methods = {item.value for item in MethodName}
+    assert doc_methods == code_methods, f"MethodName drift: doc {doc_methods ^ code_methods}"
