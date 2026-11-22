@@ -22,9 +22,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from imageguard.core.paths import data_root
 from imageguard.ingest.http_pull import _normalize_host, pull_due
 
-DEFAULT_CAPTURE_DIR = Path("data/captures")
+DEFAULT_CAPTURE_DIR = data_root() / "captures"
 
 
 def _validate_non_negative_int(value: int, name: str, minimum: int = 0) -> int:
@@ -97,19 +98,20 @@ def _save_lossless_png(frame: np.ndarray, out_dir: Path, prefix: str) -> Path:
 
 def capture_device_frame(
     device_index: int = 0,
-    out_dir: Path = DEFAULT_CAPTURE_DIR,
+    out_dir: Path | None = None,
     *,
     warmup_frames: int = 2,
 ) -> Path:
     """Chụp một khung hình thô từ webcam/camera USB theo ``device_index`` và lưu PNG."""
+    target_dir = Path(out_dir) if out_dir is not None else data_root() / "captures"
     frame = _read_frame_from_device(device_index, warmup_frames)
-    return _save_lossless_png(frame, out_dir, f"camera_dev{int(device_index)}")
+    return _save_lossless_png(frame, target_dir, f"camera_dev{int(device_index)}")
 
 
 def capture_dual_device_frames(
     primary_index: int = 0,
     secondary_index: int = 1,
-    out_dir: Path = DEFAULT_CAPTURE_DIR,
+    out_dir: Path | None = None,
     *,
     warmup_frames: int = 3,
 ) -> Path:
@@ -119,6 +121,7 @@ def capture_dual_device_frames(
     if idx_a == idx_b:
         raise ValueError("primary_index và secondary_index phải khác nhau.")
 
+    target_dir = Path(out_dir) if out_dir is not None else data_root() / "captures"
     frame_a = _read_frame_from_device(idx_a, warmup_frames)
     frame_b = _read_frame_from_device(idx_b, warmup_frames)
     if frame_b.shape[0] != frame_a.shape[0]:
@@ -128,12 +131,12 @@ def capture_dual_device_frames(
         frame_b = cv2.resize(frame_b, (target_w, target_h), interpolation=interp)
 
     combined = np.hstack([frame_a, frame_b])
-    return _save_lossless_png(combined, out_dir, f"camera_dual_dev{idx_a}_dev{idx_b}")
+    return _save_lossless_png(combined, target_dir, f"camera_dual_dev{idx_a}_dev{idx_b}")
 
 
 def capture_iot_http_frame(
     url: str,
-    out_dir: Path = DEFAULT_CAPTURE_DIR,
+    out_dir: Path | None = None,
     *,
     timeout: float = 5.0,
     allow_loopback: bool = False,
@@ -155,7 +158,7 @@ def capture_iot_http_frame(
     if host is None:
         raise ValueError("URL camera không hợp lệ (thiếu hostname/IP).")
 
-    target_dir = Path(out_dir)
+    target_dir = Path(out_dir) if out_dir is not None else data_root() / "captures"
     config = {
         "enabled": True,
         "urls": [cleaned_url],

@@ -16,9 +16,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from imageguard.core.paths import data_root
 from imageguard.ui import strings
 
-DEFAULT_DEMO_DIR = Path("data") / "demo_samples"
+DEFAULT_DEMO_DIR = data_root() / "demo_samples"
 
 _DEMO_SPECS: dict[str, tuple[str, list[str]]] = {
     "copymove": (
@@ -42,13 +43,13 @@ _DEMO_SPECS: dict[str, tuple[str, list[str]]] = {
 
 def generate_demo_sample(
     kind: str,
-    out_dir: Path = DEFAULT_DEMO_DIR,
+    out_dir: Path | None = None,
 ) -> tuple[Path, list[str]]:
     """Sinh ảnh mẫu tổng hợp theo ``kind`` và trả về ``(đường dẫn PNG, methods gợi ý)``."""
     if kind not in _DEMO_SPECS:
         raise ValueError(f"Loại mẫu không hợp lệ: {kind!r}")
 
-    target_dir = Path(out_dir)
+    target_dir = Path(out_dir) if out_dir is not None else data_root() / "demo_samples"
     target_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20261113)
 
@@ -119,9 +120,9 @@ def generate_demo_sample(
 class SampleGeneratorDialog(QDialog):
     """Hộp thoại chọn và sinh nhanh ảnh mẫu phục vụ trình diễn đồ án."""
 
-    def __init__(self, parent=None, *, out_dir: Path = DEFAULT_DEMO_DIR) -> None:
+    def __init__(self, parent=None, *, out_dir: Path | None = None) -> None:
         super().__init__(parent)
-        self._out_dir = Path(out_dir)
+        self._out_dir = Path(out_dir) if out_dir is not None else data_root() / "demo_samples"
         self.generated_path: Path | None = None
         self.recommended_methods: list[str] = []
         self.setWindowTitle(strings.DEMO_DIALOG_TITLE)

@@ -45,8 +45,8 @@ def _contained(root: Path, candidate: Path) -> bool:
 
 
 class ArtifactStore:
-    def __init__(self, root: Path | str = DEFAULT_ROOT) -> None:
-        self.root = Path(root)
+    def __init__(self, root: Path | str | None = None) -> None:
+        self.root = Path(root) if root is not None else data_root() / "artifacts"
 
     def rel_path(self, analysis_id: str, filename: str) -> str:
         _check_name(analysis_id)

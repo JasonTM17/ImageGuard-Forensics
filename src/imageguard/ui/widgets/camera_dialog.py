@@ -24,8 +24,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from imageguard.core.paths import data_root
 from imageguard.ingest.camera import (
-    DEFAULT_CAPTURE_DIR,
     capture_device_frame,
     capture_dual_device_frames,
     capture_iot_http_frame,
@@ -115,9 +115,9 @@ class _CameraWorker(QRunnable):
 class CameraCaptureDialog(QDialog):
     """Hộp thoại chụp một khung hình thô từ webcam máy tính hoặc camera ngoài."""
 
-    def __init__(self, parent=None, *, out_dir: Path = DEFAULT_CAPTURE_DIR) -> None:
+    def __init__(self, parent=None, *, out_dir: Path | None = None) -> None:
         super().__init__(parent)
-        self._out_dir = Path(out_dir)
+        self._out_dir = Path(out_dir) if out_dir is not None else data_root() / "captures"
         self._worker: _CameraWorker | None = None
         self._operation: str | None = None
         self._closed = False

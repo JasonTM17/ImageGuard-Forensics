@@ -144,6 +144,7 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
     from imageguard.core.config import load_thresholds
     from imageguard.core.errors import ErrorResult
     from imageguard.core.models import ForensicReport
+    from imageguard.core.paths import data_root
     from imageguard.services.analysis_service import (
         AnalysisRequest,
         AnalysisService,
@@ -158,16 +159,24 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
     if not methods:
         methods = list(DEFAULT_METHODS)
 
+    sf = None
     if args.no_persist:
         svc = AnalysisService(cfg)
     else:
-        db_path = Path("data") / "imageguard.db"
+        root = data_root()
+        db_path = root / "imageguard.db"
         sf = make_session_factory(db_path)
-        store = ArtifactStore()
+        store = ArtifactStore(root / "artifacts")
         svc = AnalysisService(cfg, ImageRepository(sf), AnalysisRepository(sf), store)
 
-    req = AnalysisRequest(path=args.file, methods=methods)
-    result = svc.analyze(req)
+    try:
+        req = AnalysisRequest(path=args.file, methods=methods)
+        result = svc.analyze(req)
+    finally:
+        if sf is not None:
+            bind = sf.kw.get("bind")
+            if bind is not None:
+                bind.dispose()
 
     if isinstance(result, ForensicReport):
         payload = report_to_dict(result)

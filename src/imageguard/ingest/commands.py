@@ -32,45 +32,52 @@ def run_ingest(
         print("error: ingest directory does not exist", file=sys.stderr)
         return 2
 
+    session_factory = None
     try:
-        thresholds = load_thresholds()
-        session_factory = make_session_factory(
-            ingest_config.data_dir / "imageguard.db"
-        )
-        analyses = AnalysisRepository(session_factory)
-        service = AnalysisService(
-            thresholds,
-            ImageRepository(session_factory),
-            analyses,
-            ArtifactStore(ingest_config.data_dir / "artifacts"),
-        )
-        ingestor = FolderIngestor(
-            ingest_config, service, thresholds.snapshot_hash()
-        )
-    except Exception as exc:  # noqa: BLE001 - keep terminal errors path-free
-        print(f"error: ingest setup failed ({type(exc).__name__})", file=sys.stderr)
-        return 1
-
-    if mode == "once":
         try:
-            summary = ingestor.scan_once(watch_dir)
+            thresholds = load_thresholds()
+            session_factory = make_session_factory(
+                ingest_config.data_dir / "imageguard.db"
+            )
+            analyses = AnalysisRepository(session_factory)
+            service = AnalysisService(
+                thresholds,
+                ImageRepository(session_factory),
+                analyses,
+                ArtifactStore(ingest_config.data_dir / "artifacts"),
+            )
+            ingestor = FolderIngestor(
+                ingest_config, service, thresholds.snapshot_hash()
+            )
         except Exception as exc:  # noqa: BLE001 - keep terminal errors path-free
-            print(f"error: ingest scan failed ({type(exc).__name__})", file=sys.stderr)
+            print(f"error: ingest setup failed ({type(exc).__name__})", file=sys.stderr)
             return 1
-        _print_summary(mode, summary)
-        return 0
 
-    try:
-        while True:
-            summary = ingestor.scan_once(watch_dir)
-            if summary.has_activity:
-                _print_summary(mode, summary)
-            time.sleep(1.0)
-    except KeyboardInterrupt:
-        return 0
-    except Exception as exc:  # noqa: BLE001 - keep terminal errors path-free
-        print(f"error: ingest watch failed ({type(exc).__name__})", file=sys.stderr)
-        return 1
+        if mode == "once":
+            try:
+                summary = ingestor.scan_once(watch_dir)
+            except Exception as exc:  # noqa: BLE001 - keep terminal errors path-free
+                print(f"error: ingest scan failed ({type(exc).__name__})", file=sys.stderr)
+                return 1
+            _print_summary(mode, summary)
+            return 0
+
+        try:
+            while True:
+                summary = ingestor.scan_once(watch_dir)
+                if summary.has_activity:
+                    _print_summary(mode, summary)
+                time.sleep(1.0)
+        except KeyboardInterrupt:
+            return 0
+        except Exception as exc:  # noqa: BLE001 - keep terminal errors path-free
+            print(f"error: ingest watch failed ({type(exc).__name__})", file=sys.stderr)
+            return 1
+    finally:
+        if session_factory is not None:
+            bind = session_factory.kw.get("bind")
+            if bind is not None:
+                bind.dispose()
 
 
 def _print_summary(mode: str, summary) -> None:

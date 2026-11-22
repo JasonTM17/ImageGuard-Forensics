@@ -75,7 +75,7 @@ class ThresholdSet:
 
 
 def load_thresholds(path: Path | None = None) -> ThresholdSet:
-    p = path or DEFAULT_CONFIG
+    p = path or config_path()
     data = yaml.safe_load(p.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(  # noqa: TRY004 - ValueError nhất quán với ThresholdSet.get cho node không phải mapping
