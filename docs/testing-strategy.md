@@ -50,3 +50,10 @@ Trên `pull_request` và `push` vào `main`, workflow `ci` chạy trên
 `pytest-qt`, cài editable package, rồi `ruff check src tests scripts` và
 `pytest -q` với `QT_QPA_PLATFORM=offscreen`. Job song song `test-py313` lặp
 cùng bước trên Python 3.13 (không thay job `test` làm required check).
+
+## Độ phủ kiểm thử (đo ngày 2026-11-22)
+
+Chạy bằng `QT_QPA_PLATFORM=offscreen` và `pytest --cov=src/imageguard --cov-report=term-missing`:
+
+- **Tổng hợp:** **1593 passed, 5 skipped** (4 skip do thiếu quyền symlink Windows, 1 skip do `cv2.HOGDescriptor` không có trong bản OpenCV 5.0.0.93); độ phủ mã nguồn **91%** (`9810` statements, `834` missed — tăng từ `90%` / `1547 passed` ở baseline).
+- **Nhóm trọng yếu đạt độ phủ cao:** `core/io.py`, `core/preprocess.py`, `core/config.py`, `core/models.py`, `forensics/fusion.py`, `forensics/localize/heatmap.py`, `forensics/localize/fusion_masks.py`, `forensics/keypoint/viz.py`, `forensics/auxiliary/ela.py`, `ingest/camera.py`, `storage/db.py`, `storage/repository.py`, `ui/app.py`, `ui/widgets/verdict_panel.py` (100%); `services/analysis_service.py` (99%); `evaluation/enhance_ops.py` & `forensics/block/pipeline.py` (98%); `forensics/keypoint/pipeline.py` (97%); `ui/widgets/image_canvas.py` (96%); `core/metadata.py` (94%); `cli.py` & `ui/screens/enhance.py` (90%).

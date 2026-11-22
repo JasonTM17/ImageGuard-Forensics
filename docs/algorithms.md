@@ -12,6 +12,7 @@ Index tài liệu thuật toán + công thức nền. Chi tiết từng method x
 | Local noise / model-fill | file này, mục dưới | P08 ✓ |
 | Frequency analysis | file này, mục dưới | P08 ✓ |
 | Splicing cues | file này, mục dưới | P08 ✓ |
+| Deepfake / AI cues (`deepfake_cues`) | file này, mục dưới | P08+ ✓ |
 
 ## ELA — Error Level Analysis
 
@@ -57,3 +58,11 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
 - Corroboration giữa noise outlier và ELA difference: tỉ lệ
   `(noise_outlier ∩ ELA_hot)/ELA_hot ≥ overlap_frac` (0.15) → `INCONCLUSIVE`
   (cue kết hợp); mask là phần giao hai vùng.
+
+### Deepfake / AI cues (`deepfake_cues`)
+- Pipeline khám phá 6 trụ cột Xử lý ảnh cổ điển (không dùng DL): định vị ROI
+  khuôn mặt (Haar hoặc phân đoạn da YCrCb/HSV + kiểm chứng SAT), chênh lệch
+  nhiễu phần dư σ + Otsu/CCL, vi kết cấu LBP χ², đỉnh tuần hoàn/rolloff 2D FFT,
+  biên ghép Canny + boundary + Hough, và bất đối xứng HOG/Hu.
+- Hỗ trợ ảnh ghép Dual-Camera Cross-Sensor (`W ≥ 2.1·H`) bằng phân tích độc
+  lập từng nửa cảm biến. Aux signal — không bao giờ trả `SUSPICIOUS_INDICATION`.
