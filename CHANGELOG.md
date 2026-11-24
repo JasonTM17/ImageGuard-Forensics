@@ -23,6 +23,8 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Changed
 
+- 2026-11-24 (demo ipkit): chương 2 demo bổ sung 7 hàng trưng bày màu và hình học — YCbCr (Y, Cb|Cr), HSV (H, S|V) qua `color.py`, và dịch/phóng 1,5×/xoay 17° qua `geometry/`; kiểm bằng `test_demo_chapter_c2_color_geometry_rows` (giữ bề rộng montage 324 px, ảnh nhỏ 48×64 vẫn chạy đúng).
+- 2026-11-24 (packaging): thêm mục "Trạng thái bằng chứng 2026-11-24" trong `docs/packaging.md` — build stock exe từ `main @ f06d76e` **PASS** (preflight RAM free 8,19 GiB ≥ 4 GiB, PyInstaller 6.22.3, ~105 s; lần 2026-11-21 BLOCKED chỉ do RAM); startup smoke DB tạo sau 1,1 s, exe alive ≥ 20 s với fixture, journey offscreen PASS + UI smoke pytest-qt 145 passed; `configs/thresholds.yaml` SHA-256 không đổi. Native GUI journey vẫn NOT_RUN; không claim packaged-ready.
 - 2026-11-21: cập nhật ma trận đã chạy thử trong `docs/demo-script.md` (smoke GUI 4 s offscreen đã có receipt cục bộ, lưu ngày 2026-11-21) và thêm mục "Trạng thái bằng chứng 2026-11-21" trong `docs/packaging.md` (journey offscreen PASS trên `main @ 5ec332e`, UI smoke pytest-qt offscreen PASS/exit 0; build exe mới BLOCKED do RAM < 4 GiB — chưa claim packaged-ready). Không đổi mã nguồn, ngưỡng hay schema.
 - Đồng bộ README và hướng dẫn runtime với layout code và giới hạn đo CASIA đã sàng lọc; README có mục lục trỏ tới các tài liệu chuyên đề.
 - CI: job Python 3.13 không chặn merge (`continue-on-error`).

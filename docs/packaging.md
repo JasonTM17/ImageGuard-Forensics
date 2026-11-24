@@ -44,6 +44,15 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 - Build stock exe từ `5ec332e` trong lần chạy này **BLOCKED** do preflight RAM free < 4 GiB (4 lần lấy mẫu đều dưới ngưỡng) — chưa có startup smoke trên exe mới ở lần này; CI `package-smoke` vẫn chỉ là signal `continue-on-error`.
 - Native GUI journey (có màn hình) trên exe vẫn là **NOT_RUN** (chưa được cấp Computer Use). Không claim "packaged-ready" vượt quá các bằng chứng trên; khởi động trên máy sạch vẫn cần kiểm tra riêng.
 
+## Trạng thái bằng chứng 2026-11-24
+
+- Build stock exe từ `main @ f06d76e` (PyInstaller 6.22.3, wrapper `scripts/build_app.ps1`, dir cô lập) **PASS** — preflight RAM free 8,19 GiB (≥ 4 GiB), build ~105 s, exit 0. Exe SHA-256 `1F365EA8…8FF4C2` (receipt cục bộ `plans/261121-2135…/reports/packaged-runtime-261124-f06d76e/`, gitignored).
+- Startup smoke trên exe thật offscreen **PASS**: DB `data\imageguard.db` được tạo cạnh exe sau 1,1 s (≤ 30 s), không exit sớm.
+- Exe offscreen nhận ảnh fixture qua argv **PASS**: process alive ≥ 20 s rồi dừng sạch.
+- Journey offscreen (source, cùng commit; analyze keypoint+block+ela → persist → reopen → export Markdown) **PASS**: verdict `suspicious_indication`, 66 dòng Markdown, `report.json` artifact tồn tại; UI smoke pytest-qt offscreen **PASS** (145 passed). `configs/thresholds.yaml` SHA-256 trùng pin `3D7948F5…CE23` (ngưỡng không đổi).
+- Lần 2026-11-21 build bị BLOCKED duy nhất do RAM free < 4 GiB; lần này cùng rule đã PASS.
+- Vẫn giữ nguyên các giới hạn: native GUI journey (có màn hình) trên exe **NOT_RUN** (cần Computer Use); job CI `package-smoke` chỉ là signal `continue-on-error`; **không claim "packaged-ready"** vượt bằng chứng; khởi động trên máy sạch chưa kiểm.
+
 ## Giới hạn đã biết
 
 - Bản build kèm toàn bộ PySide6/Qt (~410 MB giải nén, đo 2026-11-16) —
