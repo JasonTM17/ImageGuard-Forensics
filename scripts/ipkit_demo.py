@@ -21,10 +21,12 @@ if str(_SRC) not in sys.path:
 
 from imageguard.ipkit import (
     classifiers,
+    color,
     features_basic,
     features_harris,
     features_hog,
     frequency,
+    geometry,
     histogram,
     intensity,
     morph_algos,
@@ -278,7 +280,7 @@ def write_png_safe(out_dir: Path, filename: str, bgr: np.ndarray) -> Path:
 
 
 def demo_chapter_c2(out_dir: Path, bgr: np.ndarray) -> Path:
-    """Chương 2: cường độ, histogram và lọc không gian (mean/Gaussian/median/unsharp).
+    """Chương 2: cường độ, histogram, lọc không gian, màu YCbCr/HSV và hình học.
 
     Parameters
     ----------
@@ -322,6 +324,31 @@ def demo_chapter_c2(out_dir: Path, bgr: np.ndarray) -> Path:
             "C2: Unsharp masking",
         )
     )
+    # --- Màu sắc: YCbCr / HSV (ipkit.color nhận đầu vào RGB) ---
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    ycc = color.rgb_to_ycbcr(rgb)
+    rows.append(build_pair_row(bgr, ycc[..., 0], "C2: YCbCr (kenh Y)"))
+    rows.append(
+        build_pair_row(ycc[..., 1], ycc[..., 2], "C2: YCbCr (kenh Cb | kenh Cr)")
+    )
+    hsv = color.rgb_to_hsv(rgb)
+    h_vis = np.clip(np.rint(hsv[..., 0] * (255.0 / 360.0)), 0, 255).astype(np.uint8)
+    s_vis = np.clip(np.rint(hsv[..., 1] * 255.0), 0, 255).astype(np.uint8)
+    v_vis = np.clip(np.rint(hsv[..., 2] * 255.0), 0, 255).astype(np.uint8)
+    rows.append(build_pair_row(bgr, h_vis, "C2: HSV (kenh H: 0-360 -> 0-255)"))
+    rows.append(build_pair_row(s_vis, v_vis, "C2: HSV (kenh S | kenh V, x255)"))
+    # --- Hình học: dịch / phóng to / xoay (Ch.2 mục biến đổi hình học) ---
+    translated = geometry.translate(bgr, 20.0, 10.0)
+    rows.append(build_pair_row(bgr, translated, "C2: Dich phoi (+20,+10)"))
+    # Phóng to cho ảnh lớn hơn gốc: cắt giữa về shape gốc để so sánh trực tiếp.
+    scaled = geometry.scale(bgr, 1.5, 1.5)
+    src_h, src_w = bgr.shape[:2]
+    out_h, out_w = scaled.shape[:2]
+    top, left = (out_h - src_h) // 2, (out_w - src_w) // 2
+    scaled_view = scaled[top : top + src_h, left : left + src_w]
+    rows.append(build_pair_row(bgr, scaled_view, "C2: Phong to 1.5x (cat giua)"))
+    rotated = geometry.rotate(bgr, 17.0)
+    rows.append(build_pair_row(bgr, rotated, "C2: Xoay 17 do (bilinear)"))
     montage = stack_montage(rows)
     return write_png_safe(out_dir, CHAPTER_OUTPUT_NAMES[0], montage)
 

@@ -276,6 +276,7 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 | §2 | Biến đổi cường độ (negative, log, gamma, stretch, …) | `intensity.*` | `test_ipkit_intensity.py` | Một số LUT | — |
 | (hình học) | translate, scale, rotate, affine nearest/bilinear | `geometry.*` | `test_ipkit_geometry.py` | `warpAffine` (sai lệch bilinear ≤ 1) | — |
 | (màu) | BT.601, YCbCr JPEG full-range, HSV độ | `color.*` | `test_ipkit_color.py` | Không | — |
+| (demo C2) | Y/Cb/Cr, H/S/V, dịch/phóng/xoay | `scripts/ipkit_demo.py` chương 2 | `test_ipkit_demo.py` | `cv2.cvtColor` BGR↔RGB ở demo | — |
 | §3 | Histogram, equalize, matching, local | `histogram.*` | `test_ipkit_histogram.py` | `cv2.equalizeHist` cho `equalize` | — |
 | §4–§6 | Lọc không gian, làm sắc | `spatial.*` (+ `edges.convolve2d`) | `test_ipkit_spatial.py` | blur, GaussianBlur, medianBlur | — |
 | (nhiễu demo) | Salt-pepper, speckle, Poisson | `noise.*` | `test_ipkit_noise.py` | Không | — |
@@ -351,7 +352,7 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 
 Điểm vào API: `src/imageguard/ipkit/__init__.py`. Mô tả đầy đủ: [image-processing-toolkit.md](image-processing-toolkit.md).
 
-Kiểm thử gói (đo lại 2026-11-24): `python -m pytest tests/ -k ipkit -q -p no:cacheprovider` → **324 passed, 1 skipped** (~11,80 s).
+Kiểm thử gói (đo lại 2026-11-24): `python -m pytest tests/ -k ipkit -q -p no:cacheprovider` → **325 passed, 1 skipped** (~13,17 s).
 
 ---
 

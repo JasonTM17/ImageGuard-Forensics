@@ -398,6 +398,6 @@ $env:PYTHONPATH='src'
 python -m pytest tests/ -k ipkit -q -p no:cacheprovider
 ```
 
-Lần chạy ghi nhận khi cập nhật tài liệu này (venv dự án, `PYTHONPATH` trỏ `src` của repo clone): **324 passed, 1 skipped** trong **11,80 s** (2026-11-24, sau khi thêm `color.py`, `geometry/`, `features_harris.py`).
+Lần chạy ghi nhận khi cập nhật tài liệu này (venv dự án, `PYTHONPATH` trỏ `src` của repo clone): **325 passed, 1 skipped** trong **13,17 s** (2026-11-24, sau khi thêm `color.py`, `geometry/`, `features_harris.py` và hàng demo màu/hình học ở chương 2).
 
 Tài liệu liên quan: [course-coverage.md](course-coverage.md), [testing-strategy.md](testing-strategy.md).

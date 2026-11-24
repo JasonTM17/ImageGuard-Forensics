@@ -96,3 +96,34 @@ def test_ipkit_demo_default_out(monkeypatch, tmp_path: Path) -> None:
         p = out_dir / name
         assert p.is_file(), f"missing default output {name}"
         assert p.stat().st_size > 100
+
+
+def test_demo_chapter_c2_color_geometry_rows(monkeypatch, tmp_path: Path) -> None:
+    import cv2
+
+    mod = _load_ipkit_demo_module()
+    captured: list[str] = []
+    real_row = mod.build_pair_row
+
+    def spy_row(left, right, caption):
+        captured.append(caption)
+        return real_row(left, right, caption)
+
+    monkeypatch.setattr(mod, "build_pair_row", spy_row)
+    out_dir = mod.validate_out_dir(tmp_path)
+    path = mod.demo_chapter_c2(out_dir, mod.synthetic_demo_image(mod.DEMO_SEED))
+
+    # 8 hàng cũ + 2 YCbCr + 2 HSV + 3 hình học = 15 hàng.
+    assert len(captured) == 15
+    assert "C2: YCbCr (kenh Y)" in captured
+    assert "C2: YCbCr (kenh Cb | kenh Cr)" in captured
+    assert "C2: HSV (kenh H: 0-360 -> 0-255)" in captured
+    assert "C2: HSV (kenh S | kenh V, x255)" in captured
+    assert "C2: Dich phoi (+20,+10)" in captured
+    assert "C2: Phong to 1.5x (cat giua)" in captured
+    assert "C2: Xoay 17 do (bilinear)" in captured
+
+    img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    assert img is not None
+    # Mỗi hàng cao 22 (caption) + 128 (ảnh); bề rộng 2*160 + 4 (gap) = 324.
+    assert img.shape[:2] == (15 * (22 + 128), 324)
