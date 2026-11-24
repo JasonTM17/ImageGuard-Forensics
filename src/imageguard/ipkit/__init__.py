@@ -1,26 +1,42 @@
 """Thư viện toán tử Xử lý ảnh số thuần NumPy (`imageguard.ipkit`)."""
 
-# Cấu trúc mô-đun theo từng nhóm kỹ thuật xử lý ảnh cốt lõi:
-#   intensity / histogram / spatial (không gian), frequency (miền tần số),
-#   morphology + morph_algos (hình thái học), edges / threshold / segmentation,
-#   features_* (đặc trưng & giảm chiều), classifiers (phân lớp mẫu).
-# Xuất theo tên module (tránh xung đột tên hàm dùng chung như `laplacian`).
-from imageguard.ipkit import (
-    classifiers,
-    edges,
-    features_basic,
-    features_hog,
-    features_projection,
-    frequency,
-    histogram,
-    intensity,
-    morph_algos,
-    morphology,
-    noise,
-    segmentation,
-    spatial,
-    threshold,
+# Tên module (color, geometry, features_harris, ...) được nạp lười qua
+# ``__getattr__``. Detector chỉ ``from imageguard.ipkit import features_basic``
+# thì không kéo các module giảng dạy mới vào đồ thị import.
+import importlib
+
+_SUBMODULES = frozenset(
+    {
+        "classifiers",
+        "color",
+        "edges",
+        "features_basic",
+        "features_harris",
+        "features_hog",
+        "features_projection",
+        "frequency",
+        "geometry",
+        "histogram",
+        "intensity",
+        "morph_algos",
+        "morphology",
+        "noise",
+        "segmentation",
+        "spatial",
+        "threshold",
+    }
 )
+
+
+def __getattr__(name: str):
+    """Nạp một submodule ipkit đúng lúc người gọi xin tên đó."""
+    if name not in _SUBMODULES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(f"{__name__}.{name}")
+    globals()[name] = module
+    return module
+
+
 from imageguard.ipkit.edges import (
     convolve2d,
     gradient_magnitude,
@@ -44,14 +60,17 @@ __all__ = [
     "adaptive_mean_threshold",
     "classifiers",
     "close_",
+    "color",
     "convolve2d",
     "dilate",
     "edges",
     "erode",
     "features_basic",
+    "features_harris",
     "features_hog",
     "features_projection",
     "frequency",
+    "geometry",
     "gradient",
     "gradient_magnitude",
     "histogram",

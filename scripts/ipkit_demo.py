@@ -22,6 +22,7 @@ if str(_SRC) not in sys.path:
 from imageguard.ipkit import (
     classifiers,
     features_basic,
+    features_harris,
     features_hog,
     frequency,
     histogram,
@@ -459,9 +460,13 @@ def demo_chapter_c6(out_dir: Path, bgr: np.ndarray) -> Path:
     # Nhân 17 để mã LBP dễ nhìn hơn khi trình chiếu (chỉ hiển thị).
     lbp_vis = np.clip(lbp.astype(np.uint16) * 17, 0, 255).astype(np.uint8)
     hog_vis = features_hog.hog_visualize(gray, cell=8, bins=9, signed=False)
+    ys, xs = features_harris.harris_corners(gray, rel_threshold=0.05)
+    marked = gray.copy()
+    marked[ys, xs] = 255
     rows = [
         build_pair_row(gray, lbp_vis, "C6: Ma LBP (8 lang gieng)"),
         build_pair_row(gray, hog_vis, "C6: HOG visualize (cell=8)"),
+        build_pair_row(gray, marked, "C6: Goc Harris (diem sang)"),
     ]
     return write_png_safe(out_dir, CHAPTER_OUTPUT_NAMES[4], stack_montage(rows))
 

@@ -15,6 +15,7 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 - Khung đánh giá: metrics R1–R5, ModelBench, runner tổng hợp; protocol chất lượng detector đóng băng; study enhancement cổ điển có seed/bootstrap.
 - SynthForge / split dataset; SQLite lưu metadata phân tích, artifact store ghi file trên đĩa.
 - Bộ operator xử lý ảnh cổ điển NumPy-only (`ipkit`) — demo/education, không dùng cho verdict.
+- 2026-11-24: mở rộng `ipkit` thêm `color.py` (BT.601 gray, YCbCr JPEG full-range, HSV), `geometry/` (translate/scale/rotate/affine, lấy mẫu nearest/bilinear, viền 0) và `features_harris.py` (góc Harris); nạp submodule lười qua `__getattr__` để detector không kéo các module giảng dạy mới. Không đổi verdict/fusion/ngưỡng; test mới `test_ipkit_{color,geometry,harris,import_boundary}.py`.
 - Script tổng hợp verdict fusion offline từ các hàng detector đã lưu (`scripts/fusion_offline_summary.py`), kèm khoảng tin cậy Wilson.
 - Script benchmark phương pháp (`scripts/bench_methods.py`) và script sinh hình báo cáo (`scripts/make_report_figures.py`).
 - CI GitHub Actions (`ci`): Windows, Python 3.14, `ruff check src tests scripts`, `pytest -q` với `QT_QPA_PLATFORM=offscreen`; job `test-py313` tương thích 3.13.

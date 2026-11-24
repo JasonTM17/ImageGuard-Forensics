@@ -273,7 +273,9 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 
 | Mục slide | Chủ đề | Module / hàm | Test | OpenCV trong test | Chưa có trong ipkit |
 | --- | --- | --- | --- | --- | --- |
-| §2 | Biến đổi cường độ (negative, log, gamma, stretch, …) | `intensity.*` | `test_ipkit_intensity.py` | Một số LUT | Biến đổi hình học (scale/rotate/translate) |
+| §2 | Biến đổi cường độ (negative, log, gamma, stretch, …) | `intensity.*` | `test_ipkit_intensity.py` | Một số LUT | — |
+| (hình học) | translate, scale, rotate, affine nearest/bilinear | `geometry.*` | `test_ipkit_geometry.py` | `warpAffine` (sai lệch bilinear ≤ 1) | — |
+| (màu) | BT.601, YCbCr JPEG full-range, HSV độ | `color.*` | `test_ipkit_color.py` | Không | — |
 | §3 | Histogram, equalize, matching, local | `histogram.*` | `test_ipkit_histogram.py` | `cv2.equalizeHist` cho `equalize` | — |
 | §4–§6 | Lọc không gian, làm sắc | `spatial.*` (+ `edges.convolve2d`) | `test_ipkit_spatial.py` | blur, GaussianBlur, medianBlur | — |
 | (nhiễu demo) | Salt-pepper, speckle, Poisson | `noise.*` | `test_ipkit_noise.py` | Không | — |
@@ -310,7 +312,8 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 | §2 | Moments, Hu | `features_basic.*` | `test_ipkit_features_basic.py` | Không | — |
 | §3 | Haar / SAT | `integral_image`, `haar_feature*` | `test_ipkit_features_basic.py` | Không | — |
 | §4 | PCA, LDA, LBPH | `features_projection.*`, `features_basic.lbph` | `test_ipkit_features_projection.py`, `test_ipkit_features_basic.py` | Không | — |
-| §5 | **SIFT, SURF** | — | — | — | **Không implement** (ý tưởng slide; forensics: `cv2.SIFT` trong keypoint) |
+| §5 | **SIFT, SURF** | — | — | — | **Không implement** (ý tưởng slide; forensics: `cv2.SIFT` trong keypoint). Góc Harris tự viết: `features_harris.py` |
+| (Harris) | R = det(M) − k·trace(M)² | `features_harris.*` | `test_ipkit_harris.py` | Không | Không thay SIFT |
 | §6 | HOG | `features_hog.*` | `test_ipkit_features_hog.py` | `cv2.HOGDescriptor` khi cấu hình khớp | — |
 
 ### Chương 7 — Pattern Recognition
@@ -331,6 +334,8 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 | `ipkit/intensity.py` | C2 §2 | Có | Không |
 | `ipkit/histogram.py` | C2 §3 | Có | Không |
 | `ipkit/spatial.py` | C2 §4–6 | Có | Không |
+| `ipkit/geometry/` | C2 hình học | Có | Không |
+| `ipkit/color.py` | C2 màu | Có | Không |
 | `ipkit/noise.py` | C2 (mô hình nhiễu) | Có | Không |
 | `ipkit/edges.py` | C2/C5 biên | Có | Không |
 | `ipkit/threshold.py` | C2/C5 ngưỡng | Có | Không |
@@ -341,11 +346,12 @@ Nguồn slide: `plans/reports/k2/lectures/C2.txt` … `C7.txt` (bản extract; P
 | `ipkit/features_basic.py` | C6 §2–4 | Có | Không |
 | `ipkit/features_projection.py` | C6 §4 | Có | Không |
 | `ipkit/features_hog.py` | C6 §6 | Có | Không |
+| `ipkit/features_harris.py` | C6 góc Harris | Có | Không |
 | `ipkit/classifiers.py` | C7 | Có | Không |
 
 Điểm vào API: `src/imageguard/ipkit/__init__.py`. Mô tả đầy đủ: [image-processing-toolkit.md](image-processing-toolkit.md).
 
-Kiểm thử gói (một lần, đã đo): `python -m pytest tests/ -k ipkit -q -p no:cacheprovider` → **263 passed, 1 skipped** (~7,88 s).
+Kiểm thử gói (đo lại 2026-11-24): `python -m pytest tests/ -k ipkit -q -p no:cacheprovider` → **324 passed, 1 skipped** (~11,80 s).
 
 ---
 

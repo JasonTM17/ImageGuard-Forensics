@@ -86,7 +86,7 @@ print(round(float(blur.mean()), 2))  # 127.5 (đã chạy)
 
 **Tests:** `tests/test_ipkit_spatial.py` — `mean_filter`/`gaussian_filter`/`median_filter` vs `cv2.blur`/`GaussianBlur`/`medianBlur` (sai lệch biên/uint8 có thể ±1).
 
-**Chưa có trong ipkit (slide C2):** biến đổi hình học (scale, rotate, translate).
+**Đã có trong ipkit (slide C2):** biến đổi hình học (translate, scale, rotate, affine) — xem mục [Màu và hình học](#màu-và-hình-học--colorpy-geometry-chương-2) ở cuối tài liệu.
 
 ---
 
@@ -330,7 +330,22 @@ assert Z.shape == (20, 2)
 
 **Tests:** `tests/test_ipkit_features_projection.py` (không `cv2`).
 
-**Chưa có trong ipkit (slide C6 mục 5):** **SIFT**, **SURF** — giải thích ý tưởng trên slide; triển khai pháp y dùng `cv2.SIFT` trong `forensics/keypoint/` (không phải ipkit).
+**Chưa có trong ipkit (slide C6 mục 5):** **SIFT**, **SURF** — giải thích ý tưởng trên slide; triển khai pháp y dùng `cv2.SIFT` trong `forensics/keypoint/` (không phải ipkit). Góc Harris tự viết nằm ở `features_harris.py` và không thay cho SIFT.
+
+---
+
+## Màu và hình học — `color.py`, `geometry/` (Chương 2)
+
+| API | Nội dung |
+| --- | --- |
+| `color.rgb_to_gray` | BT.601, `rint`, uint8 |
+| `color.rgb_to_ycbcr`, `ycbcr_to_rgb` | JPEG full-range, không studio swing |
+| `color.rgb_to_hsv`, `hsv_to_rgb` | H độ `[0, 360)`, S và V trong `[0, 1]` |
+| `geometry.translate`, `scale`, `rotate`, `affine` | ánh xạ ngược, viền 0, nearest hoặc bilinear |
+
+Các hàm này không đi vào `fusion` và không đổi verdict. Tên submodule được nạp lười: `from imageguard.ipkit import features_basic` không kéo `geometry`, `color` hay `features_harris`. Ảnh đầu ra của phép hình học có cạnh tối đa 4096 và tối đa 4_000_000 pixel. HSV từ chối giá trị không hữu hạn và S, V ngoài `[0, 1]`.
+
+**Tests:** `tests/test_ipkit_color.py`, `tests/test_ipkit_geometry.py`, `tests/test_ipkit_harris.py`.
 
 ---
 
@@ -383,6 +398,6 @@ $env:PYTHONPATH='src'
 python -m pytest tests/ -k ipkit -q -p no:cacheprovider
 ```
 
-Lần chạy ghi nhận khi cập nhật tài liệu này (venv dự án, `PYTHONPATH` trỏ `src` của repo clone): **263 passed, 1 skipped** trong **7,88 s**.
+Lần chạy ghi nhận khi cập nhật tài liệu này (venv dự án, `PYTHONPATH` trỏ `src` của repo clone): **324 passed, 1 skipped** trong **11,80 s** (2026-11-24, sau khi thêm `color.py`, `geometry/`, `features_harris.py`).
 
 Tài liệu liên quan: [course-coverage.md](course-coverage.md), [testing-strategy.md](testing-strategy.md).

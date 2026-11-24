@@ -64,10 +64,11 @@ src/imageguard/
                localize/   fusion_masks.py heatmap.py
   enhancement/ derive.py nafnet.py
   ingest/      folder.py commands.py config.py custody.py http_pull.py camera.py
-  ipkit/       intensity.py histogram.py spatial.py frequency.py
-               morphology.py morph_algos.py edges.py threshold.py
+  ipkit/       intensity.py histogram.py spatial.py color.py
+               geometry/   sampling.py transforms.py
+               frequency.py morphology.py morph_algos.py edges.py threshold.py
                segmentation.py noise.py features_basic.py features_hog.py
-               features_projection.py classifiers.py _util.py
+               features_harris.py features_projection.py classifiers.py _util.py
   services/    analysis_service.py history_service.py
                evaluation_service.py report_service.py
   storage/     db.py artifacts.py repository.py models.py
