@@ -26,6 +26,9 @@ from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.errors import ErrorResult
 from imageguard.core.io import safe_open
 from imageguard.core.models import AlgorithmResult, ForensicReport, ImageDocument
+from imageguard.forensics.auxiliary.face_roi_cross_compare import (
+    apply_reference_cue,
+)
 from imageguard.forensics.auxiliary.meta_report import audit_exif
 from imageguard.forensics.fusion import combine
 from imageguard.forensics.registry import load_method
@@ -43,6 +46,11 @@ class AnalysisRequest:
     cancel: threading.Event | None = None
     progress_cb: ProgressCB = None
     include_exif: bool = True
+    reference_path: Path | None = None  # ảnh tham chiếu phiên cho deepfake cue
+
+
+class _ReferenceOpenError(Exception):
+    """safe_open(reference_path) trả ErrorResult — chỉ mang ErrorCode, không path."""
 
 
 class _PersistRecoveryError(Exception):
@@ -89,6 +97,12 @@ class AnalysisService:
                 r = load_method(spec).analyze(doc, self.cfg, req.cancel)
             except Exception as e:  # noqa: BLE001 - method isolation: method crash/cancel không được huỷ pipeline
                 r = _error_result(spec, e)
+            if r.method is MethodName.DEEPFAKE_CUES:
+                if req.reference_path is not None:
+                    r = _with_reference_cue(r, doc, req.reference_path, self.cfg)
+                manifest = req.path.with_name(f"{req.path.stem}.burst.json")
+                if manifest.is_file():
+                    r = _with_temporal_cue(r, manifest)
             results.append(r)
         if req.include_exif:
             results.append(audit_exif(doc, self.cfg))
@@ -192,6 +206,41 @@ class AnalysisService:
         if failed:
             raise _PersistRecoveryError(rid, failed) from exc
         raise exc
+
+
+def _with_reference_cue(
+    result: AlgorithmResult, doc: ImageDocument, ref_path: Path, cfg: ThresholdSet
+) -> AlgorithmResult:
+    """safe_open ảnh tham chiếu rồi áp cue cross-compare lên kết quả deepfake.
+
+    Mọi lỗi mở/so sánh → giữ nguyên result gốc + limitation chỉ mang tên loại
+    exception (không đường dẫn, không raw message — cùng floor với persist).
+    """
+    try:
+        ref_doc = safe_open(ref_path, cfg)
+        if isinstance(ref_doc, ErrorResult):
+            raise _ReferenceOpenError(ref_doc.code.value)
+        return apply_reference_cue(result, ref_doc, doc)
+    except Exception as exc:  # noqa: BLE001 - reference chỉ là cue phụ: lỗi không được huỷ kết quả gốc
+        result.limitations.append(
+            "bỏ qua so sánh ảnh tham chiếu phiên — không mở/dùng được "
+            f"({type(exc).__name__})")
+        return result
+
+
+def _with_temporal_cue(result: AlgorithmResult, manifest: Path) -> AlgorithmResult:
+    """Nạp burst cạnh ảnh và áp cue đứng yên. Lỗi chỉ thêm tên loại exception."""
+    try:
+        from imageguard.forensics.auxiliary.temporal_face_roi import apply_temporal_cue
+        from imageguard.ingest.camera_burst import load_burst_frames
+
+        return apply_temporal_cue(result, load_burst_frames(manifest))
+    except Exception as exc:  # noqa: BLE001 - burst là cue phụ, không hủy kết quả gốc
+        result.limitations.append(
+            "bỏ qua so sánh các khung liên tiếp — không đọc được "
+            f"({type(exc).__name__})"
+        )
+        return result
 
 
 def _progress(cb: ProgressCB, frac: float, stage: str) -> None:

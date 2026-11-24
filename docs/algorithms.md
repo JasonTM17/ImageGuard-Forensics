@@ -66,3 +66,16 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   biên ghép Canny + boundary + Hough, và bất đối xứng HOG/Hu.
 - Hỗ trợ ảnh ghép Dual-Camera Cross-Sensor (`W ≥ 2.1·H`) bằng phân tích độc
   lập từng nửa cảm biến. Aux signal — không bao giờ trả `SUSPICIOUS_INDICATION`.
+- Đỉnh phổ `peak_ratio` khoảng 8 trên ROI mặt webcam là cấu trúc mặt thật.
+  `freq_cue` chỉ bão hòa khi đỉnh cao hơn nhiều (lưới synthetic). Một mình
+  đỉnh đó không biến khung webcam thành kết luận deepfake.
+- Bù lại, `freq_cue` còn tính `grid_score` từ độ tập trung năng lượng phổ
+  (`fft_hf_conc8` = top-8 đỉnh HF / tổng vành HF): lưới upsampling tuần hoàn
+  (GAN/Diffusion) dồn năng lượng vào ít đỉnh nên `grid_score` cao ở cả dải
+  `peak_ratio` trung bình 4–15, còn cấu trúc mặt thật rải đều nên ≈ 0. Số đo
+  hiệu chuẩn trên cohort synthetic, không phải camera thật.
+- Cùng phiên, operator có thể lưu một PNG làm mốc. Lần phân tích sau so residual,
+  LBP và FFT trong ROI mặt với mốc đó. Không có mốc thì điểm 6 trụ không đổi.
+- Burst 4–6 khung PNG từ một camera ghi manifest basename cạnh khung chính.
+  ROI mặt gần như đứng yên chỉ nâng `NO_INDICATION` lên `INCONCLUSIVE`.
+  Không có số đo độ chính xác trên camera thật.

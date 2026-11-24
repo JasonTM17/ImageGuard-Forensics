@@ -237,11 +237,15 @@ def _lbp_texture_cues(
     return lbp_cue, lbp_chi2, flat_in, flat_out, flat_blocks
 
 
-def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float]:
-    """Đo đỉnh tuần hoàn (magnitude p99.8/median) & suy hao phổ 2D FFT (C3)."""
+def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float, float]:
+    """Đo đỉnh tuần hoàn (magnitude p99.8/median), suy hao phổ 2D FFT & độ tập trung đỉnh (C3).
+
+    Trả ``(freq_cue, peak_ratio, spectral_rolloff, hf_conc8)`` — ``hf_conc8`` là
+    tỷ lệ năng lượng của 8 đỉnh HF lớn nhất trên tổng năng lượng vành HF.
+    """
     rh, rw = roi_gray.shape
     if rh < 16 or rw < 16:
-        return 0.0, 1.0, 1.0
+        return 0.0, 1.0, 1.0, 0.0
     centered = roi_gray.astype(np.float32) - float(roi_gray.mean())
     win = np.outer(np.hanning(rh), np.hanning(rw)).astype(np.float32)
     mag = np.abs(np.fft.fftshift(np.fft.fft2(centered * win)))
@@ -253,7 +257,7 @@ def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float]:
     hf_mask = (norm_r >= 0.45) & (norm_r <= 0.95)
     mf_mask = (norm_r >= 0.15) & (norm_r < 0.45)
     if not np.any(hf_mask):
-        return 0.0, 1.0, 1.0
+        return 0.0, 1.0, 1.0, 0.0
 
     # Đỉnh tuần hoàn checkerboard đo trên biên độ tuyến tính (tránh bị log1p nén dải đỉnh).
     hf_mag = mag[hf_mask]
@@ -261,14 +265,38 @@ def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float]:
     hf_p998 = float(np.percentile(hf_mag, 99.8))
     peak_ratio = hf_p998 / hf_med
 
+    # Độ tập trung năng lượng: lưới upsampling tuần hoàn dồn năng lượng vào vài
+    # đỉnh Espectral cô lập, còn cấu trúc mặt thật (mắt/tóc) rải đều trên vành HF.
+    # Đo bằng top-8 |mag| / tổng |mag| của vành HF — face synthetic ~0.002, lưới
+    # 3px ~0.046 (cohort tests/test_deepfake_cues.py), xem warmup trong ledger plan.
+    hf_sorted = np.sort(hf_mag)[::-1]
+    hf_conc8 = float(hf_sorted[:8].sum() / (hf_sorted.sum() + 1e-9))
+
     hf_mean = float(np.mean(spec[hf_mask]))
     mf_mean = float(np.mean(spec[mf_mask])) if np.any(mf_mask) else hf_mean
     spectral_rolloff = hf_mean / (mf_mean + 1e-6)
 
-    peak_score = float(np.clip((peak_ratio - 3.3) / 2.2, 0.0, 1.0))
+    # peak_ratio khoảng 8 trên ROI mặt webcam 196px là cấu trúc mặt thật
+    # (mắt, tóc), không phải lưới upsampling. Ngưỡng cũ bão hòa từ 5.5 nên
+    # mọi khung webcam ra freq_cue = 1. Checkerboard synthetic vẫn ~29.
+    peak_score = float(np.clip((peak_ratio - 4.0) / 14.0, 0.0, 1.0))
     rolloff_score = float(np.clip((0.58 - spectral_rolloff) / 0.25, 0.0, 1.0))
-    freq_cue = float(np.clip(max(peak_score, 0.65 * peak_score + 0.35 * rolloff_score), 0.0, 1.0))
-    return freq_cue, peak_ratio, spectral_rolloff
+    # Lưới tuần hoàn (GAN/diffusion upsampling) có peak_ratio trung bình (~7.6 với
+    # chu kỳ 3px) NHƯNG năng lượng tập trung vào ít đỉnh → grid_score cao, trong khi
+    # mặt thật peak cao nhưng rải đều → grid_score ≈ 0. Nhờ đó dải peak 4..15 không
+    # còn bị recalibration của peak_score che khuất (Wukong claim 5, plan 261124-2152).
+    # Giới hạn đo được (cohort 20 seed): lưới NN upsampling biên hài thực (nhiều
+    # hài, conc8 ~0.003-0.004) KHÔNG tách được khỏi mặt bằng conc8; grid_score có thể
+    # bật trên texture tuần hoàn tự nhiên — xem docs/limitations.md.
+    grid_score = float(np.clip((hf_conc8 - 0.006) / 0.040, 0.0, 1.0))
+    freq_cue = float(
+        np.clip(
+            max(peak_score, 0.65 * peak_score + 0.35 * max(rolloff_score, grid_score)),
+            0.0,
+            1.0,
+        )
+    )
+    return freq_cue, peak_ratio, spectral_rolloff, hf_conc8
 
 
 def _seam_canny_hough_cue(roi_gray_u8: np.ndarray) -> tuple[float, int]:
@@ -594,7 +622,7 @@ class DeepfakeCues:
         # Trụ cột 4: Phổ tần số 2D FFT (đỉnh checkerboard & suy hao cao tần hướng tâm).
         roi_f = gray[ry : ry + rh, rx : rx + rw]
         roi_u8 = gray_u8[ry : ry + rh, rx : rx + rw]
-        freq_cue, peak_ratio, spectral_rolloff = _fft_highfreq_cue(roi_f)
+        freq_cue, peak_ratio, spectral_rolloff, hf_conc8 = _fft_highfreq_cue(roi_f)
 
         # Trụ cột 5 & 6: Biên ghép hình học (Canny + Boundary + Hough) & đối xứng HOG/Hu.
         seam_hough_cue, seam_hough_lines = _seam_canny_hough_cue(roi_u8)
@@ -704,6 +732,7 @@ class DeepfakeCues:
                 "freq_cue": round(freq_cue, 4),
                 "fft_hf_peak_ratio": round(peak_ratio, 3),
                 "spectral_rolloff": round(spectral_rolloff, 3),
+                "fft_hf_conc8": round(hf_conc8, 5),
                 "seam_hough_cue": round(seam_hough_cue, 4),
                 "seam_hough_lines": seam_hough_lines,
                 "hog_asym": round(hog_asym, 4),

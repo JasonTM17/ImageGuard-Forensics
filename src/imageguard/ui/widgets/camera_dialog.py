@@ -13,6 +13,7 @@ import numpy as np
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -33,6 +34,10 @@ from imageguard.ingest.camera import (
 )
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.widgets.camera_deepfake_preview import (
+    format_burst_deepfake_preview,
+    format_deepfake_preview,
+)
 
 
 def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
@@ -163,6 +168,15 @@ class CameraCaptureDialog(QDialog):
         self.edit_url.setEnabled(False)
         lay.addWidget(self.edit_url)
 
+        self.chk_burst = QCheckBox(strings.CAMERA_BURST_CHECK)
+        self.chk_burst.setToolTip(strings.CAMERA_BURST_HINT)
+        self._burst_enabled = True
+        self.chk_burst.blockSignals(True)
+        self.chk_burst.setChecked(True)
+        self.chk_burst.blockSignals(False)
+        self.chk_burst.toggled.connect(self._on_burst_toggled)
+        lay.addWidget(self.chk_burst)
+
         for rad in (self.rad_webcam, self.rad_usb, self.rad_dual, self.rad_iot):
             rad.toggled.connect(self._sync_inputs)
 
@@ -201,6 +215,18 @@ class CameraCaptureDialog(QDialog):
         btn_row.addWidget(self.btn_cancel)
         lay.addLayout(btn_row)
 
+        post_row = QHBoxLayout()
+        self.btn_accept_frame = QPushButton(strings.CAMERA_BTN_ACCEPT_FRAME)
+        self.btn_accept_frame.clicked.connect(self.accept)
+        self.btn_accept_frame.setVisible(False)
+        self.btn_retake = QPushButton(strings.CAMERA_BTN_RETAKE)
+        self.btn_retake.clicked.connect(self._retake_capture)
+        self.btn_retake.setVisible(False)
+        post_row.addStretch(1)
+        post_row.addWidget(self.btn_retake)
+        post_row.addWidget(self.btn_accept_frame)
+        lay.addLayout(post_row)
+
     def probe_ports(self) -> None:
         """Start a port probe and update the suggestion when it completes."""
         self._start_job("probe", partial(probe_camera_indices, max_index=4))
@@ -212,18 +238,54 @@ class CameraCaptureDialog(QDialog):
         ext = [idx for idx in found if idx >= 1]
         if ext:
             self.spin_usb.setValue(int(ext[0]))
-        self.lbl_probe_info.setText(
+        lines = [
             f"Thiết bị phát hiện: {found}"
             + (f" · Cổng camera ngoài gợi ý: {ext[0]}" if ext else " · Chỉ thấy Webcam 0")
+        ]
+        if 0 in found and ext:
+            lines.append(strings.CAMERA_DUAL_HINT)
+        elif len(found) == 1:
+            lines.append(strings.CAMERA_SINGLE_LIMIT)
+        self.lbl_probe_info.setText("\n".join(lines))
+
+    def _on_burst_toggled(self, checked: bool) -> None:
+        self._burst_enabled = bool(checked)
+        hint = strings.CAMERA_BURST_HINT
+        text = self.lbl_probe_info.text()
+        if checked and hint not in text:
+            self.lbl_probe_info.setText((text + "\n" + hint).strip())
+        elif not checked and hint in text:
+            self.lbl_probe_info.setText(text.replace(hint, "").strip())
+
+    def _burst_selected(self) -> bool:
+        return self._burst_enabled and (
+            self.rad_webcam.isChecked() or self.rad_usb.isChecked()
         )
+
+    def _capture_burst(self, device_index: int, out_dir: Path) -> Path:
+        from imageguard.ingest.camera_burst import capture_device_burst
+
+        primary, _manifest = capture_device_burst(
+            device_index, out_dir, frame_count=5
+        )
+        return primary
 
     def _sync_inputs(self) -> None:
         idle = self._worker is None
+        single = self.rad_webcam.isChecked() or self.rad_usb.isChecked()
         self.spin_usb.setEnabled(idle and (self.rad_usb.isChecked() or self.rad_dual.isChecked()))
         self.edit_url.setEnabled(idle and self.rad_iot.isChecked())
+        self.chk_burst.setEnabled(idle and single)
+        if not single:
+            self._burst_enabled = False
+            if self.chk_burst.isChecked():
+                self.chk_burst.setChecked(False)
 
     def _capture_request(self) -> Callable[[Path], Path]:
         """Snapshot Qt inputs on the GUI thread before dispatching native I/O."""
+        if self._burst_selected():
+            idx = 0 if self.rad_webcam.isChecked() else int(self.spin_usb.value())
+            return partial(self._capture_burst, idx)
         if self.rad_webcam.isChecked():
             return partial(capture_device_frame, 0)
         if self.rad_usb.isChecked():
@@ -233,10 +295,69 @@ class CameraCaptureDialog(QDialog):
         return partial(capture_iot_http_frame, self.edit_url.text())
 
     def _set_busy(self, busy: bool) -> None:
-        for control in (self.btn_probe, self.btn_preview, self.btn_capture,
-                        self.rad_webcam, self.rad_usb, self.rad_dual, self.rad_iot):
+        for control in (
+            self.btn_probe,
+            self.btn_preview,
+            self.btn_capture,
+            self.rad_webcam,
+            self.rad_usb,
+            self.rad_dual,
+            self.rad_iot,
+            self.chk_burst,
+        ):
             control.setEnabled(not busy)
+        if busy:
+            self.btn_accept_frame.setEnabled(False)
+            self.btn_retake.setEnabled(False)
+        else:
+            pending = self.captured_path is not None
+            self.btn_accept_frame.setEnabled(pending and self.btn_accept_frame.isVisible())
+            self.btn_retake.setEnabled(pending and self.btn_retake.isVisible())
         self._sync_inputs()
+
+    def _append_deepfake_diagnostics(self, diagnostics: str, frame: np.ndarray | None) -> str:
+        if frame is None:
+            return diagnostics
+        try:
+            extra = format_deepfake_preview(frame)
+        except Exception as exc:  # noqa: BLE001 - chỉ hiện tên loại lỗi, giữ chẩn đoán quang học
+            extra = type(exc).__name__
+        return f"{diagnostics}\n\n{extra}" if diagnostics else extra
+
+    def _show_frame_preview(self, raw: bytes) -> bool:
+        pix = QPixmap()
+        if not pix.loadFromData(raw):
+            return False
+        self.lbl_preview.setPixmap(
+            pix.scaled(
+                420,
+                180,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        return True
+
+    def _pillar_text_from_path(self, path: Path) -> str:
+        raw = path.read_bytes()
+        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise ValueError("Không đọc được khung đã chụp.")
+        manifest = path.with_name(f"{path.stem}.burst.json")
+        if manifest.is_file():
+            from imageguard.ingest.camera_burst import load_burst_frames
+
+            return format_burst_deepfake_preview(load_burst_frames(manifest))
+        return format_deepfake_preview(frame)
+
+    def _retake_capture(self) -> None:
+        self.captured_path = None
+        self.lbl_preview.clear()
+        self.lbl_preview.setText("Chưa có ảnh xem trước")
+        self.lbl_probe_info.setText("")
+        self.btn_accept_frame.setVisible(False)
+        self.btn_retake.setVisible(False)
+        self._set_busy(False)
 
     def _start_job(self, operation: str, task: Callable[[], object]) -> None:
         if self._worker is not None or self._closed:
@@ -265,17 +386,30 @@ class CameraCaptureDialog(QDialog):
             self._show_ports(value)
         elif operation == "preview":
             raw, diagnostics = value
-            pix = QPixmap()
-            if not pix.loadFromData(raw):
+            if not self._show_frame_preview(raw):
                 self.lbl_err.setText("Không hiển thị được ảnh xem trước từ camera.")
                 return
-            self.lbl_probe_info.setText(diagnostics)
-            self.lbl_preview.setPixmap(
-                pix.scaled(420, 180, Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation))
+            frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+            self.lbl_probe_info.setText(self._append_deepfake_diagnostics(diagnostics, frame))
         elif operation == "capture":
             self.captured_path = value
-            self.accept()
+            try:
+                raw = value.read_bytes()
+            except Exception as exc:  # noqa: BLE001
+                self.lbl_err.setText(type(exc).__name__)
+                self.captured_path = None
+                return
+            if not self._show_frame_preview(raw):
+                self.lbl_err.setText("Không hiển thị được khung đã chụp.")
+                self.captured_path = None
+                return
+            try:
+                self.lbl_probe_info.setText(self._pillar_text_from_path(value))
+            except Exception as exc:  # noqa: BLE001 - giữ PNG gốc để phân tích dù bảng trụ lỗi
+                self.lbl_err.setText(type(exc).__name__)
+            self.btn_accept_frame.setVisible(True)
+            self.btn_retake.setVisible(True)
+            self._set_busy(False)
 
     def preview_now(self) -> None:
         self._start_job("preview", partial(_preview_result, self._capture_request(),
@@ -296,5 +430,7 @@ class CameraCaptureDialog(QDialog):
     def showEvent(self, event) -> None:
         self._closed = False
         self.captured_path = None
+        self.btn_accept_frame.setVisible(False)
+        self.btn_retake.setVisible(False)
         self._set_busy(self._worker is not None)
         super().showEvent(event)

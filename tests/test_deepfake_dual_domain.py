@@ -359,6 +359,9 @@ def test_single_image_numeric_baseline_matches_v1_snapshot() -> None:
     sha256 3e63b7e907589110d8c8df6104335e0ace8ea7a6330c4693eb63f5f1316eb88e,
     `main .venv`, ngày 2026-11-18) — không phải oracle tự chế. Cố định cả
     evidence/score/verdict và digest mask+heatmap (trừ duration_ms).
+    2026-11-24: thêm key `fft_hf_conc8` (grid_score của trụ FFT, plan 261124-2152)
+    bằng giá trị chụp từ chạy thật — mọi golden khác GIỮ NGUYÊN, chứng minh
+    freq_cue/score không đổi trên control này (conc8 0.00281 < 0.006 → grid_score 0).
     """
     rng = np.random.default_rng(9)
     img = np.clip(128 + rng.normal(0.0, 16.0, (256, 256, 3)), 0, 255).astype(np.uint8)
@@ -405,6 +408,7 @@ _SINGLE_V1_EVIDENCE: dict = {
     "freq_cue": 0.0,
     "fft_hf_peak_ratio": 2.957,
     "spectral_rolloff": 0.992,
+    "fft_hf_conc8": 0.00281,  # thêm 2026-11-24 (grid_score/fft_hf_conc8), giá trị từ chạy thật
     "seam_hough_cue": 0.0,
     "seam_hough_lines": 0,
     "hog_asym": 0.1783,
