@@ -82,6 +82,9 @@ class NoiseLocal:
         kl = int(cfg.value("noise", "local_k"))
         # cv2.medianBlur với CV_32F chỉ hỗ trợ ksize 3 và 5 — giá trị khác
         # raise AssertionError. Clamp [3,5] và ép số lẻ.
+        k = min(5, max(3, k))
+        if k % 2 == 0:
+            k = 5 if k == 4 else 3
         kl = min(5, max(3, kl))
         if kl % 2 == 0:
             kl = 5 if kl == 4 else 3

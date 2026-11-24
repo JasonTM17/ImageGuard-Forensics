@@ -185,22 +185,25 @@ def test_cleanup_failure_reports_incomplete_recovery(
     out = _analyze(env, valid_png)
     rid = out.report_id
     warn = "\n".join(_warn_lines(out))
+    # Message _PersistRecoveryError giữ nguyên thiết kế an toàn: UUID + stage
+    # + loại exception — đủ truy vết recovery, không raw message/host path
+    # (redaction các exception generic có ở test_persist_limitation_redacts_host_paths).
+    assert "_PersistRecoveryError" in warn
     assert rid in warn
     assert "không hoàn tất" in warn and "recovery" in warn
     if fail_db:
-        assert "database" in warn and "RuntimeError" in warn
+        assert "database:RuntimeError" in warn
         assert env.analyses.get(rid) is not None  # DB cleanup đã fail
     else:
         assert _counts(env, rid) == (0, 0, 0)  # DB cleanup đã chạy xong
     if fail_art:
-        assert "artifacts" in warn and "OSError" in warn
+        assert "artifacts:OSError" in warn
         assert (env.tmp / "art" / rid).is_dir()  # dir còn — documented limit
         orphan = ReportService(env.store).read_report_json(rid)
         assert orphan and orphan["report_id"] == rid  # orphan exportable: limit
     else:
         assert not (env.tmp / "art" / rid).exists()  # artifacts vẫn được dọn
-    # Recovery text mới: UUID + stage + loại exception — không raw message,
-    # không absolute path.
+    # Recovery text không được lộ raw message/đường dẫn gốc.
     assert "controlled" not in warn
     assert str(env.tmp) not in warn
 
@@ -276,3 +279,22 @@ def test_normal_persist_still_works(
         "noise_local_mask.png", "noise_local_heat.png", "report.json"}
     rj = json.loads((d / "report.json").read_text(encoding="utf-8"))
     assert rj["report_id"] == out.report_id
+
+
+def test_persist_limitation_redacts_host_paths(
+        env, monkeypatch: pytest.MonkeyPatch, valid_png: Path) -> None:
+    _use_fake(monkeypatch)
+    orig = env.store.put_bytes
+
+    def wrapped(analysis_id, filename, data):
+        if filename == "noise_local_mask.png":
+            raise OSError("controlled fault: D:\\abs\\path\\mask.png")
+        return orig(analysis_id, filename, data)
+
+    monkeypatch.setattr(env.store, "put_bytes", wrapped)
+    out = _analyze(env, valid_png)
+    warn = _warn_lines(out)[0]
+    # Limitation chỉ nêu loại exception — không raw message chứa host path.
+    assert "OSError" in warn
+    assert "D:\\abs" not in warn
+    assert "path\\mask" not in warn

@@ -121,6 +121,10 @@ class HistoryScreen(QWidget):
                 self, "Lỗi cơ sở dữ liệu",
                 f"Không đọc được lịch sử phân tích: {type(e).__name__}: {e}")
         self.table.setRowCount(len(rows))
+        # Xóa selection cũ TRƯỚC khi refill: currentRow cũ trỏ sang bản ghi
+        # khác sau refresh — Reopen/Export/Delete có thể nhầm dòng mới.
+        self.table.clearSelection()
+        self.table.setCurrentCell(-1, -1)
         for i, r in enumerate(rows):
             self.table.setItem(i, 0, _table_cell(r["created_at"][:19]))
             self.table.setItem(i, 1, _table_cell(r["image_name"]))

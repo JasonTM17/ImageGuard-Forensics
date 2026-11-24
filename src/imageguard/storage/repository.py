@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from imageguard.storage.models import (
@@ -32,7 +33,18 @@ class ImageRepository:
             row = ImageAsset(sha256=sha256, file_name=file_name, width=w,
                              height=h, format=fmt)
             s.add(row)
-            s.commit()
+            try:
+                s.commit()
+            except IntegrityError:
+                # check-then-insert không nguyên tử: hai session (app + CLI
+                # /ingest chạy song song) chèn cùng sha256 — bên thua nhặt
+                # lại row người thắng thay vì làm hỏng cả lần persist.
+                s.rollback()
+                winner = s.scalar(
+                    select(ImageAsset).where(ImageAsset.sha256 == sha256))
+                if winner is None:
+                    raise
+                return winner
             return row
 
 
@@ -135,6 +147,10 @@ class ExperimentRepository:
 
 
 def _assert_relative(rel: str) -> None:
+    if not rel:
+        # Path("") không có parts/anchor/drive — lọt qua mọi kiểm tra dưới
+        # và để lại row artifact không truy cập được bởi abs_path.
+        raise ValueError(f"DB chỉ lưu relative path an toàn: {rel!r}")
     p = Path(rel)
     unsafe = (
         ".." in p.parts

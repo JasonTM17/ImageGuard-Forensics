@@ -34,7 +34,7 @@ class ImageAsset(Base):
     height: Mapped[int] = mapped_column(Integer)
     format: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC))
+        default=lambda: datetime.now(UTC).replace(tzinfo=None))
     analyses: Mapped[list[Analysis]] = relationship(back_populates="image")
 
 
@@ -43,7 +43,7 @@ class Analysis(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
     image_id: Mapped[int] = mapped_column(ForeignKey("image_assets.id"))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC))
+        default=lambda: datetime.now(UTC).replace(tzinfo=None))
     tool_version: Mapped[str] = mapped_column(String(16))
     overall_verdict: Mapped[str] = mapped_column(String(32))
     config_hash: Mapped[str] = mapped_column(String(16))
@@ -88,7 +88,7 @@ class Experiment(Base):
     dataset: Mapped[str] = mapped_column(String(32))
     split: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC))
+        default=lambda: datetime.now(UTC).replace(tzinfo=None))
     provenance_json: Mapped[str] = mapped_column(Text, default="{}")
     results: Mapped[list[ExperimentResult]] = relationship(
         cascade="all, delete-orphan")

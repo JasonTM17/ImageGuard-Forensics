@@ -493,6 +493,7 @@ def _stream_jpeg(
         secret_values,
     )
     prefix = bytearray()
+    suffix = b""
     total = 0
     try:
         with output:
@@ -520,6 +521,7 @@ def _stream_jpeg(
                     raise _Refusal("too_large")
                 if len(prefix) < 3:
                     prefix.extend(chunk[: 3 - len(prefix)])
+                suffix = (suffix + chunk)[-2:]
                 output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
@@ -532,6 +534,10 @@ def _stream_jpeg(
             raise _AttemptFailure("connection_error", retryable=True)
         if bytes(prefix) != b"\xff\xd8\xff":
             raise _Refusal("invalid_jpeg")
+        if remaining_bytes is None and suffix != b"\xff\xd9":
+            # Chunked/no Content-Length: thiếu EOI cuối stream = bản đọc cụt —
+            # không publish JPEG dở dang (cùng hoàn cảnh connection_error).
+            raise _AttemptFailure("connection_error", retryable=True)
         return _publish_temp(temp_path, base_name, secret_values)
     finally:
         temp_path.unlink(missing_ok=True)

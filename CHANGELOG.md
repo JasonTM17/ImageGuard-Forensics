@@ -34,6 +34,22 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Fixed
 
+- 2026-11-24 (vòng 4 — audit 3 subagent độc lập: forensics, storage/services, UI/ingest; mỗi finding có repro):
+  - `core/preprocess.py` & `block/pipeline.py`: kẹp cạnh ảnh làm việc ≥1px sau downscale (old: ảnh tỉ lệ cực đoan 3×4000/1×4000 làm `cv2.resize` nhận cạnh 0 → crash detector thay vì né khéo).
+  - `auxiliary/freq_view.py`: ảnh rộng 1px làm gradient rỗng → `score=NaN` lọt report (giờ `blockiness=0.0`, không NaN).
+  - `auxiliary/noise_map.py` & `auxiliary/noise_local.py`: clamp `noise.median_k` lẻ trong [3,5] cho `medianBlur` float32 như `deepfake_cues` (old: config ≥7 làm detector raise).
+  - `services/history_service.py`: dọn file artifact TRƯỚC khi xóa row DB — file bị khóa (AV/viewer) không còn để lại row đã mất trong khi file mồ côi ở đĩa; retry được.
+  - `storage/repository.py`: `get_or_create` bắt `IntegrityError` (race sha256 giữa app và CLI/ingest), rollback và trả về row người thắng thay vì bỏ cả lần persist; `_assert_relative` từ chối `rel_path=""`.
+  - `services/report_service.py`: guard export chặn cả vùng `data_root()` ngoài artifacts root (old: có thể ghi đè backup/SQLite đã đóng trong `data\`).
+  - `services/evaluation_service.py`: ghi row DB trước khi ghi file report eval (old: lỗi DB bỏ lại file `eval-*` mồ côi).
+  - `storage/models.py`: default `created_at` thống nhất naive-UTC (old: default aware bị SQLite hút tzinfo Silent).
+  - `services/analysis_service.py`: limitation persist-fail không còn lộ raw exception/host path; riêng `_PersistRecoveryError` giữ message an toàn (UUID + stage) cho truy vết recovery.
+  - `ui/workers.py`: `AnalysisWorker.run` bắt `BaseException` và báo `failed` trước khi re-raise `KeyboardInterrupt`/`SystemExit` (old: GUI khóa vĩnh viễn, nút Cancel chết).
+  - `ui/screens/history.py`: `refresh()` xóa selection cũ trước khi refill (old: sau delete, dòng được chọn có thể trỏ sang bản ghi khác).
+  - `ingest/http_pull.py`: stream không Content-Length phải kết thúc EOI `\xff\xd9` — từ chối JPEG chunked cụt như `connection_error` (bổ sung cho vòng 3).
+  - `ingest/custody.py`: một dòng JSONL = một lệnh write + fsync (old: hai write, crash giữa hai lệnh làm rách custody log).
+  - `ingest/commands.py`: dispose engine dùng `getattr` — factory kiểm thử không phải `sessionmaker` không còn làm `AttributeError` che return code.
+  - Regression: `tests/test_extreme_shape_regressions.py` (4), `tests/test_storage_partial_failures.py` (7), `tests/test_ui_worker_regressions.py` (3), `tests/test_ingest_regressions.py` (4), `test_analysis_persist_recovery.py` +1 redaction, siết lại assertion recovery trong cleanup test.
 - 2026-11-22 (vòng 3):
   - `ingest/http_pull.py`: kiểm tra `response.length > 0` sau khi EOF trong `_stream_jpeg` để từ chối/retry (`connection_error`) các phản hồi `Content-Length` bị cắt cụt thay vì lưu file JPEG dở dang.
   - `ui/screens/analyze.py` & `forensics/localize/heatmap.py`: xóa `lbl_err` cũ khi áp dụng overlay hợp lệ trong `_apply_overlay`, bảo vệ kiểm tra kích thước/kênh/dtype (`heatmap` & `pairs_image`) khỏi `ValueError` chưa bắt, và từ chối mảng complex/không phải số trong `normalize_map`/`_to_2d`.

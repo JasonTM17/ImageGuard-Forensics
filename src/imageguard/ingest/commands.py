@@ -75,7 +75,9 @@ def run_ingest(
             return 1
     finally:
         if session_factory is not None:
-            bind = session_factory.kw.get("bind")
+            # Factory kiểm thử có thể không phải sessionmaker — đừng để
+            # AttributeError trong finally che mất return code thật.
+            bind = (getattr(session_factory, "kw", None) or {}).get("bind")
             if bind is not None:
                 bind.dispose()
 

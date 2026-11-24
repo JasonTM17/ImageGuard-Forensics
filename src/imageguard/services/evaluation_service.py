@@ -25,7 +25,9 @@ class EvaluationService:
                    else CoMoFoDAdapter(root))
         methods = [load_method(s) for s in method_specs]
         report = run_eval(adapter, methods, self.cfg, split, seed)
-        report.save(self.reports_dir)
+        # Ghi row DB TRƯỚC file report: nếu file fail (đĩa đầy/đường dẫn
+        # hỏng) vẫn còn row truy vết được; ngược lại sẽ để lại file eval-*
+        # mồ côi không có row nào tương ứng.
         if self.experiments is not None:
             self.experiments.save({
                 "experiment_id": report.experiment_id,
@@ -33,4 +35,5 @@ class EvaluationService:
                 "provenance": report.provenance,
                 "per_method": report.per_method,
             })
+        report.save(self.reports_dir)
         return report

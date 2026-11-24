@@ -43,8 +43,16 @@ class AnalysisWorker(QRunnable):
         try:
             out = self._svc.analyze(self._req)
             self.signals.result.emit(out)
-        except Exception as e:  # noqa: BLE001 - không bao giờ để exception chết thread
-            self.signals.failed.emit(str(e))
+        except BaseException as e:  # SystemExit/KeyboardInterrupt cũng phải
+            # báo failed để màn hình không bị khóa vĩnh viễn (_worker không
+            # bao giờ reset nếu tín hiệu cuối kỳ không tới GUI).
+            self.signals.failed.emit(
+                f"{type(e).__name__}: {e}" if isinstance(
+                    e, (KeyboardInterrupt, SystemExit)) else str(e))
+            # KeyboardInterrupt/SystemExit không nuốt — re-raise để pool/interpreter
+            # xử lý tiếp, sau khi đã báo failed.
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
 
 
 class EnhanceSignals(QObject):

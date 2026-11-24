@@ -52,10 +52,14 @@ class HistoryService:
         }
 
     def delete(self, analysis_id: str) -> bool:
-        rels = self.analyses.delete(analysis_id)
-        if not rels and self.analyses.get(analysis_id) is None:
-            pass  # row đã xóa hoặc không tồn tại
-        self.store.delete_analysis(analysis_id)  # dọn file artifacts
+        existed = self.analyses.get(analysis_id) is not None
+        # Dọn file artifacts TRƯỚC khi xóa row: file bị khóa trên Windows
+        # (AV/viewer giữ handle) sẽ raise trước khi DB commit — row còn
+        # nguyên để lịch sử hiển thị và người dùng retry, thay vì để lại
+        # artifact mồ côi không còn row nào trỏ tới.
+        self.store.delete_analysis(analysis_id)
+        if existed:
+            self.analyses.delete(analysis_id)
         return True
 
     def stats(self) -> dict:

@@ -76,11 +76,15 @@ class FreqView:
 
         # --- cue 2: JPEG blockiness ---
         # |∇x| TB theo cột; biên block = cột % win == win-1 (trừ cột 0).
-        gx = np.abs(np.diff(gray, axis=1)).mean(axis=0)
+        if gray.shape[1] < 2:
+            # Ảnh 1 cột: diff rỗng → mean NaN — chặn trước khi lọt vào score.
+            gx = np.zeros(0, dtype=np.float64)
+        else:
+            gx = np.abs(np.diff(gray, axis=1)).mean(axis=0)
         edge_cols = np.arange(win - 1, gray.shape[1] - 1, win)  # biên sau block
         inner = np.setdiff1d(np.arange(len(gx)), edge_cols)
         gx_b = float(gx[edge_cols].mean()) if len(edge_cols) else 0.0
-        gx_i = float(gx[inner].mean()) + 1e-9
+        gx_i = (float(gx[inner].mean()) if len(inner) else 0.0) + 1e-9
         blockiness = float(np.clip((gx_b - gx_i) / gx_i, 0, 1))
 
         is_jpeg = doc.image_format == "jpeg"

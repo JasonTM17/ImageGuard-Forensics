@@ -60,9 +60,9 @@ class BlockCopyMove:
         h, w = gray.shape
         scale = min(1.0, max_side / max(h, w))
         if scale < 1.0:
-            gray = cv2.resize(
-                gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA
-            )
+            # Kẹp ≥1px mỗi cạnh: 3×4000 nhân scale cho cạnh 0 → cv2.raise.
+            nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+            gray = cv2.resize(gray, (nw, nh), interpolation=cv2.INTER_AREA)
             limitations.append(
                 f"block analysis trên bản scale={scale:.2f} — vùng copy nhỏ hơn "
                 "block có thể mất"

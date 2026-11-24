@@ -396,7 +396,9 @@ def test_retries_only_connection_timeouts_and_stops_at_configured_bound(
     class Response:
         def __init__(self) -> None:
             self.headers = {"Content-Type": "image/jpeg"}
-            self.body = b"\xff\xd8\xffpayload"
+            # Không có Content-Length (giống chunked) — body phải có EOI
+            # (\xff\xd9) để không bị coi là bản JPEG đọc cụt.
+            self.body = b"\xff\xd8\xffpayload\xff\xd9"
 
         def getcode(self) -> int:
             return 200
@@ -431,7 +433,7 @@ def test_retries_only_connection_timeouts_and_stops_at_configured_bound(
 
     assert attempts == 3
     assert result == [{"status": "written", "basename": "shot.jpg"}]
-    assert (tmp_path / "shot.jpg").read_bytes() == b"\xff\xd8\xffpayload"
+    assert (tmp_path / "shot.jpg").read_bytes() == b"\xff\xd8\xffpayload\xff\xd9"
     _assert_no_temporary_files(tmp_path)
 
 

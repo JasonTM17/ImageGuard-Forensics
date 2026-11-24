@@ -103,11 +103,18 @@ class AnalysisService:
         if self.images is not None and self.analyses is not None:
             try:
                 self._persist(report, doc, results, wall_ms)
-            except Exception as e:  # noqa: BLE001 - ranh giới persistence: lỗi DB/artifact không được huỷ kết quả phân tích
-                # Phân tích đã tính xong — persistence lỗi KHÔNG được huỷ kết quả.
-                # Báo trong limitations để report tự nói rõ mất persist.
+            except _PersistRecoveryError as e:
+                # str() của recovery error được thiết kế an toàn: chỉ UUID +
+                # stage + loại exception — không đường dẫn, không raw message.
                 report.limitations.append(
-                    f"lưu lịch sử/artifact thất bại — kết quả phân tích vẫn hợp lệ ({type(e).__name__}: {e})")
+                    "lưu lịch sử/artifact thất bại — kết quả phân tích vẫn "
+                    f"hợp lệ ({type(e).__name__}: {e})")
+            except Exception as e:  # noqa: BLE001 - ranh giới persistence: lỗi DB/artifact không được huỷ kết quả phân tích
+                # Exception generic có thể chứa đường dẫn tuyệt đối/host path
+                # trong str() — chỉ giữ tên loại, đúng floor không lộ host path.
+                report.limitations.append(
+                    "lưu lịch sử/artifact thất bại — kết quả phân tích vẫn "
+                    f"hợp lệ ({type(e).__name__})")
 
         _progress(req.progress_cb, 1.0, "done")
         return report

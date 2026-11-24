@@ -64,6 +64,11 @@ class NoiseMap:
             "signal khám phá — cần corroborate bằng detector conclusive",
         ]
         k = int(cfg.value("noise", "median_k"))
+        # cv2.medianBlur với CV_32F chỉ hỗ trợ ksize 3 và 5 — clamp như
+        # local_k trong noise_local để config lớn hơn không làm detector raise.
+        k = min(5, max(3, k))
+        if k % 2 == 0:
+            k = 5 if k == 4 else 3
         bs = int(cfg.value("noise", "block"))
         m = float(cfg.value("noise", "outlier_mad"))
         min_frac = float(cfg.value("noise", "min_outlier_frac"))

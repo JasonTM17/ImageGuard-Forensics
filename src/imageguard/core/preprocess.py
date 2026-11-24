@@ -33,7 +33,10 @@ def working_copy(
     h, w = gray.shape
     scale = min(1.0, max_side / max(w, h))
     if scale < 1.0:
-        gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        # Kẹp mỗi cạnh ≥ 1px: ảnh tỉ lệ cực đoan (vd 1×4000) sẽ cho cạnh 0
+        # nếu chỉ nhân scale — cv2.resize raise thay vì detector né khéo.
+        nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+        gray = cv2.resize(gray, (nw, nh), interpolation=cv2.INTER_AREA)
         doc.resolution_reduced = True
         doc.scale_factor = scale
     return gray, scale

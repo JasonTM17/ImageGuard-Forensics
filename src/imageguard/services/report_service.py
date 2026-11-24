@@ -13,6 +13,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from imageguard.core.paths import data_root
 from imageguard.storage.artifacts import ArtifactStore
 from imageguard.ui.strings import VERDICT_LABEL
 
@@ -55,9 +56,19 @@ class ReportService:
 
     def _guard_export_destination(self, destination: Path, canonical: Path) -> None:
         target = destination.resolve()
+        artifacts_root = self.store.root.resolve()
         if (canonical.resolve() != canonical
-                or target.is_relative_to(self.store.root.resolve()) and target != canonical):
+                or (target.is_relative_to(artifacts_root)
+                    and target != canonical)):
             raise ValueError("export destination would replace a stored artifact")
+        # Vùng data runtime (SQLite, backup, file nội bộ) nằm NGOÀI artifact
+        # root: kê từ chỉ che artifacts subtree — chặn cả phần còn lại của
+        # data_root để export không ghi đè dữ liệu vận hành khác.
+        data = data_root().resolve()
+        if target.is_relative_to(data) and not target.is_relative_to(artifacts_root):
+            raise ValueError(
+                "export destination nằm trong thư mục data runtime "
+                "— chọn nơi khác")
 
     def _write_external(self, destination: Path, data: bytes, canonical: Path) -> None:
         temporary: Path | None = None

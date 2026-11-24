@@ -8,6 +8,7 @@ camera nor a verified capture time is established by these records.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,12 @@ class CustodyLog:
             record["error_code"] = error_code
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        line = (
+            json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+        )
         with self.path.open("a", encoding="utf-8", newline="\n") as stream:
-            stream.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
-            stream.write("\n")
+            # Một dòng = một write duy nhất + fsync: crash giữa hai write cũ
+            # (payload, newline) làm rách JSONL — custody phải nguyên vẹn.
+            stream.write(line)
+            stream.flush()
+            os.fsync(stream.fileno())
