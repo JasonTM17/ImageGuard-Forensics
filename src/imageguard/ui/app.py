@@ -8,7 +8,10 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from imageguard.core.config import load_thresholds
-from imageguard.services.analysis_service import AnalysisService
+from imageguard.services.analysis_service import (
+    AnalysisService,
+    reclaim_orphan_artifacts,
+)
 from imageguard.services.history_service import HistoryService
 from imageguard.storage.artifacts import ArtifactStore
 from imageguard.storage.db import make_session_factory
@@ -24,6 +27,8 @@ def build_services(db_path=None, artifacts_root=None):
     sf = make_session_factory(**kwargs)
     store = ArtifactStore(artifacts_root) if artifacts_root else ArtifactStore()
     analyses = AnalysisRepository(sf)
+    # Thu hồi dir artifact mồ côi từ crash lần chạy trước (fail-closed).
+    reclaim_orphan_artifacts(store, analyses)
     analysis = AnalysisService(cfg, ImageRepository(sf), analyses, store)
     history = HistoryService(analyses, store)
     return analysis, history

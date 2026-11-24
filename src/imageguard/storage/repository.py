@@ -114,6 +114,11 @@ class AnalysisRepository:
             s.commit()
             return rels
 
+    def all_ids(self) -> set[str]:
+        """Toàn bộ analyses id — dữ kiện cho startup sweep artifact mồ côi."""
+        with self._sf() as s:
+            return set(s.scalars(select(Analysis.id)))
+
     def stats(self) -> dict:
         with self._sf() as s:
             total = s.scalar(select(func.count(Analysis.id))) or 0

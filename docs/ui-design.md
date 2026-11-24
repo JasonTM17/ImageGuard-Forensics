@@ -76,6 +76,12 @@ database-free) và check `threading.Event` trước khi emit `result`;
 
 - View: ảnh gốc là base pixmap, ảnh tăng cường là overlay; slider 0–100 chỉ
   đổi opacity của overlay — không ghi pixel, không chạy lại operator.
+- Cancel ở **Analyze** khác **Enhance** một cách có chủ đích: kết quả phân
+  tích đã `persist` xong trước thời điểm banner dựng — triệt tiêu hiển thị
+  sẽ tạo row lịch sử "vô hình" (đã lưu mà người dùng không thấy). Phương
+  pháp bị hủy giữ nguyên kết quả-cancel chuẩn của service (INCONCLUSIVE +
+  limitation "cancelled"); trạng thái "Đang dừng/Đã hủy" hiển thị kèm.
+  Quyết định ghi ngày 2026-11-24 sau audit vòng 4.
 - Banner `strings.ENHANCE_BANNER` cố định, luôn hiện: ảnh tăng cường là
   bản xem, không phải bằng chứng; phân tích dấu hiệu chỉ gắn với file gốc.
 - Xuất: PNG + `.json` sibling (`derive.write_sibling`) ghi `derived`,

@@ -284,4 +284,22 @@ def report_to_dict(report: ForensicReport) -> dict:
     }
 
 
+def reclaim_orphan_artifacts(
+    store: ArtifactStore | None, analyses: AnalysisRepository | None
+) -> tuple[list[str], list[str]]:
+    """Startup sweep dir artifact mồ côi (dir có, row Analysis không có).
+
+    Fail-closed theo hai tầng: đọc danh sách id lỗi → trả rỗng và KHÔNG xóa
+    gì; dir nào không xóa được (file bị khóa) được bỏ qua cho lần sau. Caller:
+    app boot, CLI analyze persist, ingest setup.
+    """
+    if store is None or analyses is None:
+        return [], []
+    try:
+        known = analyses.all_ids()
+    except Exception:  # noqa: BLE001 - sweep phải fail-closed: DB lỗi = không xóa
+        return [], []
+    return store.sweep_orphan_report_dirs(known)
+
+
 _report_dict = report_to_dict

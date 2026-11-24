@@ -68,6 +68,13 @@ class ELA:
         rgb = cv2.cvtColor(doc.array, cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(rgb)
         qualities = list(cfg.value("ela", "qualities"))
+        if not qualities:
+            # Config rỗng = không quét được; abstain thay vì maximum.reduce
+            # trên list rỗng (ValueError giết cả method).
+            return self._done(
+                Verdict.INCONCLUSIVE, None, t0,
+                ["ela qualities rỗng trong cấu hình — bỏ qua quét ELA"],
+            )
         amplify = float(cfg.value("ela", "amplify"))
         maps: dict[int, np.ndarray] = {}
         for q in qualities:

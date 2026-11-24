@@ -23,6 +23,11 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Changed
 
+- 2026-11-24 (vòng 5 — user ủy quyền quyết định cho 4 item còn treo):
+  - **Orphan sweep**: `reclaim_orphan_artifacts()` chạy lúc khởi động app/CLI persist/ingest setup — thu hồi dir report-id UUID không còn row Analysis (còn sót từ crash giữa reserve-dir và DB write); fail-closed hai tầng (DB lỗi → không xóa gì; dir bị khóa → chờ lần sau), chỉ đụng con trực tiếp dạng UUID của artifacts root.
+  - **Watch-mode prune**: `_handled`/`_seen_hashes` chỉ còn là cache hữu hạn — entry của file đã biến mất bị prune cuối mỗi scan; custody log (tên, sha) vẫn là nguồn chân lý nên file quay lại không bị re-analyze.
+  - **Config guards**: ELA với `qualities` rỗng → INCONCLUSIVE kèm limitation "qualities rỗng" (thay vì `ValueError` trên `maximum.reduce`); `zigzag_indices` từ chối `n_coeffs` ngoài [1, B²] với thông điệp rõ — method-isolation chuyển thành verdict error.
+  - **Quyết định cancel Analyze** (khác Enhance một cách có chủ đích): giữ nguyên hiển thị kết quả đã persist + trạng thái hủy — ghi rõ trong `docs/ui-design.md` để thôi bị coi là lỗi chưa xử lý.
 - 2026-11-24 (testing docs): cập nhật `docs/testing-strategy.md` độ phủ đo lại trên CI commit `c034a92` — **1701 passed, 3 skipped** (3.14 + 3.13), coverage giữ **94%** (10347 statements / 651 missed), ghi chú khác biệt 2 skip symlink giữa máy dev và runner.
 - 2026-11-24 (demo ipkit): chương 2 demo bổ sung 7 hàng trưng bày màu và hình học — YCbCr (Y, Cb|Cr), HSV (H, S|V) qua `color.py`, và dịch/phóng 1,5×/xoay 17° qua `geometry/`; kiểm bằng `test_demo_chapter_c2_color_geometry_rows` (giữ bề rộng montage 324 px, ảnh nhỏ 48×64 vẫn chạy đúng).
 - 2026-11-24 (packaging): thêm mục "Trạng thái bằng chứng 2026-11-24" trong `docs/packaging.md` — build stock exe từ `main @ f06d76e` **PASS** (preflight RAM free 8,19 GiB ≥ 4 GiB, PyInstaller 6.22.3, ~105 s; lần 2026-11-21 BLOCKED chỉ do RAM); startup smoke DB tạo sau 1,1 s, exe alive ≥ 20 s với fixture, journey offscreen PASS + UI smoke pytest-qt 145 passed; `configs/thresholds.yaml` SHA-256 không đổi. Native GUI journey cửa sổ thật trên exe **PASS** cùng ngày (UIA automation, user cấp quyền): banner verdict "Có dấu hiệu nghi vấn" + persist 1 báo cáo/3 method rows; overlay/lịch sử/Tăng cường vẫn presenter chạy tay; không claim packaged-ready.

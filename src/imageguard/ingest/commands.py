@@ -9,7 +9,10 @@ from pathlib import Path
 from imageguard.core.config import load_thresholds
 from imageguard.ingest.config import IngestConfigError, load_ingest_config
 from imageguard.ingest.folder import FolderIngestor
-from imageguard.services.analysis_service import AnalysisService
+from imageguard.services.analysis_service import (
+    AnalysisService,
+    reclaim_orphan_artifacts,
+)
 from imageguard.storage.artifacts import ArtifactStore
 from imageguard.storage.db import make_session_factory
 from imageguard.storage.repository import AnalysisRepository, ImageRepository
@@ -40,11 +43,14 @@ def run_ingest(
                 ingest_config.data_dir / "imageguard.db"
             )
             analyses = AnalysisRepository(session_factory)
+            store = ArtifactStore(ingest_config.data_dir / "artifacts")
+            # Thu hồi dir mồ côi từ crash lần trước (fail-closed).
+            reclaim_orphan_artifacts(store, analyses)
             service = AnalysisService(
                 thresholds,
                 ImageRepository(session_factory),
                 analyses,
-                ArtifactStore(ingest_config.data_dir / "artifacts"),
+                store,
             )
             ingestor = FolderIngestor(
                 ingest_config, service, thresholds.snapshot_hash()

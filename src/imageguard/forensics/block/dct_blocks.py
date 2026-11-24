@@ -43,6 +43,12 @@ def zigzag_indices(B: int, k: int) -> np.ndarray:
     Trả về:
         ndarray int độ dài k — chỉ số cột trong vector hoá B² chiều.
     """
+    if k < 0 or k > B * B:
+        # Config sai (n_coeffs vượt B², hoặc âm) sẽ tạo feature matrix lệch
+        # độ rộng — fail sớm với thông điệp rõ, method-isolation chuyển thành
+        # verdict error kèm thông điệp trong limitations thay vì crash mờ.
+        # k == 0 giữ semantics course-lock "0 hệ số → mảng rỗng".
+        raise ValueError(f"n_coeffs phải trong [0, {B * B}] với B={B}: nhận {k}")
     order = sorted(
         ((u, v) for u in range(B) for v in range(B)),
         key=lambda p: (p[0] + p[1], -p[0] if (p[0] + p[1]) % 2 else p[0]),

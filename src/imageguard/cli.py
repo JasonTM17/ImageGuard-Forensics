@@ -148,6 +148,7 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
     from imageguard.services.analysis_service import (
         AnalysisRequest,
         AnalysisService,
+        reclaim_orphan_artifacts,
         report_to_dict,
     )
     from imageguard.storage.artifacts import ArtifactStore
@@ -167,7 +168,11 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
         db_path = root / "imageguard.db"
         sf = make_session_factory(db_path)
         store = ArtifactStore(root / "artifacts")
-        svc = AnalysisService(cfg, ImageRepository(sf), AnalysisRepository(sf), store)
+        analyses_repo = AnalysisRepository(sf)
+        # Thu hồi dir mồ côi từ crash lần trước (fail-closed, không xóa gì
+        # khi DB không đọc được).
+        reclaim_orphan_artifacts(store, analyses_repo)
+        svc = AnalysisService(cfg, ImageRepository(sf), analyses_repo, store)
 
     try:
         req = AnalysisRequest(path=args.file, methods=methods)

@@ -57,6 +57,9 @@ class FolderIngestor:
         self._latest_events = self.custody.latest_events()
         self._seen_hashes: set[str] = set()
         self._handled: dict[Path, tuple[int, int]] = {}
+        # sha → path referencing nó (hiện còn trên đĩa) — để prune bỏ sha
+        # khi mọi path tham chiếu đã biến mất, giữ watch mode bộ nhớ hữu hạn.
+        self._sha_refs: dict[str, set[Path]] = {}
 
     def scan_once(self, directory: Path | str) -> ScanSummary:
         watch_dir = Path(directory)
@@ -140,6 +143,7 @@ class FolderIngestor:
         submitted = 0
         for path, signature, image_sha256, key in candidates:
             if image_sha256 in self._seen_hashes:
+                self._sha_refs.setdefault(image_sha256, set()).add(path)
                 self._append_event(
                     "skipped_duplicate", path, signature, image_sha256,
                     analysis_id=None,
@@ -159,6 +163,7 @@ class FolderIngestor:
 
             submitted += 1
             self._seen_hashes.add(image_sha256)
+            self._sha_refs.setdefault(image_sha256, set()).add(path)
             try:
                 result = self.service.analyze(
                     AnalysisRequest(path=path, methods=list(self.config.methods))
@@ -206,7 +211,28 @@ class FolderIngestor:
                     summary.errors += 1
             self._handled[path] = signature
 
+        self._prune_gone()
         return summary
+
+    def _prune_gone(self) -> None:
+        """Watch mode: bỏ cache entry của file đã biến mất.
+
+        Custody log là nguồn chân lý (key ``(tên, sha)`` đã hoàn tất ⇒ bỏ
+        qua); ``_handled``/``_seen_hashes`` chỉ cache để đỡ đọc lại sha của
+        file không đổi. File quay lại sau khi bị prune sẽ được xử lý lại
+        theo custody — không re-analyze nếu (tên, sha) đã hoàn tất.
+        """
+        for path in list(self._handled):
+            if not path.exists():
+                del self._handled[path]
+        for sha in list(self._sha_refs):
+            refs = self._sha_refs[sha]
+            gone = {p for p in refs if not p.exists()}
+            if gone:
+                refs.difference_update(gone)
+            if not refs:
+                del self._sha_refs[sha]
+                self._seen_hashes.discard(sha)
 
     def _stable_signature(self, path: Path) -> tuple[int, int] | None:
         first = _file_signature(path)

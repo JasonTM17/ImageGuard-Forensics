@@ -17,6 +17,11 @@ import numpy as np
 
 from imageguard.core.paths import data_root
 
+# Tên dir report chuẩn: str(uuid4()) — sweep mồ côi chỉ công nhận dạng này.
+_REPORT_DIR_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+)
+
 DEFAULT_ROOT = data_root() / "artifacts"
 
 _SAFE = re.compile(r"[a-z0-9_\-]+", re.IGNORECASE | re.ASCII)
@@ -140,3 +145,35 @@ class ArtifactStore:
         d = (root / analysis_id).resolve()
         if d != root and _contained(root, d) and d.is_dir():
             shutil.rmtree(d)
+
+    def sweep_orphan_report_dirs(
+        self, known_ids: set[str]
+    ) -> tuple[list[str], list[str]]:
+        """Xóa dir report-id UUID không còn row Analysis nào trỏ tới.
+
+        Crash giữa ``_reserve_dir`` và DB write để lại dir mồ côi; startup
+        gọi hàm này để thu hồi. Chỉ đụng **con trực tiếp** của root và tên
+        đúng dạng UUID (str(uuid4)) — file/dir người dùng đặt vào artifacts
+        root không bao giờ bị coi là mồ côi. Trả ``(swept, skipped)``; lỗi
+        liệt kê root → trả rỗng, KHÔNG xóa gì (fail-closed).
+        """
+        swept: list[str] = []
+        skipped: list[str] = []
+        try:
+            entries = list(self.root.iterdir())
+        except OSError:
+            return swept, skipped
+        for entry in entries:
+            name = entry.name
+            if name in known_ids or not _REPORT_DIR_RE.fullmatch(name):
+                continue
+            if not entry.is_dir():
+                continue
+            try:
+                shutil.rmtree(entry)
+            except OSError:
+                # File bị khóa (AV/viewer) — để lại cho lần sweep sau.
+                skipped.append(name)
+                continue
+            swept.append(name)
+        return swept, skipped
