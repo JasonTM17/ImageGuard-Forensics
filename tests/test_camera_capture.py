@@ -221,10 +221,12 @@ def test_camera_capture_dialog_modes_and_error_handling(
 
     def ok_device(idx: int, out_dir: Path) -> Path:
         calls.append((idx, out_dir))
+        cv2.imwrite(str(expected), np.zeros((48, 64, 3), dtype=np.uint8))
         return expected
 
     monkeypatch.setattr(dlg_mod, "capture_device_frame", ok_device)
     dlg.rad_usb.setChecked(True)
+    dlg.chk_burst.setChecked(False)
     dlg.spin_usb.setValue(2)
     dlg.capture_now()
     qtbot.waitUntil(lambda: dlg._worker is None)
@@ -238,6 +240,7 @@ def test_camera_capture_dialog_modes_and_error_handling(
 
     def ok_dual(idx_a: int, idx_b: int, out_dir: Path) -> Path:
         dual_calls.append((idx_a, idx_b, out_dir))
+        cv2.imwrite(str(expected_dual), np.zeros((48, 128, 3), dtype=np.uint8))
         return expected_dual
 
     monkeypatch.setattr(dlg_mod, "capture_dual_device_frames", ok_dual)
@@ -248,3 +251,57 @@ def test_camera_capture_dialog_modes_and_error_handling(
     qtbot.waitUntil(lambda: dlg._worker is None)
     assert dual_calls == [(0, 2, tmp_path)]
     assert dlg.captured_path == expected_dual
+
+
+def test_burst_checkbox_routes_webcam_to_burst_helper(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from imageguard.ui.widgets import camera_dialog as dlg_mod
+
+    dlg = dlg_mod.CameraCaptureDialog(out_dir=tmp_path)
+    assert dlg.chk_burst.isChecked()
+    expected = tmp_path / "burst.png"
+    calls: list[int] = []
+
+    def fake_burst(_self, device_index: int, out_dir: Path) -> Path:
+        calls.append(device_index)
+        cv2.imwrite(str(expected), np.zeros((48, 64, 3), dtype=np.uint8))
+        return expected
+
+    monkeypatch.setattr(dlg_mod.CameraCaptureDialog, "_capture_burst", fake_burst)
+    assert dlg.chk_burst.toolTip() == dlg_mod.strings.CAMERA_BURST_HINT
+    dlg.capture_now()
+    qtbot.waitUntil(lambda: dlg._worker is None)
+    assert calls == [0]
+    assert dlg.captured_path == expected
+
+    dlg.rad_dual.setChecked(True)
+    assert not dlg.chk_burst.isChecked()
+    assert not dlg.chk_burst.isEnabled()
+
+
+def test_capture_burst_helper_returns_primary_from_module(
+    qtbot, tmp_path: Path, monkeypatch
+) -> None:
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from imageguard.ingest import camera_burst
+    from imageguard.ui.widgets import camera_dialog as dlg_mod
+
+    expected = tmp_path / "primary.png"
+    cv2.imwrite(str(expected), np.zeros((64, 64, 3), dtype=np.uint8))
+    manifest = tmp_path / "primary.burst.json"
+    calls: list[int] = []
+
+    def fake_burst(device_index: int, out_dir: Path, *, frame_count: int = 5, warmup_frames: int = 2):
+        calls.append(frame_count)
+        assert device_index == 1
+        assert out_dir == tmp_path
+        return expected, manifest
+
+    monkeypatch.setattr(camera_burst, "capture_device_burst", fake_burst)
+    dlg = dlg_mod.CameraCaptureDialog(out_dir=tmp_path)
+    assert dlg._capture_burst(1, tmp_path) == expected
+    assert calls == [5]

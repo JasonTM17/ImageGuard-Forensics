@@ -52,6 +52,24 @@ Study cổ điển đã ghi trên cohort thiết kế; arm **NAFNet (E3)** trên
 - Metric R1–R5 và `INCONCLUSIVE` tách khỏi ma trận nhị phân — xem [`docs/evaluation-methodology.md`](evaluation-methodology.md).
 - Artifact đánh giá chi tiết nằm ngoài repo công khai; khi trích số trong báo cáo đồ án, lấy từ [`casia-formal-evidence-summary.md`](casia-formal-evidence-summary.md) hoặc artifact đã lưu cục bộ, không suy diễn ([`README.md`](../README.md)).
 
+## Camera và deepfake khám phá
+
+Mốc cùng phiên và burst 4–6 khung chỉ thêm tín hiệu trên khung gốc. Chúng không
+có cohort đo trên camera thật, không nhận diện một người, và không đổi hợp đồng
+`deepfake_cues`: không bao giờ `SUSPICIOUS_INDICATION`. Ảnh đã tăng cường vẫn
+không được đưa vào detector.
+
+Giới hạn đo được của trụ FFT (cohort synthetic 20 seed, 2026-11-24, không phải
+camera thật): sau khi hiệu chuẩn `peak_score` về `(peak_ratio - 4.0)/14.0` để
+khung webcam tự nhiên (peak ~8) không còn `freq_cue = 1`, các lưới upsampling
+biên hài thực (NN 2×, peak ~6.9–7.4) rơi vào dải mù 4–15 và chỉ được chấm điểm
+thấp riêng lẻ ở trụ này — có thể still bị phát hiện qua các trụ σ/LBP khác.
+`grid_score` (độ tập trung đỉnh HF, `fft_hf_conc8`) bắt được lưới tuần hoàn kiểu
+GAN/Diffusion (chu kỳ 3px, `fft_hf_conc8` ~0.046) an toàn với mặt (~0.003) và
+nhiễu thuần (~0.003), nhưng có thể bật trên texture tuần hoàn tự nhiên (vải
+dệt, nan chớp) nếu ROI tình cờ là vùng đó — luật corroboration (không phát hiện
+mặt thì giảm điểm) giúp giảm báo giả cho thân bài.
+
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
 Giới hạn tài nguyên `safe_open` (100 MB, 80 MP) và SSRF khi bật ingest HTTP — [`docs/security-error-handling.md`](security-error-handling.md), [`docs/ingest.md`](ingest.md). DNS rebinding vẫn là rủi ro còn lại khi dùng HTTP snapshot.

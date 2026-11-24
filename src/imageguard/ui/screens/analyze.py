@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from imageguard.core.errors import ErrorResult
 from imageguard.core.models import ForensicReport
 from imageguard.forensics.localize.heatmap import overlay_mask
+from imageguard.ingest.session_reference import SessionReferenceStore
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
@@ -56,6 +57,7 @@ class AnalyzeScreen(QWidget):
         self._path: Path | None = None
         self._report: ForensicReport | None = None
         self._doc = None
+        self._ref_store = SessionReferenceStore()
         self._build()
 
     def _build(self) -> None:
@@ -84,6 +86,20 @@ class AnalyzeScreen(QWidget):
         apply_a11y(self.btn_demo_sample, strings.A11Y_DEMO_SAMPLE)
         self.btn_demo_sample.clicked.connect(self._open_demo_sample)
         rl.addWidget(self.btn_demo_sample)
+
+        ref_row = QHBoxLayout()
+        self.btn_set_ref = QPushButton(strings.ANALYZE_BTN_SET_REFERENCE)
+        apply_a11y(self.btn_set_ref, strings.ANALYZE_BTN_SET_REFERENCE)
+        self.btn_set_ref.clicked.connect(self._set_reference)
+        self.btn_clear_ref = QPushButton(strings.ANALYZE_BTN_CLEAR_REFERENCE)
+        apply_a11y(self.btn_clear_ref, strings.ANALYZE_BTN_CLEAR_REFERENCE)
+        self.btn_clear_ref.clicked.connect(self._clear_reference)
+        ref_row.addWidget(self.btn_set_ref, 1)
+        ref_row.addWidget(self.btn_clear_ref, 1)
+        rl.addLayout(ref_row)
+        self.lbl_ref = QLabel("")
+        self.lbl_ref.setWordWrap(True)
+        rl.addWidget(self.lbl_ref)
 
         self.lbl_file = QLabel(strings.FMT_HINT)
         self.lbl_file.setWordWrap(True)
@@ -202,7 +218,42 @@ class AnalyzeScreen(QWidget):
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 2)
 
+        self._refresh_ref_status()
         self.setAcceptDrops(True)
+
+    # --- session reference ---
+    def _refresh_ref_status(self) -> None:
+        has_ref = self._ref_store.get_reference() is not None
+        self.lbl_ref.setText(
+            strings.ANALYZE_REFERENCE_READY
+            if has_ref
+            else strings.ANALYZE_REFERENCE_MISSING
+        )
+        idle = self._worker is None
+        self.btn_set_ref.setEnabled(idle and self._path is not None)
+        self.btn_clear_ref.setEnabled(idle and has_ref)
+
+    def _set_reference(self) -> None:
+        if self._worker is not None or self._path is None:
+            return
+        try:
+            self._ref_store.set_reference(self._path)
+        except Exception as e:  # noqa: BLE001 - ranh giới UI: báo lỗi ẩn path, không crash
+            self.lbl_err.setText(
+                f"{strings.MSG_EXCEPTION_PATH_REDACTED} ({type(e).__name__})"
+            )
+        self._refresh_ref_status()
+
+    def _clear_reference(self) -> None:
+        if self._worker is not None:
+            return
+        try:
+            self._ref_store.clear()
+        except Exception as e:  # noqa: BLE001
+            self.lbl_err.setText(
+                f"{strings.MSG_EXCEPTION_PATH_REDACTED} ({type(e).__name__})"
+            )
+        self._refresh_ref_status()
 
     def _show_busy_open(self) -> None:
         self.lbl_status.setText(strings.MSG_BUSY_CANNOT_OPEN)
@@ -227,6 +278,8 @@ class AnalyzeScreen(QWidget):
             # Nguyên tắc: khung hình gốc từ camera tự động kích hoạt nhánh kiểm tra Deepfake trước.
             self.chk_df.setChecked(True)
             self.load_path(dlg.captured_path)
+            if self._path is not None and self._ref_store.get_reference() is None:
+                self.lbl_ref.setText(strings.ANALYZE_CAMERA_NEXT_STEP)
 
     def _open_demo_sample(self) -> None:
         if self._worker is not None:
@@ -300,6 +353,7 @@ class AnalyzeScreen(QWidget):
         self.btn_run.setEnabled(not running and self._path is not None)
         self.btn_send_enhance.setEnabled(not running and self._path is not None)
         self.btn_cancel.setEnabled(running)
+        self._refresh_ref_status()
         if not running:
             self.progress.setFormat("%p%")
         for c in (self.chk_kp, self.chk_bl, self.chk_ela,
@@ -328,6 +382,7 @@ class AnalyzeScreen(QWidget):
             self.lbl_err.setText(f"{out.code.value}: {out.message}")
             self.btn_run.setEnabled(False)
             self.btn_send_enhance.setEnabled(False)
+            self._refresh_ref_status()
             return
         self._path = path
         self._doc = out
@@ -339,6 +394,7 @@ class AnalyzeScreen(QWidget):
             f"{out.file_bytes // 1024} KB · EXIF: {ex_txt}")
         self.btn_run.setEnabled(True)
         self.btn_send_enhance.setEnabled(True)
+        self._refresh_ref_status()
 
     # --- run ---
     def _methods(self) -> list[str]:
@@ -373,7 +429,8 @@ class AnalyzeScreen(QWidget):
         self.progress.setValue(0)
         self._cancel_event = threading.Event()
         req = AnalysisRequest(
-            path=self._path, methods=methods, cancel=self._cancel_event)
+            path=self._path, methods=methods, cancel=self._cancel_event,
+            reference_path=self._ref_store.get_reference())
         self._worker = AnalysisWorker(self._svc, req)
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.result.connect(self._on_result)

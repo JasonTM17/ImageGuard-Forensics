@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -97,6 +98,17 @@ def test_deepfake_cues_detects_smooth_synthetic_roi_as_inconclusive() -> None:
     assert res.params_hash == cfg.snapshot_hash()
 
 
+def test_freq_scale_keeps_webcam_peak_below_saturation() -> None:
+    """peak_ratio ~8 (mặt webcam) không được trở lại freq=1; lưới ~29 vẫn bão hòa."""
+    source = Path("src/imageguard/forensics/auxiliary/deepfake_cues.py").read_text(
+        encoding="utf-8"
+    )
+    assert "(peak_ratio - 4.0) / 14.0" in source
+    assert "(peak_ratio - 3.3) / 2.2" not in source
+    mild = float(np.clip((8.0 - 4.0) / 14.0, 0.0, 1.0))
+    assert mild < 0.5
+
+
 def test_deepfake_cues_detects_fft_checkerboard_artifact() -> None:
     rng = np.random.default_rng(77)
     img = np.clip(128 + rng.normal(0.0, 10.0, (256, 256, 3)), 0, 255).astype(np.float32)
@@ -107,10 +119,76 @@ def test_deepfake_cues_detects_fft_checkerboard_artifact() -> None:
     u8 = np.clip(img, 0, 255).astype(np.uint8)
 
     res = DeepfakeCues().analyze(_doc(u8, "checkerboard.png"), load_thresholds())
-    assert res.evidence["freq_cue"] >= 0.45
     assert res.evidence["fft_hf_peak_ratio"] > 4.0
+    # Lưới 3px có peak_ratio trung bình (~7.6) nhưng năng lượng phổ tập trung
+    # (hf_conc8 ~0.046 so với mặt ~0.003) nên grid_score vẫn kéo freq_cue >= 0.45 —
+    # Wukong claim 5 (plan 261124-2152): recalibration của peak_score không được
+    # che khuất lưới tuần hoàn ở dải peak 4..15.
+    assert res.evidence["fft_hf_conc8"] > 0.02
+    assert 0.45 <= res.evidence["freq_cue"] < 1.0
     assert res.verdict in {Verdict.INCONCLUSIVE, Verdict.NO_INDICATION}
     assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
+
+
+def test_fft_grid_concentration_catches_upsampling_but_not_face() -> None:
+    """Hồi quy Wukong claim 5: upsample NN 4x của mặt thật vẫn bị cờ (freq_cue cao),
+    trong khi mặt textured tự nhiên thì freq_cue ~0 (không báo giả pillar 4)."""
+    cfg = load_thresholds()
+    face = _synthetic_face_frame(smooth_face=False)
+    small = cv2.resize(face, (face.shape[1] // 4, face.shape[0] // 4), interpolation=cv2.INTER_AREA)
+    up4 = cv2.resize(small, (face.shape[1], face.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+    res_face = DeepfakeCues().analyze(_doc(face, "face.png"), cfg)
+    res_up = DeepfakeCues().analyze(_doc(up4, "face_nn4x.png"), cfg)
+
+    assert res_face.evidence["freq_cue"] < 0.15
+    assert res_face.evidence["fft_hf_conc8"] < 0.006
+    assert res_up.evidence["freq_cue"] >= 0.55
+    assert res_up.evidence["fft_hf_conc8"] > res_face.evidence["fft_hf_conc8"]
+    for res in (res_face, res_up):
+        assert res.verdict in {Verdict.INCONCLUSIVE, Verdict.NO_INDICATION, Verdict.NOT_APPLICABLE}
+        assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
+
+
+def _face_like_frame(seed: int) -> np.ndarray:
+    """Mặt tổng hợp có seed (ellipse da + 2 mắt + nhiễu cảm biến) để cohort nhiều seed."""
+    rng = np.random.default_rng(seed)
+    img = np.clip(128 + rng.normal(0, 14, (320, 320, 3)), 0, 255).astype(np.float32)
+    cv2.ellipse(img, (160, 150), (70, 90), 0, 0, 360, (170, 140, 120), -1)
+    cv2.circle(img, (135, 135), 9, (30, 30, 40), -1)
+    cv2.circle(img, (185, 135), 9, (30, 30, 40), -1)
+    img += rng.normal(0, 6, img.shape)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def _grid3px_frame(seed: int) -> np.ndarray:
+    """Lưới tuần hoàn 3px kiểu GAN/Diffusion upsampling trên nền nhiễu (chu kỳ 3px)."""
+    rng = np.random.default_rng(seed)
+    img = np.clip(128 + rng.normal(0, 10, (256, 256, 3)), 0, 255).astype(np.float32)
+    yy, xx = np.mgrid[64:192, 64:192]
+    img[64:192, 64:192] += (22.0 * np.cos(2 * np.pi * xx / 3.0) * np.cos(2 * np.pi * yy / 3.0))[:, :, None]
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def test_fft_conc8_threshold_separates_faces_from_grids_across_seeds() -> None:
+    """Ngưỡng grid_score (conc8 > 0.006) không overfit 1 seed: cohort 20 seed,
+    mọi mặt đều conc8 < 0.006, mọi lưới 3px đều conc8 > 0.02 (biên ~16x).
+    Số đo từ chạy thật 2026-11-24 (plan 261124-2152 ledger) — cohort synthetic,
+    không phải số đo camera thật."""
+    from imageguard.forensics.auxiliary.deepfake_cues import _fft_highfreq_cue
+
+    def _conc8(img: np.ndarray) -> float:
+        g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        h, w = g.shape
+        roi = g[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
+        return _fft_highfreq_cue(roi)[3]
+
+    face_concs = [_conc8(_face_like_frame(1000 + s)) for s in range(20)]
+    grid_concs = [_conc8(_grid3px_frame(2000 + s)) for s in range(20)]
+
+    assert max(face_concs) < 0.006
+    assert min(grid_concs) > 0.02
+    assert min(grid_concs) > 8 * max(face_concs)
 
 
 def test_deepfake_cues_non_face_smooth_camera_scene_avoids_false_positive() -> None:

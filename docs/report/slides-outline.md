@@ -143,6 +143,10 @@ chỉ đóng góp `INCONCLUSIVE`.
 
 - Bốn nhóm cue phụ: noise σ-MAD, `noise_local` hai tầng, frequency (spectrum/blockiness),
   splicing (noise × ELA) — tất cả là exploratory (`docs/algorithms.md`).
+- Cue deepfake/AI (`deepfake_cues`): 6 trụ cột DIP trên ROI mặt (Haar/skin+SAT, nhiễu dư σ,
+  LBP χ², phổ 2D FFT, Canny-Hough biên ghép, đối xứng HOG/Hu) + mốc tham chiếu cùng phiên và
+  burst 4–6 khung — chỉ `NO_INDICATION`/`INCONCLUSIVE`, không bao giờ `SUSPICIOUS`
+  (`src/imageguard/forensics/auxiliary/deepfake_cues.py`, `docs/limitations.md`).
 - Fusion: `SUSPICIOUS_INDICATION` cần ít nhất một detector copy-move; nếu mọi method chạy được đều
   `NO_INDICATION` thì kết quả là `NO_INDICATION`; còn lại `INCONCLUSIVE`
   (`src/imageguard/forensics/fusion.py`).

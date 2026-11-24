@@ -215,3 +215,38 @@ A11Y_SETTINGS_TREE = "Cây ngưỡng thuật toán"
 A11Y_VERDICT_BANNER = "Tóm tắt dấu hiệu tổng thể"
 
 A11Y_MAIN_TABS = "Điều hướng chức năng chính"
+
+DEEPFAKE_PREVIEW_TITLE = "Dấu hiệu khám phá trên khung gốc"
+DEEPFAKE_PREVIEW_DISCLAIMER = (
+    "Đây là tín hiệu khám phá trên khung hình gốc, không phải kết luận ảnh giả "
+    "và không nhận diện danh tính."
+)
+CAMERA_BTN_ACCEPT_FRAME = "Dùng khung này để phân tích"
+CAMERA_BTN_RETAKE = "Chụp lại"
+ANALYZE_BTN_SET_REFERENCE = "Lưu khung này làm mốc cùng phiên"
+ANALYZE_BTN_CLEAR_REFERENCE = "Xóa mốc cùng phiên"
+ANALYZE_REFERENCE_READY = (
+    "Đã có mốc cùng phiên. Lần phân tích sau sẽ so residual, LBP và FFT trong "
+    "vùng mặt. Không nhận diện danh tính."
+)
+ANALYZE_REFERENCE_MISSING = "Chưa có mốc cùng phiên."
+ANALYZE_CAMERA_NEXT_STEP = (
+    "Khung camera này không phải kết luận deepfake. "
+    "Lưu nó làm mốc cùng phiên, rồi phân tích một khung nghi vấn khác."
+)
+CAMERA_BURST_CHECK = "Chụp 5 khung liên tiếp để xem mặt có đứng yên"
+CAMERA_BURST_HINT = (
+    "Năm khung gần như không đổi có thể là ảnh tĩnh hoặc màn hình phát lại. "
+    "Đây chỉ là tín hiệu khám phá."
+)
+CAMERA_DUAL_HINT = (
+    "Phát hiện thêm một camera. Có thể chụp song song để so hai cảm biến. "
+    "Một webcam vẫn phân tích được."
+)
+CAMERA_SINGLE_LIMIT = (
+    "Một camera: sáu trụ cột trên khung gốc, không so chéo cảm biến."
+)
+DEEPFAKE_PREVIEW_LIVE_TEXTURE = (
+    "Mặt còn nhiễu cảm biến. Kết quả này không phải nhận diện deepfake."
+)
+DEEPFAKE_VERDICT_SCREEN = "Không phải kết luận deepfake."

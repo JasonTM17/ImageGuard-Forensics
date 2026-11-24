@@ -7,7 +7,7 @@ import threading
 import numpy as np
 import pytest
 from PIL import Image
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 
 from imageguard.ui.widgets import camera_dialog as camera
 
@@ -17,6 +17,9 @@ def device(qtbot, tmp_path):
     path = tmp_path / "camera.png"
     Image.fromarray(np.full((80, 96, 3), 100, np.uint8)).save(path)
     dialog = camera.CameraCaptureDialog(out_dir=tmp_path)
+    dialog._burst_enabled = False
+    dialog.chk_burst.setChecked(False)
+    dialog.lbl_probe_info.setText("")
     qtbot.addWidget(dialog)
     dialog.show()
     entered, release = threading.Event(), threading.Event()
@@ -157,6 +160,7 @@ def test_capture_uses_source_values_from_dispatch(qtbot, monkeypatch, device):
         release.set()
     qtbot.waitUntil(lambda: dialog._worker is None)
     assert dialog.captured_path == path
+    qtbot.mouseClick(dialog.btn_accept_frame, Qt.MouseButton.LeftButton)
     assert accepted_threads == [threading.get_ident()]
     assert threads[0] != accepted_threads[0]
 
