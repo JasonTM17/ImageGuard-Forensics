@@ -22,7 +22,7 @@ Tài liệu cho **bảo vệ đồ án** môn Xử lý ảnh: người trình b�
 | Xuất Markdown qua `ReportService` (tương đương nút GUI) | **PASS** |
 | Smoke GUI 4 s (process không thoát sớm) | **PASS** — 2026-11-12: quan sát smoke chưa lưu receipt; **2026-11-21: PASS offscreen (`alive_at_4s=true`), receipt đã lưu cục bộ tại `plans/261121-2135-hoan-thien-du-an-va-cac-gate-con-thieu/reports/demo-receipt-261121/` (gitignored — chỉ có trên máy tác giả)** |
 | Demo `ipkit` (CLI) | **PASS** |
-| Thao tác GUI có màn hình (overlay, lịch sử, Tăng cường) | **NOT_RUN** trong phiên tự động — presenter chạy tay khi máy chiếu |
+| Thao tác GUI có màn hình (overlay, lịch sử, Tăng cường) | **2026-11-24: hành trình phân tích tự động trên cửa sổ thật exe PASS** (UIA qua accessibility contract; banner verdict + persist; receipt cục bộ trong `plans/261121-2135-.../reports/packaged-runtime-261124-f06d76e/`); overlay/lịch sử/Tăng cường presenter chạy tay |
 
 ---
 
@@ -150,7 +150,7 @@ Quan sát: thư mục `data\artifacts\<analysis_id>\` chứa `copy_move_keypoint
 
 ## Phần 4 — GUI: mở ảnh, phân tích, overlay (≈2,5 phút) — thao tác trực tiếp
 
-> **Trạng thái ghi nhận:** **NOT_RUN** (cần màn hình). Đã **PASS** smoke: process `python -m imageguard <ảnh>` chạy ≥4 s không thoát sớm (offscreen) — từ 2026-11-21 smoke này **đã có receipt** lưu cục bộ (xem ma trận bên trên).
+> **Trạng thái ghi nhận:** **2026-11-24: PASS (tự động, cửa sổ thật)** cho luồng Phần 4 trên **exe đóng gói**: mở ảnh argv → bấm "Chạy phân tích" qua UIA accessibility → banner verdict "Có dấu hiệu nghi vấn" + "Dấu hiệu: Copy-Move (keypoint SIFT/ORB)" → app persist 1 báo cáo + 3 method rows vào SQLite cạnh exe (receipt `native-journey-receipt.json`, thư mục gốc cục bộ gitignored). Bước kẹp overlay + đọc thẻ method vẫn do presenter chạy tay. Smoke offscreen ≥4 s đã có receipt từ 2026-11-21.
 
 ```powershell
 cd <repo>

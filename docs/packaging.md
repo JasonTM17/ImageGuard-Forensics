@@ -51,7 +51,7 @@ dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu
 - Exe offscreen nhận ảnh fixture qua argv **PASS**: process alive ≥ 20 s rồi dừng sạch.
 - Journey offscreen (source, cùng commit; analyze keypoint+block+ela → persist → reopen → export Markdown) **PASS**: verdict `suspicious_indication`, 66 dòng Markdown, `report.json` artifact tồn tại; UI smoke pytest-qt offscreen **PASS** (145 passed). `configs/thresholds.yaml` SHA-256 trùng pin `3D7948F5…CE23` (ngưỡng không đổi).
 - Lần 2026-11-21 build bị BLOCKED duy nhất do RAM free < 4 GiB; lần này cùng rule đã PASS.
-- Vẫn giữ nguyên các giới hạn: native GUI journey (có màn hình) trên exe **NOT_RUN** (cần Computer Use); job CI `package-smoke` chỉ là signal `continue-on-error`; **không claim "packaged-ready"** vượt bằng chứng; khởi động trên máy sạch chưa kiểm.
+- **Native GUI journey (cửa sổ thật) trên exe stock — PASS 2026-11-24** (user cấp toàn quyền): driver UIA mở `ImageGuard.exe <ảnh synthforge argv>`, bấm "Chạy phân tích dấu hiệu" qua accessibility contract, banner verdict "Có dấu hiệu nghi vấn" hiển thị đúng, app persist 1 báo cáo + 3 method rows vào SQLite cạnh exe; receipt `native-journey-receipt.json` cùng thư mục (driver ở `plans/261121-2135-.../assets/native_gui_journey_exe.py`, gitignored). Overlay/lịch sử/Tăng cường vẫn NOT_RUN tự động — presenter chạy tay; job CI `package-smoke` chỉ là signal `continue-on-error`; **không claim "packaged-ready"** vượt bằng chứng; khởi động trên máy sạch chưa kiểm.
 
 ## Giới hạn đã biết
 
