@@ -22,7 +22,6 @@ from imageguard.evaluation.datasets import split_of
 from imageguard.evaluation.synthforge import ForgeSpec, _base_image, forge, generate_set
 
 _REPO_SRC = Path(__file__).resolve().parents[1] / "src"
-_PYTHON = Path(r"D:\ImageGuard Forensics\.venv\Scripts\python.exe")
 _FORBIDDEN_OUT = ("forged", "fake", "authentic")
 _VOLATILE_TOP = frozenset({"report_id", "created_at"})
 
@@ -42,7 +41,7 @@ def _run(
     *,
     timeout: float = 45.0,
 ) -> subprocess.CompletedProcess[str]:
-    exe = _PYTHON if _PYTHON.is_file() else sys.executable
+    exe = sys.executable
     return subprocess.run(
         [str(exe), "-m", "imageguard", *args],
         cwd=tmp_path,

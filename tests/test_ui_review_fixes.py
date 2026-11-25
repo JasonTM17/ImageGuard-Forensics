@@ -1,4 +1,4 @@
-"""Offscreen tests for UX review fixes (report D:\\ig-test\\ag\\report.md)."""
+"""Offscreen tests for UX review fixes."""
 
 from __future__ import annotations
 

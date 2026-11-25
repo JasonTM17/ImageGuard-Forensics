@@ -11,9 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-PYTHON = REPO.parent / "ImageGuard Forensics" / ".venv" / "Scripts" / "python.exe"
-if not PYTHON.is_file():
-    PYTHON = Path(sys.executable)
+PYTHON = Path(sys.executable)
 SCRIPT = REPO / "scripts" / "ipkit_demo.py"
 
 EXPECTED_PNGS = (

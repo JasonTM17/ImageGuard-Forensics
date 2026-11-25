@@ -22,7 +22,7 @@ from imageguard.core.models import AlgorithmResult, ForensicReport
 
 _LONG = "z" * 520
 _UNICODE_RTL = "\u202e\u0627\u0644\u0639\u0631\u0628\u064a\u0629_\u1ea3nh_" + "ñ" * 40
-# Đường dẫn pytest-of-Admin dài — giữ leaf ngắn trên đĩa; chuỗi 500+ qua setText/lỗi.
+# Đường dẫn tạm dài — giữ leaf ngắn trên đĩa; chuỗi 500+ qua setText/lỗi.
 _DISK_LEAF = "ảnh_" + ("x" * 80) + ".png"
 
 
