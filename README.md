@@ -40,6 +40,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | Tài liệu | Nội dung |
 | --- | --- |
 | [`docs/user-guide.md`](docs/user-guide.md) | Vận hành GUI/CLI, verdict, Enhance, ingest |
+| [`docs/camera-dialog.md`](docs/camera-dialog.md) | Luồng hộp thoại camera, worker và hủy thao tác |
 | [`docs/ui-design.md`](docs/ui-design.md) | Tab, worker, overlay, wording |
 | [`docs/architecture.md`](docs/architecture.md) | Layer, data flow, cây thư mục |
 | [`docs/testing-strategy.md`](docs/testing-strategy.md) | Kim tự tháp test, determinism, lệnh pytest |
