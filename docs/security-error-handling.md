@@ -47,3 +47,8 @@ pixels are not passed to fusion. A custody failure tag is the fixed string
 `enhance_sibling_failed` with no exception text and no path. The operator
 still has to treat the watched folder as sensitive: it holds the original
 images and, when this option is on, a derived copy.
+
+## Giới hạn tài nguyên
+
+- Burst webcam nạp qua cùng `safe_open` cho từng frame, nhưng working copy phục vụ cue thời gian được downscale tối đa 640 px/cạnh, yêu cầu kích thước đồng nhất và có ngân sách pixel tổng để không nhân trần bộ nhớ theo số frame.
+

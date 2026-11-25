@@ -192,6 +192,8 @@ def test_apply_reference_cue_preserves_fields_and_clean_evidence() -> None:
         "ref_residual_gap",
         "ref_lbp_chi2",
         "ref_fft_peak_delta",
+        "ref_face_detected",
+        "sus_face_detected",
     }
     for key in new_keys:
         v = out.evidence[key]
@@ -209,3 +211,19 @@ def test_apply_reference_cue_keeps_other_verdicts() -> None:
         base = _base_result(score=0.5, verdict=verdict)
         out = apply_reference_cue(base, ref, sus)
         assert out.verdict is verdict
+
+
+def test_reference_cue_requires_faces_in_both_frames() -> None:
+    rng = np.random.default_rng(11)
+    ref_arr = rng.integers(0, 255, (96, 128, 3), dtype=np.uint8)
+    sus_arr = rng.integers(0, 255, (96, 128, 3), dtype=np.uint8)
+    ref = _doc(ref_arr, "ref.png", sha="a" * 64)
+    sus = _doc(sus_arr, "sus.png", sha="b" * 64)
+    base = _base_result(score=0.20, verdict=Verdict.NO_INDICATION)
+
+    out = apply_reference_cue(base, ref, sus)
+    assert out.score == 0.20
+    assert out.verdict == Verdict.NO_INDICATION
+    assert out.evidence["ref_face_detected"] == 0
+    assert out.evidence["sus_face_detected"] == 0
+    assert any("cần phát hiện mặt ở cả hai khung" in x for x in out.limitations)

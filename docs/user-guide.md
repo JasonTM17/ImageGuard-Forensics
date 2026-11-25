@@ -79,7 +79,7 @@ cảm biến quanh ROI được chọn, method trả *Không đủ bằng chứn
 
 Trong hộp thoại camera, webcam mặc định chụp 5 khung. Ảnh xem trước và khung
 vừa chụp hiện các trụ cột khám phá trên khung gốc, kèm điểm đứng yên nếu có
-burst. Bấm *Dùng khung này để phân tích* mới đưa PNG sang tab Phân tích. Ô *Chụp 5 khung liên tiếp* chỉ dùng cho một webcam hoặc một camera
+burst. Bấm *Dùng khung này để phân tích* mới đưa PNG sang tab Phân tích. Ô *Chụp 5 khung trong vài giây* chỉ dùng cho một webcam hoặc một camera
 USB. Trên tab Phân tích, *Lưu khung này làm mốc cùng phiên* giữ một bản sao
 dưới `data/session_ref/` để lần chạy sau so vùng mặt. Mốc và burst đều là tín
 hiệu khám phá: công cụ không nhận diện danh tính và không kết luận ảnh giả.

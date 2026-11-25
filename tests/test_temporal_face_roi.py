@@ -47,3 +47,27 @@ def test_apply_temporal_cue_never_returns_suspicious() -> None:
     assert out.score <= 0.2 + TEMPORAL_SCORE_MAX_DELTA + 1e-6
     assert "temporal_static_score" in out.evidence
     assert "\\" not in str(out.evidence["temporal_static_score"])
+
+
+def test_laplacian_uses_documented_default_ksize1(monkeypatch) -> None:
+    import cv2
+
+    base = _synthetic_face_frame(smooth_face=False)
+    original = cv2.Laplacian
+    seen: list[int | None] = []
+
+    def spy(src, ddepth, **kwargs):
+        seen.append(kwargs.get("ksize"))
+        return original(src, ddepth, **kwargs)
+
+    monkeypatch.setattr(cv2, "Laplacian", spy)
+    temporal_static_cue([base.copy(), base.copy()])
+    assert seen and all(k in (None, 1) for k in seen)
+
+
+def test_static_non_face_burst_does_not_change_score_or_verdict() -> None:
+    frame = np.full((96, 128, 3), 120, dtype=np.uint8)
+    out = apply_temporal_cue(_result(0.2), [frame.copy() for _ in range(4)])
+    assert out.score == 0.2
+    assert out.verdict == Verdict.NO_INDICATION
+    assert out.evidence["temporal_face_detected"] == 0

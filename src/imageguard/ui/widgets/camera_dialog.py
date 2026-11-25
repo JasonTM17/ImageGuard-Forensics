@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import threading
 from collections.abc import Callable
@@ -82,6 +83,34 @@ def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
     )
 
 
+def _append_deepfake_text(diagnostics: str, frame: np.ndarray | None) -> str:
+    if frame is None:
+        return diagnostics
+    try:
+        extra = format_deepfake_preview(frame)
+    except Exception as exc:  # noqa: BLE001 - chỉ hiện tên loại lỗi, giữ chẩn đoán quang học
+        extra = type(exc).__name__
+    return f"{diagnostics}\n\n{extra}" if diagnostics else extra
+
+
+def _pillar_text_from_file(path: Path) -> str:
+    raw = path.read_bytes()
+    frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise ValueError("Không đọc được khung đã chụp.")
+    manifest = path.with_name(f"{path.stem}.burst.json")
+    if manifest.is_file():
+        from imageguard.ingest.camera_burst import load_burst_frames
+
+        return format_burst_deepfake_preview(
+            load_burst_frames(
+                manifest,
+                expected_primary_sha256=hashlib.sha256(raw).hexdigest(),
+            )
+        )
+    return format_deepfake_preview(frame)
+
+
 def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[bytes, str]:
     with tempfile.TemporaryDirectory() as tmp:
         preview_path = capture(Path(tmp))
@@ -90,7 +119,29 @@ def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[byt
         if frame is None:
             raise ValueError("Không đọc được ảnh xem trước từ camera.")
         diagnostics = analyze_camera_frame_ipkit(frame, is_dual=is_dual)
+        if preview_path.with_name(f"{preview_path.stem}.burst.json").is_file():
+            try:
+                deepfake_text = _pillar_text_from_file(preview_path)
+            except Exception as exc:  # noqa: BLE001 - preview phụ không được xoá chẩn đoán quang học
+                deepfake_text = type(exc).__name__
+            diagnostics = f"{diagnostics}\n\n{deepfake_text}" if diagnostics else deepfake_text
+        else:
+            diagnostics = _append_deepfake_text(diagnostics, frame)
     return raw, diagnostics
+
+
+def _capture_result(
+    capture: Callable[[Path], Path], out_dir: Path
+) -> tuple[Path, bytes, str, str]:
+    path = capture(out_dir)
+    raw = path.read_bytes()
+    try:
+        pillar_text = _pillar_text_from_file(path)
+        pillar_error = ""
+    except Exception as exc:  # noqa: BLE001 - giữ PNG gốc để phân tích dù bảng trụ lỗi
+        pillar_text = ""
+        pillar_error = type(exc).__name__
+    return path, raw, pillar_text, pillar_error
 
 
 class _CameraSignals(QObject):
@@ -315,15 +366,6 @@ class CameraCaptureDialog(QDialog):
             self.btn_retake.setEnabled(pending and self.btn_retake.isVisible())
         self._sync_inputs()
 
-    def _append_deepfake_diagnostics(self, diagnostics: str, frame: np.ndarray | None) -> str:
-        if frame is None:
-            return diagnostics
-        try:
-            extra = format_deepfake_preview(frame)
-        except Exception as exc:  # noqa: BLE001 - chỉ hiện tên loại lỗi, giữ chẩn đoán quang học
-            extra = type(exc).__name__
-        return f"{diagnostics}\n\n{extra}" if diagnostics else extra
-
     def _show_frame_preview(self, raw: bytes) -> bool:
         pix = QPixmap()
         if not pix.loadFromData(raw):
@@ -337,18 +379,6 @@ class CameraCaptureDialog(QDialog):
             )
         )
         return True
-
-    def _pillar_text_from_path(self, path: Path) -> str:
-        raw = path.read_bytes()
-        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-        if frame is None:
-            raise ValueError("Không đọc được khung đã chụp.")
-        manifest = path.with_name(f"{path.stem}.burst.json")
-        if manifest.is_file():
-            from imageguard.ingest.camera_burst import load_burst_frames
-
-            return format_burst_deepfake_preview(load_burst_frames(manifest))
-        return format_deepfake_preview(frame)
 
     def _retake_capture(self) -> None:
         self.captured_path = None
@@ -389,24 +419,17 @@ class CameraCaptureDialog(QDialog):
             if not self._show_frame_preview(raw):
                 self.lbl_err.setText("Không hiển thị được ảnh xem trước từ camera.")
                 return
-            frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-            self.lbl_probe_info.setText(self._append_deepfake_diagnostics(diagnostics, frame))
+            self.lbl_probe_info.setText(diagnostics)
         elif operation == "capture":
-            self.captured_path = value
-            try:
-                raw = value.read_bytes()
-            except Exception as exc:  # noqa: BLE001
-                self.lbl_err.setText(type(exc).__name__)
-                self.captured_path = None
-                return
+            path, raw, pillar_text, pillar_error = value
+            self.captured_path = path
             if not self._show_frame_preview(raw):
                 self.lbl_err.setText("Không hiển thị được khung đã chụp.")
                 self.captured_path = None
                 return
-            try:
-                self.lbl_probe_info.setText(self._pillar_text_from_path(value))
-            except Exception as exc:  # noqa: BLE001 - giữ PNG gốc để phân tích dù bảng trụ lỗi
-                self.lbl_err.setText(type(exc).__name__)
+            self.lbl_probe_info.setText(pillar_text)
+            if pillar_error:
+                self.lbl_err.setText(pillar_error)
             self.btn_accept_frame.setVisible(True)
             self.btn_retake.setVisible(True)
             self._set_busy(False)
@@ -419,7 +442,7 @@ class CameraCaptureDialog(QDialog):
         if self._worker is not None or self._closed:
             return
         self.captured_path = None
-        self._start_job("capture", partial(self._capture_request(), self._out_dir))
+        self._start_job("capture", partial(_capture_result, self._capture_request(), self._out_dir))
 
     def done(self, result: int) -> None:
         self._closed = True

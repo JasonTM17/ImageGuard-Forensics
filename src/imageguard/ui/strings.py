@@ -234,10 +234,10 @@ ANALYZE_CAMERA_NEXT_STEP = (
     "Khung camera này không phải kết luận deepfake. "
     "Lưu nó làm mốc cùng phiên, rồi phân tích một khung nghi vấn khác."
 )
-CAMERA_BURST_CHECK = "Chụp 5 khung liên tiếp để xem mặt có đứng yên"
+CAMERA_BURST_CHECK = "Chụp 5 khung trong vài giây để xem mặt có đứng yên"
 CAMERA_BURST_HINT = (
-    "Năm khung gần như không đổi có thể là ảnh tĩnh hoặc màn hình phát lại. "
-    "Đây chỉ là tín hiệu khám phá."
+    "Nếu mặt gần như không đổi trong vài giây, hệ thống chỉ đánh dấu cần đối "
+    "chiếu thêm. Người thật cũng có thể đứng yên."
 )
 CAMERA_DUAL_HINT = (
     "Phát hiện thêm một camera. Có thể chụp song song để so hai cảm biến. "

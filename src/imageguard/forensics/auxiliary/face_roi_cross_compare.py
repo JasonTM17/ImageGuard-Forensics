@@ -2,7 +2,8 @@
 
 Ngữ cảnh (plan v2): operator lưu một khung webcam làm reference rồi phân tích
 khung sau. Nếu vùng mặt ở khung sau mất vi kết cấu cảm biến so với reference
-(da bị làm mịn kiểu AI/deepfake), cue tham chiếu tăng. Đây là tín hiệu khám
+(da bị làm mịn kiểu AI/deepfake), cue tham chiếu tăng. Cue chỉ thay đổi
+điểm/verdict khi cả hai ROI đều được phát hiện là mặt. Đây là tín hiệu khám
 phá bổ sung cho ``DeepfakeCues`` — theo contract AUX_METHODS nó chỉ có thể
 nâng ``NO_INDICATION`` → ``INCONCLUSIVE``, KHÔNG BAO GIỜ ``SUSPICIOUS``.
 
@@ -189,9 +190,16 @@ def apply_reference_cue(
     limitations = list(result.limitations)
     cue = float(cmp["ref_combined_cue"])
 
+    both_faces = bool(cmp["ref_face_detected"] and cmp["sus_face_detected"])
     if cmp["same_frame"]:
         limitations.append(
             "ảnh nghi vấn trùng byte với ảnh tham chiếu phiên — cue tham chiếu = 0"
+        )
+    elif not both_faces:
+        limitations.append(
+            "cue tham chiếu không áp dụng — cần phát hiện mặt ở cả hai khung "
+            f"(ref={int(bool(cmp['ref_face_detected']))}, "
+            f"suspect={int(bool(cmp['sus_face_detected']))})"
         )
     else:
         if score is not None:
@@ -221,6 +229,8 @@ def apply_reference_cue(
             "ref_residual_gap": cmp["ref_residual_gap"],
             "ref_lbp_chi2": cmp["ref_lbp_chi2"],
             "ref_fft_peak_delta": cmp["ref_fft_peak_delta"],
+            "ref_face_detected": int(bool(cmp["ref_face_detected"])),
+            "sus_face_detected": int(bool(cmp["sus_face_detected"])),
         }
     )
 

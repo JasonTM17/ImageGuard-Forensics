@@ -206,3 +206,20 @@ def test_message_free_device_error_cannot_signal_success(qtbot, monkeypatch, dev
     assert dialog.captured_path is None
     assert "RuntimeError" in dialog.lbl_err.text()
     assert dialog.btn_capture.isEnabled()
+
+
+def test_deepfake_formatting_runs_off_gui_thread(qtbot, monkeypatch, device):
+    dialog, path, *_ = device
+    gui_thread = threading.get_ident()
+    seen = []
+    monkeypatch.setattr(camera, "capture_device_frame", lambda *_args: path)
+
+    def fake_format(frame):
+        seen.append(threading.get_ident())
+        return "deepfake text"
+
+    monkeypatch.setattr(camera, "format_deepfake_preview", fake_format)
+    dialog.capture_now()
+    qtbot.waitUntil(lambda: dialog.captured_path == path, timeout=5000)
+    qtbot.waitUntil(lambda: dialog.lbl_probe_info.text() == "deepfake text", timeout=5000)
+    assert seen and seen[0] != gui_thread

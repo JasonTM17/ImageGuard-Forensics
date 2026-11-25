@@ -76,6 +76,8 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   hiệu chuẩn trên cohort synthetic, không phải camera thật.
 - Cùng phiên, operator có thể lưu một PNG làm mốc. Lần phân tích sau so residual,
   LBP và FFT trong ROI mặt với mốc đó. Không có mốc thì điểm 6 trụ không đổi.
-- Burst 4–6 khung PNG từ một camera ghi manifest basename cạnh khung chính.
-  ROI mặt gần như đứng yên chỉ nâng `NO_INDICATION` lên `INCONCLUSIVE`.
-  Không có số đo độ chính xác trên camera thật.
+- Burst 4–6 khung PNG từ một camera được đọc trong một phiên mở, cách nhau
+  khoảng 0.75 giây để chuyển động tự nhiên có thời gian xuất hiện. Manifest
+  basename cạnh khung chính ghi cadence và sha256 từng khung; phân tích bỏ qua
+  burst nếu hash không khớp primary PNG. ROI mặt gần như đứng yên chỉ nâng
+  `NO_INDICATION` lên `INCONCLUSIVE`. Không có số đo độ chính xác trên camera thật.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import secrets
 import sys
+import time
 import urllib.parse
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +50,16 @@ def _open_capture(device_index: int):
     return cv2.VideoCapture(device_index)
 
 
+def _is_valid_bgr_frame(candidate: object) -> bool:
+    return (
+        isinstance(candidate, np.ndarray)
+        and candidate.size > 0
+        and candidate.ndim == 3
+        and candidate.shape[2] == 3
+        and candidate.dtype == np.uint8
+    )
+
+
 def _read_frame_from_device(device_index: int, warmup_frames: int) -> np.ndarray:
     """Mở thiết bị, đọc ``warmup_frames`` để ổn định phơi sáng rồi trả về frame BGR uint8."""
     idx = _validate_non_negative_int(device_index, "device_index", minimum=0)
@@ -64,20 +75,69 @@ def _read_frame_from_device(device_index: int, warmup_frames: int) -> np.ndarray
             )
         for _ in range(warmup):
             ok, candidate = cap.read()
-            if (
-                ok
-                and isinstance(candidate, np.ndarray)
-                and candidate.size > 0
-                and candidate.ndim == 3
-                and candidate.shape[2] == 3
-                and candidate.dtype == np.uint8
-            ):
+            if ok and _is_valid_bgr_frame(candidate):
                 frame = candidate
         if frame is None:
             raise RuntimeError(
                 f"Không đọc được khung hình hợp lệ từ camera (index={idx})."
             )
         return frame
+    finally:
+        cap.release()
+
+
+def _read_spaced_frame_burst_from_device(
+    device_index: int,
+    warmup_frames: int,
+    frame_count: int,
+    frame_interval_s: float,
+) -> tuple[list[np.ndarray], list[float]]:
+    """Đọc nhiều frame trong một lần mở camera, cách nhau tối thiểu một khoảng.
+
+    Không đọc back-to-back ở tốc độ sensor: cue thời gian cần đủ khoảng trôi để
+    chuyển động tự nhiên xuất hiện; interval phải dương.
+    """
+    idx = _validate_non_negative_int(device_index, "device_index", minimum=0)
+    warmup = _validate_non_negative_int(warmup_frames, "warmup_frames", minimum=1)
+    count = _validate_non_negative_int(frame_count, "frame_count", minimum=1)
+    if isinstance(frame_interval_s, bool) or not isinstance(frame_interval_s, (int, float)):
+        raise TypeError("frame_interval_s must be a number")
+    interval = float(frame_interval_s)
+    if not 0.0 < interval <= 5.0:
+        raise ValueError("frame_interval_s must be in (0, 5] seconds")
+
+    cap = _open_capture(idx)
+    try:
+        if not cap.isOpened():
+            raise RuntimeError(
+                f"Không mở được thiết bị camera (index={idx}). "
+                "Kiểm tra kết nối webcam/camera ngoài."
+            )
+        for _ in range(warmup):
+            cap.read()
+
+        frames: list[np.ndarray] = []
+        read_times: list[float] = []
+        invalid_reads = 0
+        last_frame_at = 0.0
+        while len(frames) < count:
+            if frames and interval > 0.0:
+                wait = interval - (time.monotonic() - last_frame_at)
+                if wait > 0.0:
+                    time.sleep(wait)
+            ok, candidate = cap.read()
+            if ok and _is_valid_bgr_frame(candidate):
+                frames.append(candidate)
+                last_frame_at = time.monotonic()
+                read_times.append(last_frame_at)
+                invalid_reads = 0
+            else:
+                invalid_reads += 1
+                if invalid_reads > max(2, count):
+                    raise RuntimeError(
+                        f"Không đọc được đủ khung hình hợp lệ từ camera (index={idx})."
+                    )
+        return frames, read_times
     finally:
         cap.release()
 

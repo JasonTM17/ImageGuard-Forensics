@@ -102,7 +102,7 @@ class AnalysisService:
                     r = _with_reference_cue(r, doc, req.reference_path, self.cfg)
                 manifest = req.path.with_name(f"{req.path.stem}.burst.json")
                 if manifest.is_file():
-                    r = _with_temporal_cue(r, manifest)
+                    r = _with_temporal_cue(r, manifest, doc.sha256)
             results.append(r)
         if req.include_exif:
             results.append(audit_exif(doc, self.cfg))
@@ -228,16 +228,21 @@ def _with_reference_cue(
         return result
 
 
-def _with_temporal_cue(result: AlgorithmResult, manifest: Path) -> AlgorithmResult:
+def _with_temporal_cue(
+    result: AlgorithmResult, manifest: Path, primary_sha256: str
+) -> AlgorithmResult:
     """Nạp burst cạnh ảnh và áp cue đứng yên. Lỗi chỉ thêm tên loại exception."""
     try:
         from imageguard.forensics.auxiliary.temporal_face_roi import apply_temporal_cue
         from imageguard.ingest.camera_burst import load_burst_frames
 
-        return apply_temporal_cue(result, load_burst_frames(manifest))
+        return apply_temporal_cue(
+            result,
+            load_burst_frames(manifest, expected_primary_sha256=primary_sha256),
+        )
     except Exception as exc:  # noqa: BLE001 - burst là cue phụ, không hủy kết quả gốc
         result.limitations.append(
-            "bỏ qua so sánh các khung liên tiếp — không đọc được "
+            "bỏ qua so sánh các khung burst — không đọc được "
             f"({type(exc).__name__})"
         )
         return result

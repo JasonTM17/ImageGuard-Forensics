@@ -56,8 +56,15 @@ Study cổ điển đã ghi trên cohort thiết kế; arm **NAFNet (E3)** trên
 
 Mốc cùng phiên và burst 4–6 khung chỉ thêm tín hiệu trên khung gốc. Chúng không
 có cohort đo trên camera thật, không nhận diện một người, và không đổi hợp đồng
-`deepfake_cues`: không bao giờ `SUSPICIOUS_INDICATION`. Ảnh đã tăng cường vẫn
-không được đưa vào detector.
+`deepfake_cues`: không bao giờ `SUSPICIOUS_INDICATION`. Burst đọc trong một phiên
+mở camera với khoảng cách danh nghĩa 0.75 giây/khung; người thật đứng yên vẫn có
+thể cho điểm tĩnh cao, còn video phát lại có chuyển động vẫn có thể né cue.
+Driver camera có thể buffer frame nên cadence là danh nghĩa, không phải timestamp
+phần cứng. Manifest cũ thiếu sha256 bị bỏ qua vì không thể chứng minh thuộc đúng
+primary PNG; hash ngăn ghép nhầm/artifact chỉnh lẻ, không chống một người dùng
+local cố ý sửa đồng bộ cả file và manifest. Cả
+hai cue chỉ áp dụng thay đổi điểm/verdict khi ROI được phát hiện là mặt. Ảnh đã
+tăng cường vẫn không được đưa vào detector.
 
 Giới hạn đo được của trụ FFT (cohort synthetic 20 seed, 2026-11-24, không phải
 camera thật): sau khi hiệu chuẩn `peak_score` về `(peak_ratio - 4.0)/14.0` để

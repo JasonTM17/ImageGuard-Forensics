@@ -52,3 +52,9 @@ def test_camera_next_step_does_not_call_the_live_frame_a_deepfake() -> None:
     assert "mốc cùng phiên" in text
     assert "đã xác định giả" not in text.lower()
     assert strings.DEEPFAKE_VERDICT_SCREEN not in strings.VERDICT_LABEL.values()
+
+def test_static_non_face_burst_does_not_show_face_or_burst_claims() -> None:
+    frame = np.full((96, 128, 3), 120, dtype=np.uint8)
+    text = format_burst_deepfake_preview([frame.copy() for _ in range(5)])
+    assert strings.DEEPFAKE_PREVIEW_LIVE_TEXTURE not in text
+    assert strings.CAMERA_BURST_HINT not in text

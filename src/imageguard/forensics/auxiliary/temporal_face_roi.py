@@ -11,7 +11,7 @@ Cách đo (``temporal_static_cue``):
 1. ``_detect_face_roi`` của ``deepfake_cues`` chạy trên KHUNG GIỮA burst để
    chọn ROI — cùng detector 3 tầng với pipeline deepfake nên vùng đo nhất quán.
 2. Trong ROI đó, với mỗi khung lấy ảnh xám (luma) và đáp ứng Laplacian
-   (``cv2.Laplacian``, ksize=3) rồi tính phương sai thời gian theo từng pixel:
+   (``cv2.Laplacian``, ksize=1 mặc định) rồi tính phương sai thời gian theo từng pixel:
    ``mean_pix Var_t(luma)`` và ``mean_pix Var_t(laplacian)``.
 3. Hai đại lượng chuẩn hoá về [0,1] bằng span cố định (hiệu chuẩn trên cohort
    synthetic — xem ``tests/test_temporal_face_roi.py``) rồi trộn đều:
@@ -146,11 +146,11 @@ def temporal_static_cue(frames_bgr: list[np.ndarray]) -> dict:
     lap_rois: list[np.ndarray] = []
     for gray in grays:
         roi = gray[ry : ry + rh, rx : rx + rw]
-        luma_rois.append(roi)
+        luma_rois.append(roi.copy())
         # Laplacian tính trên toàn khung xám rồi mới crop — tránh biên giả ở
         # mép ROI (cv2.Laplacian dùng cửa sổ 3×3).
         lap_full = cv2.Laplacian(gray, cv2.CV_32F)
-        lap_rois.append(lap_full[ry : ry + rh, rx : rx + rw])
+        lap_rois.append(lap_full[ry : ry + rh, rx : rx + rw].copy())
 
     luma_stack = np.stack(luma_rois, axis=0)
     lap_stack = np.stack(lap_rois, axis=0)
@@ -219,7 +219,8 @@ def apply_temporal_cue(
             duration_ms=result.duration_ms + int((time.perf_counter() - t0) * 1000),
         )
 
-    if score is not None:
+    cue_applies = cue["frame_count"] >= 2 and bool(cue["face_detected"])
+    if score is not None and cue_applies:
         score = round(min(1.0, score + TEMPORAL_SCORE_MAX_DELTA * static), 4)
 
     if cue["frame_count"] >= 2:

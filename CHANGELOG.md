@@ -24,6 +24,8 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Changed
 
+- 2026-11-25 (camera burst hardening): burst webcam 4–6 khung nay đọc trong một phiên mở camera với khoảng cách danh nghĩa 0,75 giây/khung thay vì mở/đóng driver từng khung; manifest vẫn basename-only nhưng thêm cadence, sha256 primary/từng khung, offset đọc đo được và ghi atomic. Phân tích chỉ áp burst khi hash primary khớp ảnh đang mở; loader đi qua `safe_open` (giới hạn byte/pixel/magic) và từ chối symlink, kiểm tra kích thước đồng nhất và downscale working copy tối đa 640 px/cạnh để giới hạn bộ nhớ. Cue temporal/reference chỉ thay đổi điểm/verdict khi ROI được phát hiện là mặt; preview/capture camera tính deepfake diagnostics trong worker thread thay vì GUI thread. Các cue vẫn khám phá, không nhận diện danh tính và không có accuracy cohort camera thật.
+
 - 2026-11-24 (vòng 5 — user ủy quyền quyết định cho 4 item còn treo):
   - **Orphan sweep**: `reclaim_orphan_artifacts()` chạy lúc khởi động app/CLI persist/ingest setup — thu hồi dir report-id UUID không còn row Analysis (còn sót từ crash giữa reserve-dir và DB write); fail-closed hai tầng (DB lỗi → không xóa gì; dir bị khóa → chờ lần sau), chỉ đụng con trực tiếp dạng UUID của artifacts root.
   - **Watch-mode prune**: `_handled`/`_seen_hashes` chỉ còn là cache hữu hạn — entry của file đã biến mất bị prune cuối mỗi scan; custody log (tên, sha) vẫn là nguồn chân lý nên file quay lại không bị re-analyze.
