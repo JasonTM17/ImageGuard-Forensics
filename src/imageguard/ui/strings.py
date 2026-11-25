@@ -247,6 +247,6 @@ CAMERA_SINGLE_LIMIT = (
     "Một camera: sáu trụ cột trên khung gốc, không so chéo cảm biến."
 )
 DEEPFAKE_PREVIEW_LIVE_TEXTURE = (
-    "Mặt còn nhiễu cảm biến. Kết quả này không phải nhận diện deepfake."
+    "Tín hiệu làm mịn và biến đổi vi kết cấu ở vùng mặt đều thấp."
 )
 DEEPFAKE_VERDICT_SCREEN = "Không phải kết luận deepfake."

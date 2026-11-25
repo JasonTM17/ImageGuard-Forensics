@@ -72,15 +72,21 @@ cảnh báo trong limitations, nhưng lượt lưu chưa hoàn tất được th
 Nếu cảnh báo ghi cleanup không hoàn tất hoặc cần `recovery`, giữ mã báo cáo
 được nêu để kiểm tra và phục hồi trước khi tin vào lịch sử hay bản xuất còn sót.
 
-Nhánh Deepfake/AI nhận diện khung ghép dual-camera bằng heuristic tỷ lệ ảnh
-rộng; đó không phải xác nhận ảnh đến từ hai camera. Khi không có đủ nền cùng
-cảm biến quanh ROI được chọn, method trả *Không đủ bằng chứng*, không chấm
-điểm và không mượn nền của nửa ảnh còn lại.
+Nhánh Deepfake/AI dùng tỷ lệ ảnh rộng làm gợi ý bố cục ghép dual-camera.
+Nếu chỉ một nửa định vị được vùng mặt, hệ thống ưu tiên nửa đó. Khi thiếu
+nền cùng cảm biến để so sánh, phương pháp hiện *Không đủ bằng chứng* và lý do
+chưa tính điểm. Nếu cả hai nửa đều chưa định vị được mặt, thẻ kết quả ghi rõ
+phạm vi chỉ là vùng trung tâm của nửa được chọn.
+
+Với ảnh tải lên, bật *Dấu hiệu Deepfake / AI* hoặc chọn *Chế độ Camera / AI*.
+Thông báo chỉ sàng lọc vùng trung tâm cho biết trình định vị chưa tìm được
+vùng mặt. Ảnh quá nhỏ sẽ hiện lý do ở preview camera và thẻ phương pháp.
 
 Trong hộp thoại camera, webcam mặc định chụp 5 khung. Ảnh xem trước và khung
-vừa chụp hiện các trụ cột khám phá trên khung gốc, kèm điểm đứng yên nếu có
-burst. Bấm *Dùng khung này để phân tích* mới đưa PNG sang tab Phân tích. Ô *Chụp 5 khung trong vài giây* chỉ dùng cho một webcam hoặc một camera
-USB. Trên tab Phân tích, *Lưu khung này làm mốc cùng phiên* chuẩn hoá khung
+vừa chụp hiện các trụ cột khám phá trên khung gốc. Điểm đứng yên hiện khi bước
+phân tích burst định vị được vùng mặt. Bấm *Dùng khung này để phân tích* để đưa
+PNG sang tab Phân tích. Ô *Chụp 5 khung trong vài giây* chỉ dùng cho một webcam
+hoặc một camera USB. Trên tab Phân tích, *Lưu khung này làm mốc cùng phiên* chuẩn hoá khung
 hiện tại thành PNG lossless dưới `data/session_ref/`, không copy EXIF/GPS. Mốc
 có hiệu lực 8 giờ và chỉ được dùng khi sha256 còn khớp sidecar; sidecar chỉ
 giữ hash nguồn/hash bản chuẩn hoá và lifetime, không lưu basename hay đường dẫn

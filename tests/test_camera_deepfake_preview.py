@@ -58,3 +58,13 @@ def test_static_non_face_burst_does_not_show_face_or_burst_claims() -> None:
     text = format_burst_deepfake_preview([frame.copy() for _ in range(5)])
     assert strings.DEEPFAKE_PREVIEW_LIVE_TEXTURE not in text
     assert strings.CAMERA_BURST_HINT not in text
+    assert "temporal_frame_count: 5" in text
+    assert "temporal_static_score:" not in text
+    assert "chưa định vị được vùng mặt" in text.lower()
+
+
+def test_camera_preview_explains_small_frame() -> None:
+    text = format_deepfake_preview(np.zeros((32, 32, 3), dtype=np.uint8))
+
+    assert strings.VERDICT_LABEL["not_applicable"] in text
+    assert "ảnh quá nhỏ (32x32)" in text

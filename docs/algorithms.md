@@ -65,7 +65,10 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   nhiễu phần dư σ + Otsu/CCL, vi kết cấu LBP χ², đỉnh tuần hoàn/rolloff 2D FFT,
   biên ghép Canny + boundary + Hough, và bất đối xứng HOG/Hu.
 - Hỗ trợ ảnh ghép Dual-Camera Cross-Sensor (`W ≥ 2.1·H`) bằng phân tích độc
-  lập từng nửa cảm biến. Aux signal — không bao giờ trả `SUSPICIOUS_INDICATION`.
+  lập từng nửa cảm biến. Nếu chỉ một nửa định vị được vùng mặt, ưu tiên nửa
+  đó. Nếu thiếu nền cùng cảm biến để so sánh, phương pháp không chấm điểm và
+  kết quả không tính vào đồng thuận tín hiệu phụ. Aux signal — không bao giờ
+  trả `SUSPICIOUS_INDICATION`.
 - Đỉnh phổ `peak_ratio` khoảng 8 trên ROI mặt webcam là cấu trúc mặt thật.
   `freq_cue` chỉ bão hòa khi đỉnh cao hơn nhiều (lưới synthetic). Một mình
   đỉnh đó không biến khung webcam thành kết luận deepfake.
@@ -74,6 +77,9 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   (GAN/Diffusion) dồn năng lượng vào ít đỉnh nên `grid_score` cao ở cả dải
   `peak_ratio` trung bình 4–15, còn cấu trúc mặt thật rải đều nên ≈ 0. Số đo
   hiệu chuẩn trên cohort synthetic, không phải camera thật.
+  Vùng phẳng có điểm FFT trung tính. Khi chỉ sàng lọc vùng trung tâm, cờ
+  cần tín hiệu kết cấu hỗ trợ, chẳng hạn suy giảm nhiễu kèm chênh lệch LBP
+  hoặc tín hiệu biên. Đỉnh phổ và đường biên từ nền lặp có thể cùng xuất hiện.
 - Cùng phiên, operator có thể lưu một mốc PNG lossless đã qua `safe_open`, không
   copy EXIF/GPS và hết hạn sau 8 giờ. Lần phân tích sau so residual, LBP và FFT
   trong ROI mặt với mốc đó khi sha256 còn khớp sidecar; sidecar chỉ giữ hash

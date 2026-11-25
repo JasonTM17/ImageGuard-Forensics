@@ -7,6 +7,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import MethodName, Verdict
@@ -227,11 +228,31 @@ def test_deepfake_cues_flat_image_no_indication() -> None:
     res = DeepfakeCues().analyze(_doc(flat, "flat.png"), load_thresholds())
     assert res.verdict is Verdict.NO_INDICATION
     assert res.score is not None and res.score < 0.35
+    assert res.evidence["freq_cue"] == 0.0
 
     black = np.zeros((128, 128, 3), dtype=np.uint8)
     res_black = DeepfakeCues().analyze(_doc(black, "black.png"), load_thresholds())
     assert res_black.verdict is Verdict.NO_INDICATION
     assert res_black.score is not None and res_black.score < 0.35
+    assert res_black.evidence["freq_cue"] == 0.0
+
+
+def test_repeated_background_needs_texture_support_for_deepfake_flag() -> None:
+    rng = np.random.default_rng(307)
+    pattern = 18 * np.sin(2.0 * np.pi * np.arange(192) / 4)
+    image = np.clip(115 + pattern + rng.normal(0, 5, (192, 192)), 0, 255).astype(np.uint8)
+    cfg = load_thresholds()
+    cfg.raw["deepfake"] = {"score_thresh": 0.05}
+
+    res = DeepfakeCues().analyze(_doc(image), cfg)
+
+    assert res.evidence["face_detected"] is False
+    assert res.evidence["freq_cue"] >= 0.55
+    assert res.evidence["seam_hough_cue"] >= 0.70
+    assert res.score is not None and res.score >= 0.05
+    assert res.evidence["corroborated"] is False
+    assert res.verdict is Verdict.NO_INDICATION
+    assert res.mask is None
 
 
 def test_deepfake_cues_tiny_image_not_applicable() -> None:
@@ -273,3 +294,21 @@ def test_deepfake_cues_dual_camera_cross_sensor_detects_anomalous_half() -> None
     assert "seam_hough_lines" in res.evidence
     assert "hog_asym" in res.evidence
     assert res.verdict is Verdict.INCONCLUSIVE
+
+
+@pytest.mark.parametrize("face_side", ["left", "right"])
+def test_dual_camera_uses_single_detected_face_over_smooth_background(face_side: str) -> None:
+    face = _synthetic_face_frame()[:288]
+    rng = np.random.default_rng(307)
+    gray = np.clip(105 + rng.normal(0, 13, face.shape[:2]), 0, 255).astype(np.uint8)
+    gray[72:216, 80:240] = 110
+    room = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    frame = np.hstack((face, room) if face_side == "left" else (room, face))
+
+    res = DeepfakeCues().analyze(_doc(frame), load_thresholds())
+
+    assert res.evidence["dual_camera_mode"] is True
+    assert res.evidence["dual_roi_side"] == face_side
+    assert res.evidence["face_detected"] is True
+    assert res.verdict is Verdict.NO_INDICATION
+    assert res.mask is None

@@ -54,10 +54,12 @@ def _format_result(res) -> str:
         f"Kết quả sàng lọc: {verdict_label}. {strings.DEEPFAKE_VERDICT_SCREEN}",
     ]
     evidence = res.evidence or {}
-    keys = list(_EVIDENCE_KEYS) + [
-        "temporal_static_score",
-        "temporal_frame_count",
-    ]
+    if res.score is None or evidence.get("face_detected") is False:
+        lines.extend(res.limitations[:1])
+    has_temporal_face = bool(evidence.get("temporal_face_detected"))
+    keys = (*_EVIDENCE_KEYS, "temporal_frame_count")
+    if has_temporal_face:
+        keys = (*keys, "temporal_static_score")
     for key in keys:
         if key in evidence:
             lines.append(f"{key}: {evidence[key]}")
@@ -72,7 +74,7 @@ def _format_result(res) -> str:
         lines.append(strings.DEEPFAKE_PREVIEW_LIVE_TEXTURE)
     if (
         float(evidence.get("temporal_static_score") or 0.0) >= TEMPORAL_STATIC_MIN
-        and int(evidence.get("temporal_face_detected") or 0) == 1
+        and has_temporal_face
     ):
         lines.append(strings.CAMERA_BURST_HINT)
     return "\n".join(lines)

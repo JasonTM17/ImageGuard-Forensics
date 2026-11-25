@@ -244,7 +244,8 @@ def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float, float]
     tỷ lệ năng lượng của 8 đỉnh HF lớn nhất trên tổng năng lượng vành HF.
     """
     rh, rw = roi_gray.shape
-    if rh < 16 or rw < 16:
+    if rh < 16 or rw < 16 or np.ptp(roi_gray) == 0:
+        # Vùng phẳng không có phổ AC để suy ra mức suy hao cao tần.
         return 0.0, 1.0, 1.0, 0.0
     centered = roi_gray.astype(np.float32) - float(roi_gray.mean())
     win = np.outer(np.hanning(rh), np.hanning(rw)).astype(np.float32)
@@ -444,7 +445,7 @@ def _cue_map_to_doc(
 
 
 class DeepfakeCues:
-    """Detector khám phá dấu hiệu Deepfake / AI với 4 trụ cột Xử lý ảnh cổ điển."""
+    """Detector khám phá dấu hiệu Deepfake / AI với 6 trụ cột xử lý ảnh cổ điển."""
 
     name = "deepfake_cues"
 
@@ -519,9 +520,10 @@ class DeepfakeCues:
             dual_sigma_left = round(sig_in_l, 3)
             dual_sigma_right = round(sig_in_r, 3)
 
-            choose_right = (drop_r > drop_l + 0.05) or (
-                abs(drop_r - drop_l) <= 0.05 and face_r and not face_l
-            )
+            if face_l != face_r:
+                choose_right = face_r
+            else:
+                choose_right = drop_r > drop_l + 0.05
             if choose_right:
                 dual_roi_side = "right"
                 rx, ry, rw, rh = rect_r
@@ -550,8 +552,10 @@ class DeepfakeCues:
             )
 
         if not face_detected:
-            lim.append(
-                "không phát hiện khuôn mặt frontal — đang kiểm tra vùng trung tâm với ngưỡng đồng thuận đa tín hiệu"
+            lim.insert(
+                0,
+                "Chưa định vị được vùng mặt trên khung này. "
+                "Phân tích khung đơn chỉ sàng lọc vùng trung tâm.",
             )
 
         bx0 = min(bw - 1, max(0, rx // bs_eff))
@@ -567,7 +571,8 @@ class DeepfakeCues:
         if not np.any(outer_bg):
             outer_bg = ~inside_roi
         if dual_camera_mode and not np.any(outer_bg):
-            lim.append(
+            lim.insert(
+                0,
                 "không đủ nền cùng cảm biến trong nửa camera đã chọn "
                 "(ROI chiếm gần toàn bộ nửa) — không mượn nền camera còn lại"
             )
@@ -577,6 +582,7 @@ class DeepfakeCues:
                 t0,
                 lim,
                 evidence={
+                    "cue_unavailable": True,
                     "roi_source": roi_source,
                     "dual_camera_mode": dual_camera_mode,
                     "dual_sigma_left": dual_sigma_left,
@@ -664,15 +670,18 @@ class DeepfakeCues:
             )
         )
 
-        # Chống báo giả cho cảnh nền tự nhiên không có mặt (ví dụ bàn/tường nhẵn ở camera phụ):
-        # nếu chỉ là fallback trung tâm (không thấy mặt), đòi hỏi đồng thuận nhiều tín hiệu.
+        # Nền lặp có thể kích hoạt cả FFT và biên. Khi chỉ xét vùng giữa,
+        # cần có bằng chứng kết cấu hỗ trợ trước khi bật cờ.
         corroborated = True
         if not face_detected:
+            residual_support = smooth_cue >= 0.45 and roi_flag_frac >= 0.20
+            lbp_support = lbp_cue >= 0.18
+            spectral_or_boundary_support = (
+                freq_cue >= 0.55 or seam_cue >= 0.65 or seam_hough_cue >= 0.70
+            )
             corroborated = (
-                (smooth_cue >= 0.45 and roi_flag_frac >= 0.20 and (lbp_cue >= 0.18 or seam_cue >= 0.30))
-                or freq_cue >= 0.55
-                or seam_cue >= 0.65
-                or seam_hough_cue >= 0.70
+                (residual_support and (lbp_support or seam_cue >= 0.30))
+                or ((residual_support or lbp_support) and spectral_or_boundary_support)
             )
             if not corroborated:
                 raw_score *= 0.55
@@ -687,7 +696,7 @@ class DeepfakeCues:
             np.clip(heat_blocks, 0.0, 1.0), doc, dual_roi_side, (h, w), cv2.INTER_LINEAR
         )
 
-        has_flag = score >= thresh and (
+        has_flag = corroborated and score >= thresh and (
             kept_area > 0 or freq_cue >= 0.55 or seam_cue >= 0.65 or seam_hough_cue >= 0.70
         )
         if has_flag and kept_area == 0:
@@ -700,7 +709,8 @@ class DeepfakeCues:
         )
         verdict = Verdict.INCONCLUSIVE if has_flag else Verdict.NO_INDICATION
         if verdict == Verdict.INCONCLUSIVE:
-            lim.append(
+            lim.insert(
+                0 if face_detected else 1,
                 f"phát hiện bất thường mịn/LBP/phổ vùng ROI (score={score:.2f}, "
                 f"σ_in={med_in:.2f} vs σ_out={med_out:.2f}, lbp_χ²={lbp_chi2:.3f}) — cần đối chiếu thêm"
             )

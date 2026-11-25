@@ -12,9 +12,10 @@ import pytest
 
 import imageguard.forensics.auxiliary.deepfake_cues as dc_mod
 from imageguard.core.config import load_thresholds
-from imageguard.core.enums import Verdict
-from imageguard.core.models import ImageDocument
+from imageguard.core.enums import MethodName, Verdict
+from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.forensics.auxiliary.deepfake_cues import DeepfakeCues
+from imageguard.forensics.fusion import combine
 
 _HALF_H, _HALF_W = 240, 320
 _FULL_HALF = (0, 0, _HALF_W, _HALF_H)
@@ -79,7 +80,10 @@ def test_dual_full_half_roi_left_selected_never_borrows_right_background(
         assert res.verdict is Verdict.INCONCLUSIVE
         assert res.score is None
         assert res.mask is None
+        assert res.evidence["cue_unavailable"] is True
         assert any("nền cùng cảm biến" in item for item in res.limitations)
+        frequency = AlgorithmResult(MethodName.FREQUENCY_ANALYSIS, Verdict.INCONCLUSIVE)
+        assert combine([res, frequency])[:2] == (Verdict.INCONCLUSIVE, [])
 
 
 def test_dual_full_half_roi_right_selected_never_borrows_left_background(

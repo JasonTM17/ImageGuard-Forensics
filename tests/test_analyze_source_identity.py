@@ -141,6 +141,34 @@ def test_unchanged_source_happy_flow(qtbot, services, tmp_path: Path) -> None:
     assert not screen.btn_export.isHidden()
 
 
+def test_deepfake_card_explains_center_only_analysis(qtbot, services, tmp_path, monkeypatch) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from imageguard.ingest.session_reference import SessionReferenceStore
+    from imageguard.ui.screens.analyze import AnalyzeScreen
+    from imageguard.ui.widgets.verdict_panel import MethodCard
+
+    monkeypatch.setattr(
+        "imageguard.ui.screens.analyze.SessionReferenceStore",
+        lambda: SessionReferenceStore(tmp_path / "reference"),
+    )
+    analysis, _ = services
+    screen = AnalyzeScreen(analysis)
+    qtbot.addWidget(screen)
+    screen.load_path(_write_png(tmp_path / "wide.png", (192, 448), 120))
+    screen._apply_method_preset(["deepfake"])
+    screen.btn_run.click()
+    qtbot.waitUntil(lambda: screen._worker is None, timeout=30_000)
+
+    assert screen._report is not None
+    labels = [
+        label.text().lower()
+        for card in screen.cards_inner.findChildren(MethodCard)
+        for label in card.findChildren(QLabel)
+    ]
+    assert any("chưa định vị được vùng mặt" in text and "vùng trung tâm" in text for text in labels)
+
+
 def test_error_result_keeps_source_for_retry(qtbot, services, tmp_path: Path) -> None:
     from imageguard.ui.screens.analyze import AnalyzeScreen
 

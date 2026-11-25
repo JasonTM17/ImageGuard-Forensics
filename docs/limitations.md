@@ -76,8 +76,8 @@ thấp riêng lẻ ở trụ này — có thể still bị phát hiện qua các
 `grid_score` (độ tập trung đỉnh HF, `fft_hf_conc8`) bắt được lưới tuần hoàn kiểu
 GAN/Diffusion (chu kỳ 3px, `fft_hf_conc8` ~0.046) an toàn với mặt (~0.003) và
 nhiễu thuần (~0.003), nhưng có thể bật trên texture tuần hoàn tự nhiên (vải
-dệt, nan chớp) nếu ROI tình cờ là vùng đó — luật corroboration (không phát hiện
-mặt thì giảm điểm) giúp giảm báo giả cho thân bài.
+dệt, nan chớp). Khi chưa định vị được vùng mặt, đỉnh phổ và biên của nền lặp
+cần thêm tín hiệu kết cấu để bật cờ. Quy tắc này vẫn chỉ phục vụ sàng lọc.
 
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
