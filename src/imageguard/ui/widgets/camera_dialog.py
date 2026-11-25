@@ -36,6 +36,7 @@ from imageguard.ingest.camera import (
 )
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.error_redaction import sanitize_exception_text
 from imageguard.ui.widgets.camera_deepfake_preview import (
     format_burst_deepfake_preview,
     format_deepfake_preview,
@@ -214,7 +215,7 @@ class _CameraWorker(QRunnable):
             if not self.cancelled.is_set():
                 value = self.task()
         except Exception as exc:  # noqa: BLE001 - surface device/decode failures through Qt signals
-            error = str(exc) or type(exc).__name__
+            error = sanitize_exception_text(exc)
         finally:
             self.signals.completed.emit(value, error)
 

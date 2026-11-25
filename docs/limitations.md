@@ -62,7 +62,9 @@ thể cho điểm tĩnh cao, còn video phát lại có chuyển động vẫn c
 Driver camera có thể buffer frame nên cadence là danh nghĩa, không phải timestamp
 phần cứng. Manifest cũ thiếu sha256 bị bỏ qua vì không thể chứng minh thuộc đúng
 primary PNG; hash ngăn ghép nhầm/artifact chỉnh lẻ, không chống một người dùng
-local cố ý sửa đồng bộ cả file và manifest. Cả
+local cố ý sửa đồng bộ cả file và manifest. Mốc tham chiếu là bản PNG lossless
+hết hạn sau 8 giờ; expiry và hash chỉ giảm nguy cơ dùng nhầm mốc cũ/bị sửa,
+không chứng minh mốc được chụp live hay cùng một người. Cả
 hai cue chỉ áp dụng thay đổi điểm/verdict khi ROI được phát hiện là mặt. Ảnh đã
 tăng cường vẫn không được đưa vào detector.
 

@@ -226,8 +226,8 @@ CAMERA_BTN_RETAKE = "Chụp lại"
 ANALYZE_BTN_SET_REFERENCE = "Lưu khung này làm mốc cùng phiên"
 ANALYZE_BTN_CLEAR_REFERENCE = "Xóa mốc cùng phiên"
 ANALYZE_REFERENCE_READY = (
-    "Đã có mốc cùng phiên. Lần phân tích sau sẽ so residual, LBP và FFT trong "
-    "vùng mặt. Không nhận diện danh tính."
+    "Đã có mốc cùng phiên trong 8 giờ. Lần phân tích sau sẽ so residual, LBP "
+    "và FFT trong vùng mặt. Không nhận diện danh tính."
 )
 ANALYZE_REFERENCE_MISSING = "Chưa có mốc cùng phiên."
 ANALYZE_CAMERA_NEXT_STEP = (

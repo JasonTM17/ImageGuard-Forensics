@@ -13,6 +13,7 @@
 | SQL injection | SQLAlchemy ORM parameterized — không raw SQL string concat |
 | Unicode path Windows | imencode+write_bytes (không cv2.imwrite trực tiếp) |
 | Qt worker crash | Worker không chạm QWidget; exception → `failed` signal, không chết thread pool |
+| UI error leak host path/URL credential | `ui/error_redaction.py` redact URL hoàn toàn và thay absolute path bằng basename trước khi hiển thị trong Analyze/Enhance/Camera |
 
 ## Error taxonomy
 
@@ -35,6 +36,14 @@
 - Snapshot tải về được giữ lại cho đến khi operator xóa; ứng dụng không tải ảnh lên dịch vụ khác.
 - Khi được bật, tính năng này tạo yêu cầu HTTP(S) tới các host trong allowlist để kéo snapshot; ảnh không được gửi tới dịch vụ bên ngoài.
 - Thư mục ingest có thể chứa ảnh người. `consent_note` trong log thư mục là ghi chú do operator nhập, không phải bằng chứng về sự đồng ý.
+
+
+## Session reference custody
+
+- Reference được mở qua `safe_open` rồi encode lại PNG lossless: pixel phục vụ so sánh được giữ, EXIF/GPS và metadata nguồn không copy.
+- `reference.json` chỉ giữ sha256 bản chuẩn hoá, sha256 nguồn, thời điểm tạo và hết hạn; không lưu basename hay đường dẫn nguồn.
+- Reference hết hạn sau 8 giờ hoặc lệch hash/schema bị vô hiệu và bản copy nội bộ bị xoá. Điều này giảm reuse mốc cũ nhưng không chứng minh capture live.
+- Hai entry cố định là basename ngay dưới `data/session_ref/`; symlink không được resolve thành victim bên ngoài root khi ghi/xoá.
 
 ## Ingest viewing sibling
 

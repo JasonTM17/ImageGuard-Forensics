@@ -7,7 +7,6 @@ không bao giờ bị ghi đè.
 
 from __future__ import annotations
 
-import re
 import threading
 from pathlib import Path
 
@@ -41,6 +40,10 @@ from imageguard.evaluation.enhance_metrics import psnr, ssim
 from imageguard.evaluation.enhance_study import RESTORER_PARAMS
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.error_redaction import redact_paths_in_message
+from imageguard.ui.error_redaction import (
+    sanitize_exception_text as _sanitize_exception_text,
+)
 from imageguard.ui.widgets.camera_dialog import CameraCaptureDialog
 from imageguard.ui.widgets.image_canvas import ImageCanvas, ndarray_to_qpixmap
 from imageguard.ui.workers import EnhanceWorker, make_pool
@@ -96,51 +99,6 @@ _FIELD_SPECS = {
         ("median_k", "Lọc hạt cảm biến (Median)", "int", 1, 5, 2, 3),
     ),
 }
-
-
-_RE_QUOTED_PATH = re.compile(
-    r'"(?:[A-Za-z]:[\\/]|\\\\|/)[^"]*"|'
-    r"'(?:[A-Za-z]:[\\/]|\\\\|/)[^']*'"
-)
-_RE_UNC_PATH = re.compile(r"\\\\[^\\]+(?:\\[^\\\"'\n\r]+)+")
-_RE_WIN_ABS_PATH = re.compile(
-    r"[A-Za-z]:(?:(?:\\[^\\\"'\n\r]+)+|(?:/[^/\\\"'\n\r]+)+)"
-)
-_RE_POSIX_ABS_PATH = re.compile(r"/(?:[^/\\\"'\n\r]+(?:/[^/\\\"'\n\r]+)+)")
-_RE_PATH_LIKE = re.compile(
-    r"(?:[A-Za-z]:[\\/]|\\\\|/(?:home|Users|tmp|var|etc)(?:/|\\))"
-)
-
-
-def _path_match_to_basename(match: re.Match[str]) -> str:
-    token = match.group(0).strip("\"'")
-    return Path(token.replace("\\", "/")).name
-
-
-def _redact_paths_in_message(raw: str) -> str:
-    """Thay mọi đường dẫn tuyệt đối (kể cả có khoảng trắng) bằng tên file."""
-    if raw is None:
-        raise ValueError("message must be a string")
-    out = raw
-    for pattern in (
-        _RE_QUOTED_PATH,
-        _RE_UNC_PATH,
-        _RE_WIN_ABS_PATH,
-        _RE_POSIX_ABS_PATH,
-    ):
-        out = pattern.sub(_path_match_to_basename, out)
-    return out
-
-
-def _sanitize_exception_text(exc: BaseException) -> str:
-    """Rút gọn thông báo lỗi — không lộ đường dẫn host, chỉ tên file nếu có."""
-    raw = str(exc).strip()
-    if not raw:
-        return f"{type(exc).__name__}: {strings.MSG_EXCEPTION_PATH_REDACTED}"
-    sanitized = _redact_paths_in_message(raw)
-    if _RE_PATH_LIKE.search(sanitized):
-        return f"{type(exc).__name__}: {strings.MSG_EXCEPTION_PATH_REDACTED}"
-    return f"{type(exc).__name__}: {sanitized}"
 
 
 def _to_gray_2d(img: np.ndarray) -> np.ndarray:
@@ -395,7 +353,7 @@ class EnhanceScreen(QWidget):
             self._path = None
             self._doc = None
             self.canvas.clear_image()
-            self.lbl_err.setText(f"{out.code.value}: {out.message}")
+            self.lbl_err.setText(f"{out.code.value}: {redact_paths_in_message(out.message)}")
             self.btn_run.setEnabled(False)
             return
         self._path = path
@@ -564,7 +522,7 @@ class EnhanceScreen(QWidget):
     def _on_failed(self, msg: str) -> None:
         if self._cancel_event.is_set():
             return
-        self.lbl_err.setText(msg)
+        self.lbl_err.setText(redact_paths_in_message(msg))
 
     def _on_blend_changed(self, value: int) -> None:
         self._set_blend_readout(value)

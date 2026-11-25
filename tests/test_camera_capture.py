@@ -206,7 +206,10 @@ def test_camera_capture_dialog_modes_and_error_handling(
 
     # Lỗi khi chụp hiển thị lên lbl_err và không accept dialog.
     def fail_iot(_url: str, _out: Path) -> Path:
-        raise RuntimeError("http connection failed")
+        raise RuntimeError(
+            "http connection failed http://user:pass@192.168.1.99/shot.jpg "
+            "opening C:/Users/Jane Doe/secret.png"
+        )
 
     monkeypatch.setattr(dlg_mod, "capture_iot_http_frame", fail_iot)
     dlg.edit_url.setText("http://192.168.1.99/shot.jpg")
@@ -214,6 +217,11 @@ def test_camera_capture_dialog_modes_and_error_handling(
     qtbot.waitUntil(lambda: dlg._worker is None)
     assert dlg.captured_path is None
     assert "http connection failed" in dlg.lbl_err.text()
+    assert "<url>" in dlg.lbl_err.text()
+    assert "secret.png" in dlg.lbl_err.text()
+    assert "user:pass" not in dlg.lbl_err.text()
+    assert "192.168.1.99" not in dlg.lbl_err.text()
+    assert "Jane Doe" not in dlg.lbl_err.text()
 
     # Thành công với USB ngoài (index 2) -> gán captured_path.
     expected = tmp_path / "usb2.png"

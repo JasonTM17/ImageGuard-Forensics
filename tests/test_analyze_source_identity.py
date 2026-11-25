@@ -156,3 +156,24 @@ def test_error_result_keeps_source_for_retry(qtbot, services, tmp_path: Path) ->
     assert screen._path == p
     assert screen.btn_run.isEnabled()
     assert "DECODE_FAILED" in screen.lbl_err.text()
+
+
+def test_load_path_error_redacts_host_path(qtbot, services, tmp_path: Path, monkeypatch) -> None:
+    from imageguard.core import io as core_io
+    from imageguard.ui.screens.analyze import AnalyzeScreen
+
+    analysis, _ = services
+    screen = AnalyzeScreen(analysis)
+    qtbot.addWidget(screen)
+
+    def fail_open(_path, _cfg=None):
+        return ErrorResult(
+            ErrorCode.FILE_UNREADABLE,
+            "Không đọc được file: C:/Users/Jane Doe/secret.png",
+        )
+
+    monkeypatch.setattr(core_io, "safe_open", fail_open)
+    screen.load_path(tmp_path / "input.png")
+    assert "secret.png" in screen.lbl_err.text()
+    assert "Jane Doe" not in screen.lbl_err.text()
+    assert "C:/Users" not in screen.lbl_err.text()

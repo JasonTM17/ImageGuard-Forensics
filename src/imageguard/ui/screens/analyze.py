@@ -34,6 +34,7 @@ from imageguard.ingest.session_reference import SessionReferenceStore
 from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
+from imageguard.ui.error_redaction import redact_paths_in_message
 from imageguard.ui.widgets.camera_dialog import CameraCaptureDialog
 from imageguard.ui.widgets.image_canvas import (
     ImageCanvas,
@@ -379,7 +380,7 @@ class AnalyzeScreen(QWidget):
             self._path = None
             self._doc = None
             self.canvas.clear_image()
-            self.lbl_err.setText(f"{out.code.value}: {out.message}")
+            self.lbl_err.setText(f"{out.code.value}: {redact_paths_in_message(out.message)}")
             self.btn_run.setEnabled(False)
             self.btn_send_enhance.setEnabled(False)
             self._refresh_ref_status()
@@ -453,14 +454,14 @@ class AnalyzeScreen(QWidget):
         self._worker = None
         self._set_running(False)
         self._clear_results()
-        self.lbl_err.setText(msg)
+        self.lbl_err.setText(redact_paths_in_message(msg))
 
     def _on_result(self, out) -> None:
         self._worker = None
         self._set_running(False)
         if isinstance(out, ErrorResult):
             self._clear_results()
-            self.lbl_err.setText(f"{out.code.value}: {out.message}")
+            self.lbl_err.setText(f"{out.code.value}: {redact_paths_in_message(out.message)}")
             return
         doc = self._doc
         if doc is None or getattr(out, "image_sha256", None) != doc.sha256:

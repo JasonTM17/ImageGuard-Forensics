@@ -97,10 +97,10 @@ def test_sanitize_exception_text_paths(message, expected_tail):
 
 
 def test_redact_paths_in_message_rejects_none():
-    from imageguard.ui.screens.enhance import _redact_paths_in_message
+    from imageguard.ui.error_redaction import redact_paths_in_message
 
     with pytest.raises(ValueError, match="message must be a string"):
-        _redact_paths_in_message(None)  # type: ignore[arg-type]
+        redact_paths_in_message(None)  # type: ignore[arg-type]
 
 
 def test_sanitize_exception_empty_uses_generic():
@@ -122,9 +122,28 @@ def test_sanitize_exception_empty_uses_generic():
     ],
 )
 def test_redact_paths_basename_only(path):
-    from imageguard.ui.screens.enhance import _redact_paths_in_message
+    from imageguard.ui.error_redaction import redact_paths_in_message
 
-    redacted = _redact_paths_in_message(f"failed opening {path}")
+    redacted = redact_paths_in_message(f"failed opening {path}")
     assert redacted == "failed opening file.png"
     assert "Jane" not in redacted
     assert "Documents" not in redacted
+
+
+def test_sanitize_exception_text_redacts_url_credentials_and_host():
+    from imageguard.ui.screens.enhance import _sanitize_exception_text
+
+    out = _sanitize_exception_text(
+        _Exc("cannot reach http://user:pass@192.168.1.20/private/shot.jpg")
+    )
+    assert out == "_Exc: cannot reach <url>"
+    assert "user:pass" not in out
+    assert "192.168.1.20" not in out
+
+
+def test_redact_mixed_separator_windows_path():
+    from imageguard.ui.error_redaction import redact_paths_in_message
+
+    out = redact_paths_in_message(r"cannot open C:/Users/Jane Doe\secret.png")
+    assert out == "cannot open secret.png"
+    assert "Jane Doe" not in out

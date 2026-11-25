@@ -74,8 +74,11 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   (GAN/Diffusion) dồn năng lượng vào ít đỉnh nên `grid_score` cao ở cả dải
   `peak_ratio` trung bình 4–15, còn cấu trúc mặt thật rải đều nên ≈ 0. Số đo
   hiệu chuẩn trên cohort synthetic, không phải camera thật.
-- Cùng phiên, operator có thể lưu một PNG làm mốc. Lần phân tích sau so residual,
-  LBP và FFT trong ROI mặt với mốc đó. Không có mốc thì điểm 6 trụ không đổi.
+- Cùng phiên, operator có thể lưu một mốc PNG lossless đã qua `safe_open`, không
+  copy EXIF/GPS và hết hạn sau 8 giờ. Lần phân tích sau so residual, LBP và FFT
+  trong ROI mặt với mốc đó khi sha256 còn khớp sidecar; sidecar chỉ giữ hash
+  nguồn/hash bản chuẩn hoá và lifetime, không lưu basename hay đường dẫn nguồn.
+  Không có mốc hợp lệ thì điểm 6 trụ không đổi.
 - Burst 4–6 khung PNG từ một camera được đọc trong một phiên mở, cách nhau
   khoảng 0.75 giây để chuyển động tự nhiên có thời gian xuất hiện. Manifest
   basename cạnh khung chính ghi cadence và sha256 từng khung; phân tích bỏ qua
