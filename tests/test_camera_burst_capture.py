@@ -147,6 +147,7 @@ def test_analyze_reads_burst_manifest_beside_the_png(
 
     def _fake_apply(result, frames):
         seen.append(len(frames))
+        result.evidence["temporal_frame_count"] = len(frames)
         return result
 
     monkeypatch.setattr(
@@ -155,10 +156,14 @@ def test_analyze_reads_burst_manifest_beside_the_png(
     )
     from imageguard.services.analysis_service import AnalysisRequest, AnalysisService
 
-    AnalysisService().analyze(
+    report = AnalysisService().analyze(
         AnalysisRequest(path=primary, methods=["deepfake"], include_exif=False)
     )
     assert seen == [4]
+    deepfake = next(m for m in report.methods if m.method.value == "deepfake_cues")
+    assert deepfake.evidence["temporal_manifest_sha256"] == hashlib.sha256(
+        _manifest.read_bytes()
+    ).hexdigest()
 
 
 def test_load_burst_rejects_legacy_v1_manifest(tmp_path: Path) -> None:

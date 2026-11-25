@@ -187,3 +187,8 @@ quét đó; file đã bị đánh dấu từ lần trước không được đ�
 Để xử lý phần còn lại, chạy lại `ingest once <dir>` (file từng bị deferred
 được xếp trước ở lần quét kế tiếp) hoặc tăng `max_pending` trong file cấu hình
 ingest; `ingest watch` lặp lại hạn mức đó ở mỗi lần quét.
+
+## Kiểm chứng camera thật
+
+`PYTHONPATH=src python scripts/validate_camera_burst.py --device 0` chạy một live negative control và một frozen positive control trong thư mục tạm tự xoá. Output chỉ là JSON số/digest, không lưu ảnh hoặc database; kết quả dùng để kiểm tra pipeline, không phải accuracy cohort.
+

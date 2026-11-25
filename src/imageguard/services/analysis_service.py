@@ -7,6 +7,7 @@ worker thread; hàm này Qt-free, chạy được headless.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import threading
@@ -236,10 +237,13 @@ def _with_temporal_cue(
         from imageguard.forensics.auxiliary.temporal_face_roi import apply_temporal_cue
         from imageguard.ingest.camera_burst import load_burst_frames
 
-        return apply_temporal_cue(
-            result,
-            load_burst_frames(manifest, expected_primary_sha256=primary_sha256),
-        )
+        frames = load_burst_frames(manifest, expected_primary_sha256=primary_sha256)
+        cued = apply_temporal_cue(result, frames)
+        if len(frames) >= 2:
+            cued.evidence["temporal_manifest_sha256"] = hashlib.sha256(
+                manifest.read_bytes()
+            ).hexdigest()
+        return cued
     except Exception as exc:  # noqa: BLE001 - burst là cue phụ, không hủy kết quả gốc
         result.limitations.append(
             "bỏ qua so sánh các khung burst — không đọc được "

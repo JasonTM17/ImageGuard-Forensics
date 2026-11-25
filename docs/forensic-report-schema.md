@@ -111,7 +111,7 @@ Mỗi phần tử tương ứng một `AlgorithmResult` sau khi **loại bỏ** 
 | `copy_move_block` | `n_blocks`, `n_candidate_pairs`, `n_shifts_kept`, `top_shift_votes`, `work_size` | `work_size` là `[height, width]`. |
 | `ela` | `qualities`, `p99`, `per_quality_p99` | Heatmap không có trong JSON. |
 | `exif_audit` | `findings`, `exif_present`, `exif_missing` | Không có `score`. |
-| Các method khác (`noise_inconsistency`, `noise_local`, `frequency_analysis`, `splicing_cues`, `deepfake_cues`) | khóa riêng từng pipeline | Cùng quy tắc: không ndarray trên JSON. |
+| Các method khác (`noise_inconsistency`, `noise_local`, `frequency_analysis`, `splicing_cues`, `deepfake_cues`) | khóa riêng từng pipeline | Cùng quy tắc: không ndarray trên JSON. Với burst camera, `deepfake_cues` có thể có `temporal_manifest_sha256` làm digest provenance của sidecar đã ảnh hưởng cue. |
 
 Giá trị `null` trong evidence có nghĩa field không áp dụng hoặc không xuất được trên kênh JSON.
 

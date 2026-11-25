@@ -24,6 +24,8 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ### Changed
 
+- 2026-11-25 (camera privacy/provenance): dialog camera xoá capture chưa accept khi retake/cancel, kể cả worker hoàn tất sau khi dialog đã đóng; burst report thêm `temporal_manifest_sha256` để truy vết digest sidecar ảnh hưởng cue. Thêm `scripts/validate_camera_burst.py` chạy numeric-only live negative control và frozen positive control trong tempdir tự xoá; không lưu ảnh hoặc database.
+
 - 2026-11-25 (camera burst hardening): burst webcam 4–6 khung nay đọc trong một phiên mở camera với khoảng cách danh nghĩa 0,75 giây/khung thay vì mở/đóng driver từng khung; manifest vẫn basename-only nhưng thêm cadence, sha256 primary/từng khung, offset đọc đo được và ghi atomic. Phân tích chỉ áp burst khi hash primary khớp ảnh đang mở; loader đi qua `safe_open` (giới hạn byte/pixel/magic) và từ chối symlink, kiểm tra kích thước đồng nhất và downscale working copy tối đa 640 px/cạnh để giới hạn bộ nhớ. Cue temporal/reference chỉ thay đổi điểm/verdict khi ROI được phát hiện là mặt; preview/capture camera tính deepfake diagnostics trong worker thread thay vì GUI thread. Các cue vẫn khám phá, không nhận diện danh tính và không có accuracy cohort camera thật.
 
 - 2026-11-24 (vòng 5 — user ủy quyền quyết định cho 4 item còn treo):

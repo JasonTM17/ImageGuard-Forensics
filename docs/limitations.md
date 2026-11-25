@@ -80,3 +80,5 @@ mặt thì giảm điểm) giúp giảm báo giả cho thân bài.
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
 Giới hạn tài nguyên `safe_open` (100 MB, 80 MP) và SSRF khi bật ingest HTTP — [`docs/security-error-handling.md`](security-error-handling.md), [`docs/ingest.md`](ingest.md). DNS rebinding vẫn là rủi ro còn lại khi dùng HTTP snapshot.
+
+`scripts/validate_camera_burst.py` cung cấp positive control bằng các file frozen identical để kiểm tra logic end-to-end; đây vẫn không thay thế cohort replay thật qua màn hình/thiết bị phát lại.

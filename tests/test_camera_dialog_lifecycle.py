@@ -96,6 +96,8 @@ def test_close_during_device_wait_discards_late_results(qtbot, monkeypatch, devi
     assert accepted == []
     assert dialog.captured_path is None
     assert dialog.lbl_probe_info.text() == ""
+    if operation == "capture":
+        assert not path.exists()
 
 
 def test_probe_failure_is_displayed_and_retry_works(qtbot, monkeypatch, device):
@@ -223,3 +225,45 @@ def test_deepfake_formatting_runs_off_gui_thread(qtbot, monkeypatch, device):
     qtbot.waitUntil(lambda: dialog.captured_path == path, timeout=5000)
     qtbot.waitUntil(lambda: dialog.lbl_probe_info.text() == "deepfake text", timeout=5000)
     assert seen and seen[0] != gui_thread
+
+
+def test_discard_capture_artifacts_removes_unaccepted_burst(tmp_path):
+    names = [f"burst_{i}.png" for i in range(4)]
+    payloads = {name: f"png-{name}".encode() for name in names}
+    import hashlib
+    import json
+
+    sha_map = {}
+    for name, payload in payloads.items():
+        (tmp_path / name).write_bytes(payload)
+        sha_map[name] = hashlib.sha256(payload).hexdigest()
+    primary = tmp_path / names[2]
+    manifest = tmp_path / f"{primary.stem}.burst.json"
+    manifest.write_text(
+        json.dumps({"frames": names, "sha256": sha_map}), encoding="utf-8"
+    )
+
+    camera.discard_capture_artifacts(primary, tmp_path)
+
+    assert not manifest.exists()
+    assert all(not (tmp_path / name).exists() for name in names)
+
+
+def test_discard_capture_artifacts_keeps_frame_missing_hash(tmp_path):
+    import json
+
+    primary = tmp_path / "primary.png"
+    other = tmp_path / "other.png"
+    primary.write_bytes(b"primary")
+    other.write_bytes(b"other")
+    manifest = tmp_path / "primary.burst.json"
+    manifest.write_text(
+        json.dumps({"frames": ["other.png", "primary.png"], "sha256": {}}),
+        encoding="utf-8",
+    )
+
+    camera.discard_capture_artifacts(primary, tmp_path)
+
+    assert not primary.exists()
+    assert not manifest.exists()
+    assert other.exists()

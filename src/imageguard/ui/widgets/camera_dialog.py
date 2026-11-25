@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import threading
 from collections.abc import Callable
@@ -128,6 +129,56 @@ def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[byt
         else:
             diagnostics = _append_deepfake_text(diagnostics, frame)
     return raw, diagnostics
+
+
+def _unlink_matching_file(path: Path, expected_sha256: str | None = None) -> None:
+    """Xoá file artifact do dialog tạo; nếu có hash thì không xoá file đã bị đổi."""
+    try:
+        if not path.is_file():
+            return
+        if expected_sha256 is not None and (
+            hashlib.sha256(path.read_bytes()).hexdigest().lower()
+            != expected_sha256.lower()
+        ):
+            return
+        path.unlink()
+    except OSError:
+        pass
+
+
+def discard_capture_artifacts(path: Path, capture_dir: Path) -> None:
+    """Bỏ capture chưa được accept cùng burst sidecar do chính dialog tạo.
+
+    Chỉ đụng file ngay trong ``capture_dir``. Frame burst chỉ bị xoá khi hash
+    hiện tại còn khớp manifest; nếu user đã chỉnh sửa file, giữ nguyên thay vì
+    xoá dữ liệu đã thay đổi.
+    """
+    try:
+        root = capture_dir.resolve()
+        target = path.resolve()
+    except OSError:
+        return
+    if target.parent != root:
+        return
+    manifest = target.with_name(f"{target.stem}.burst.json")
+    if manifest.is_file():
+        try:
+            data = json.loads(manifest.read_bytes().decode("utf-8"))
+            sha_map = data.get("sha256") if isinstance(data, dict) else None
+            names = data.get("frames") if isinstance(data, dict) else None
+            if isinstance(sha_map, dict) and isinstance(names, list):
+                for name in names:
+                    if isinstance(name, str) and Path(name).name == name and ".." not in name:
+                        expected = sha_map.get(name)
+                        if isinstance(expected, str):
+                            _unlink_matching_file(root / name, expected)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            pass
+        manifest.unlink(missing_ok=True)
+    try:
+        target.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _capture_result(
@@ -381,6 +432,8 @@ class CameraCaptureDialog(QDialog):
         return True
 
     def _retake_capture(self) -> None:
+        if self.captured_path is not None:
+            discard_capture_artifacts(self.captured_path, self._out_dir)
         self.captured_path = None
         self.lbl_preview.clear()
         self.lbl_preview.setText("Chưa có ảnh xem trước")
@@ -405,6 +458,8 @@ class CameraCaptureDialog(QDialog):
         worker, operation = self._worker, self._operation
         self._worker, self._operation = None, None
         if self._closed:
+            if operation == "capture" and isinstance(value, tuple) and value:
+                discard_capture_artifacts(Path(value[0]), self._out_dir)
             return
         self._set_busy(False)
         if worker is None or worker.cancelled.is_set():
@@ -446,6 +501,9 @@ class CameraCaptureDialog(QDialog):
 
     def done(self, result: int) -> None:
         self._closed = True
+        if result != QDialog.DialogCode.Accepted and self.captured_path is not None:
+            discard_capture_artifacts(self.captured_path, self._out_dir)
+            self.captured_path = None
         if self._worker is not None:
             self._worker.cancelled.set()
         super().done(result)
