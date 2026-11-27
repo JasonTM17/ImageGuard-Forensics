@@ -74,7 +74,7 @@ class _SeqFaceROI:
         self._returns = list(returns)
         self.calls = 0
 
-    def __call__(self, work_arr, gray_u8, block_size):
+    def __call__(self, work_arr, gray_u8, block_size, cfg=None):
         r = self._returns[self.calls % len(self._returns)]
         self.calls += 1
         return r

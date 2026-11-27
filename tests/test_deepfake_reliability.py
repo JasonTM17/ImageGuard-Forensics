@@ -44,7 +44,7 @@ def test_yaml_threshold_schema_and_legacy_scalar_have_same_behavior():
 def test_panorama_is_one_image_without_explicit_layout(monkeypatch):
     seen = []
 
-    def detect(arr, gray, block):
+    def detect(arr, gray, block, cfg=None):
         seen.append(gray.shape)
         return (420, 48, 96, 128), True, "controlled_face"
 

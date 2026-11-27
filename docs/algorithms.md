@@ -63,8 +63,14 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
 
 Pipeline gồm sáu nhóm phép xử lí ảnh cổ điển: định vị ROI bằng Haar hoặc ứng
 viên màu da YCrCb/HSV + SAT; median residual và Otsu/CCL; LBP; FFT; Canny/Hough;
-và đối xứng HOG/Hu. Đây là **dấu hiệu khám phá chưa hiệu chuẩn**, không có mô
-hình phân loại Deepfake đã huấn luyện và không trả xác suất ảnh giả.
+và đối xứng HOG/Hu. Nhánh mặc định là **dấu hiệu khám phá chưa hiệu chuẩn**.
+Repo còn có nhánh logistic DIP tùy chọn để nhóm tự huấn luyện trên dữ liệu
+có nhãn; không kèm trọng số đã học và không trả xác suất ảnh giả.
+
+- Runtime chuẩn dùng OpenCV `>=4.10,<5`, có Haar cascade XML. Fallback màu da
+  yêu cầu hai vùng tối mắt tách biệt và cấu trúc tương ứng; gradient hoặc một
+  dải tối ngang không đủ. Cả Haar và skin ưu tiên ứng viên đủ chất lượng theo
+  cfg trước khi xét diện tích. Khả năng nạp Haar được ghi vào evidence.
 
 - Ảnh đơn luôn được phân tích như một ảnh đơn, kể cả panorama. Chế độ hai
   camera cần `capture_layout="dual_side_by_side"` và ranh giới
@@ -84,12 +90,14 @@ hình phân loại Deepfake đã huấn luyện và không trả xác suất ả
   quyết định `grid_score`. Cửa sổ Hann làm các bin phụ thuộc; đây không phải
   kiểm định thống kê. Vải, màn hình và các texture thật tuần hoàn vẫn có thể
   tạo cùng dấu hiệu.
-- Cờ không gian cần điểm vượt `deepfake.score_thresh` **và ít nhất hai nhóm**
+- Cờ không gian mặc định cần điểm vượt `deepfake.score_thresh` **và ít nhất hai nhóm**
   texture, phổ, biên cùng hỗ trợ. Smoothing/LBP/diện tích ít nhiễu được gom
   vào một nhóm vì chúng có thể cùng mô tả một hiệu ứng. Các nhóm vẫn tương
   quan và chưa được hiệu chuẩn trên dữ liệu thật/giả. `cue_flag=true` chỉ
   dẫn tới `INCONCLUSIVE`, không bao giờ `SUSPICIOUS_INDICATION`.
-- Mốc cùng phiên vẫn so residual/LBP/FFT của ROI 96×96 và có thể nâng
+- Mốc cùng phiên chuẩn hóa ROI 96×96, kiểm tra clipping/tương phản/cấu trúc
+  và căn dịch nguyên nhỏ hai chiều; so residual/LBP/FFT trên crop tương ứng
+  84×84 không warp thêm. Nó có thể nâng
   `NO_INDICATION` lên `INCONCLUSIVE` khi khác biệt vượt ngưỡng. Nó xuất
   `reference_cue_flag`, `ref_status` độc lập và **không cộng điểm** vào chỉ
   số không gian. Không dùng ảnh ghép hai camera làm mốc so sánh mặt.
@@ -100,6 +108,12 @@ hình phân loại Deepfake đã huấn luyện và không trả xác suất ả
 - `roi_rect` dùng tọa độ ảnh gốc; `roi_rect_working` dùng tọa độ bản làm việc.
   Heatmap/mask không kéo giãn phần block cuối chưa được đo và không lan qua
   ranh giới cảm biến.
+- Logistic DIP học 13 đặc trưng từ dev, L2 cố định và class-balanced loss,
+  cross-validation theo nhóm với chuẩn hóa riêng từng fold. Model JSON được
+  kiểm tra version/config/hash, chỉ số hiển thị là sigmoid của margin với
+  ngưỡng 0.5, không phải xác suất đã hiệu chuẩn. Giữ chất lượng ROI bắt buộc,
+  chỉ áp cho ảnh đơn; `cue_flag` do model quyết định, heuristic được lưu riêng.
+  Heatmap là diagnostic DIP; classifier không sinh mask định vị.
 
 Ngưỡng mới nằm trong `configs/thresholds.yaml`, có miền giá trị và ghi rõ
 chưa hiệu chuẩn. Giao thức đánh giá coverage, tỷ lệ bật cờ trên ảnh thật/giả

@@ -5,6 +5,27 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ## [Unreleased]
 
+### Deepfake ROI, reference and supervised DIP — 2026-11-27
+
+- Giới hạn OpenCV `>=4.10,<5`: wheel OpenCV 5.1 quan sát được thiếu
+  `CascadeClassifier`; thêm kiểm tra cascade XML và evidence khả năng runtime.
+  PyInstaller gói rõ XML và CI kiểm tra asset trong bundle.
+- Fallback màu da xác minh hai vùng mắt tách biệt, cầu mũi và hình học;
+  Haar/skin ưu tiên ứng viên đạt ngưỡng chất lượng đang dùng. Extractor
+  tăng lên `dip_6pillar_deepfake_cues_v3`.
+- Reference từ chối clipping, thay đổi tương phản quá lớn hoặc cấu trúc
+  không tương ứng; tìm dịch nguyên nhỏ hai chiều trước khi đo texture.
+  Không warp thêm pixel đo và không cộng score không gian.
+- Thêm logistic regression NumPy trên 13 đặc trưng DIP, grouped dev CV với
+  scaler fit riêng từng fold, JSON model có schema/config/hash/provenance
+  và CLI huấn luyện. Không kèm trọng số huấn luyện hay accuracy thực tế.
+- GUI nạp/xóa lựa chọn mô hình; CLI `analyze --deepfake-model --config`.
+  Giữ quality gate, hiển thị nguồn điểm, không diễn giải sigmoid thành
+  xác suất hoặc mask định vị. Kiểm tra model không đổi sau khi chọn.
+- Evaluator v2 xuất đặc trưng; mô hình học chỉ được đánh giá trên test
+  không trùng dev theo nguồn/ID/hash, kèm baseline cùng mẫu. AUC dùng margin
+  trước sigmoid để tránh mất thứ tự khi chỉ số hiển thị bão hòa.
+
 ### Deepfake reliability — 2026-11-27
 
 - Sửa phép đo phổ phụ thuộc diện tích ROI: dùng năng lượng top 1% bin cao tần

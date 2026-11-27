@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -128,7 +129,8 @@ def test_analyze_help_forbidden_words() -> None:
     assert res.returncode == 0
     out = (res.stdout + res.stderr).lower()
     assert "forged" not in out
-    assert "fake" not in out
+    # The option --deepfake-model names a method, not an authenticity verdict.
+    assert re.search(r"\bfake\b", out) is None
     assert "authentic" not in out
 
 

@@ -89,6 +89,11 @@ class MethodCard(QFrame):
 def _deepfake_context_lines(evidence: dict) -> list[str]:
     """Keep applicability and independent acquisition cues visible beyond first-N fields."""
     lines = []
+    if evidence.get("decision_source") == "learned_dip":
+        lines.append(strings.DEEPFAKE_MODEL_APPLIED if evidence.get("model_status") == "applied"
+                     else strings.DEEPFAKE_MODEL_UNAVAILABLE)
+        if evidence.get("model_in_training_data"):
+            lines.append(strings.DEEPFAKE_MODEL_TRAINING_OVERLAP)
     if evidence.get("cue_unavailable"):
         lines.append(strings.DEEPFAKE_CUE_UNAVAILABLE)
     elif "cue_flag" in evidence:

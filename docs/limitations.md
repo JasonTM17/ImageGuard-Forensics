@@ -62,6 +62,19 @@ tư thế; bộ tìm mặt Haar/màu da có thể bỏ sót hoặc định vị 
 góc nghiêng, che khuất và điều kiện chiếu sáng khác. Màu da không phải bộ
 xác nhận khuôn mặt. Phương pháp chỉ đo một ROI được chọn.
 
+Fallback phiên bản v3 kiểm tra hai mắt nên giảm lỗi trên vật thể gradient/vân
+đã tái hiện, nhưng có thể bỏ sót mắt bị che và mặt nghiêng. OpenCV phải có
+Haar cascade hoạt động; dependency hiện giới hạn `<5`, và evidence hiện rõ
+nếu custom build chỉ còn fallback. Không suy số đo trên đối chứng tổng hợp
+thành độ chính xác tìm mặt trên mọi màu da/độ tuổi/điều kiện ảnh.
+
+Nhánh logistic DIP tùy chọn cần nhóm tự huấn luyện từ ảnh có nhãn. Nó giữ
+quality gate, chỉ hỗ trợ ảnh đơn và không chứa trọng số có sẵn trong repo.
+Tham số/threshold có thể overfit dev; grouped OOF không thay thế test độc lập.
+Tách theo source_group không tự chứng minh tách danh tính hoặc generator;
+nhãn và quan hệ nguồn phải do nhóm xác minh. Sigmoid 0–1 chưa hiệu chuẩn
+xác suất; classifier không định vị pixel, heatmap chỉ là diagnostic của DIP.
+
 Bản sửa 2026-11-27 không cấp điểm nếu thiếu mặt, mặt quá nhỏ/ít tương phản
 hoặc thiếu nền độc lập. `NO_INDICATION` chỉ có nghĩa không bật cờ trên ROI
 đủ điều kiện. `INCONCLUSIVE` có thể do có dấu hiệu hoặc do thiếu dữ liệu;
@@ -86,6 +99,11 @@ Driver có thể buffer frame; khoảng cách đọc danh nghĩa 0.75 giây khô
 phải timestamp phần cứng. Mốc tham chiếu có thể tạo cờ chênh lệch độc lập,
 nhưng không cộng vào điểm không gian; thay đổi góc mặt/ánh sáng/tiêu cự cũng
 có thể làm tăng chênh lệch. Không dùng ảnh dual làm mốc tham chiếu mặt.
+
+Reference nay từ chối clipping, tương phản thay đổi quá lớn và cấu trúc không
+tương ứng; chỉ căn dịch nguyên nhỏ, không giải quyết mọi thay đổi tư thế,
+biểu cảm hoặc tiêu cự. NCC chỉ kiểm tra tương ứng cấu trúc, không xác thực
+cùng người. Các ngưỡng clipping/NCC/căn dịch vẫn là ngưỡng thăm dò.
 
 Hash và thời hạn mốc 8 giờ giảm nguy cơ dùng nhầm dữ liệu; không chứng minh
 mốc live/cùng người và không chống người sửa đồng bộ ảnh cùng manifest.

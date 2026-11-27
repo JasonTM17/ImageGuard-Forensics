@@ -70,6 +70,14 @@ A11Y_DEMO_SAMPLE = "Tạo ảnh mẫu tổng hợp để kiểm chứng phát hi
 BTN_PRESET_DEFAULT = "Mặc định (3)"
 BTN_PRESET_CAMERA = "Chế độ Camera / AI"
 BTN_PRESET_ALL = "Tất cả (8)"
+BTN_DEEPFAKE_MODEL = "Nạp mô hình DIP…"
+BTN_DEEPFAKE_MODEL_CLEAR = "Dùng trọng số mặc định"
+DEEPFAKE_MODEL_DEFAULT = "Dấu hiệu vùng mặt: đang dùng trọng số heuristic mặc định."
+DEEPFAKE_MODEL_SELECTED = "Mô hình đã học: {name}. Chỉ áp dụng khi chọn Dấu hiệu Deepfake / AI."
+DEEPFAKE_MODEL_LOAD_ERROR = "Không dùng được mô hình: {reason}"
+DEEPFAKE_MODEL_APPLIED = "Đang dùng trọng số học từ dữ liệu dev; chỉ số 0–1 chưa hiệu chuẩn xác suất."
+DEEPFAKE_MODEL_UNAVAILABLE = "Đã chọn mô hình học từ dữ liệu nhưng khung này chưa đủ điều kiện áp dụng."
+DEEPFAKE_MODEL_TRAINING_OVERLAP = "Ảnh này có trong dữ liệu phát triển; không dùng để báo cáo kết quả test."
 BTN_SEND_TO_ENHANCE = "Đưa sang Tăng cường / Siêu phân giải →"
 
 BTN_OPEN = "Mở ảnh…"
@@ -234,7 +242,8 @@ DEEPFAKE_REFERENCE_STATUS = {
     "no_difference_flag": "Mốc phiên: chênh lệch kết cấu dưới ngưỡng tham chiếu.",
     "same_frame": "Mốc phiên trùng khung đang phân tích; chưa có so sánh độc lập.",
     "face_unavailable": "Mốc phiên: chưa tìm được vùng mặt ở cả hai khung.",
-    "quality_unavailable": "Mốc phiên: vùng mặt quá nhỏ hoặc thiếu tương phản để đối chiếu.",
+    "quality_unavailable": "Mốc phiên: vùng mặt thiếu chất lượng để đối chiếu (kích thước, tương phản hoặc phơi sáng).",
+    "comparison_unavailable": "Mốc phiên: cấu trúc hai vùng mặt chưa khớp để so sánh texture; hãy chụp cùng góc và khoảng cách.",
     "unavailable": "Mốc phiên chưa áp dụng vì phân tích vùng mặt không khả dụng.",
     "unsupported_capture_layout": "Mốc phiên chưa hỗ trợ so sánh ảnh ghép hai camera.",
 }

@@ -39,6 +39,11 @@ jobs:
           python -m pip install -e ".[dev,lama]"
       - name: PyInstaller build
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_app.ps1
+      - name: Verify packaged Haar Cascade data
+        run: |
+          $cascade = @(Get-ChildItem -LiteralPath 'dist/ImageGuard' -Recurse -File -Filter 'haarcascade_frontalface_default.xml')
+          if ($cascade.Count -ne 1) { throw 'Expected one packaged frontal-face Haar Cascade XML.' }
+          if ($cascade[0].Length -eq 0) { throw 'Packaged Haar Cascade XML is empty.' }
       - name: Smoke-test packaged startup
         env:
           QT_QPA_PLATFORM: offscreen

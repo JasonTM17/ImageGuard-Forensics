@@ -204,6 +204,14 @@ def test_apply_reference_cue_preserves_fields_and_clean_evidence() -> None:
         "sus_roi_min_side",
         "ref_roi_contrast",
         "sus_roi_contrast",
+        "ref_roi_clipped_fraction",
+        "sus_roi_clipped_fraction",
+        "ref_comparison_reason",
+        "ref_contrast_ratio",
+        "ref_alignment_correlation",
+        "ref_alignment_dx",
+        "ref_alignment_dy",
+        "ref_alignment_reverse_error",
     }
     for key in new_keys:
         v = out.evidence[key]
@@ -211,7 +219,7 @@ def test_apply_reference_cue_preserves_fields_and_clean_evidence() -> None:
             assert isinstance(v, bool)
         elif key == "ref_status":
             assert v == "difference"
-        elif key.endswith("quality_reason"):
+        elif key.endswith("quality_reason") or key == "ref_comparison_reason":
             assert v == ""
         elif key.endswith("sha256"):
             assert isinstance(v, str) and _SHA_RE.match(v)
@@ -308,7 +316,7 @@ def test_reference_quality_is_checked_before_96px_resize(
     # Isolate a detected face so detection success cannot substitute for quality.
     monkeypatch.setattr(
         module, "_detect_face_roi",
-        lambda arr, gray, block: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
+        lambda arr, gray, block, cfg=None: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
     )
     textured = np.random.default_rng(4).integers(40, 200, (128, 128, 3), dtype=np.uint8)
     side = 32 if degradation == "roi_too_small" else 128
@@ -335,7 +343,7 @@ def test_reference_quality_uses_working_resolution_and_active_config(monkeypatch
 
     monkeypatch.setattr(
         module, "_detect_face_roi",
-        lambda arr, gray, block: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
+        lambda arr, gray, block, cfg=None: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
     )
     large = np.random.default_rng(4).integers(40, 200, (256, 256, 3), dtype=np.uint8)
     cfg = load_thresholds()
@@ -348,3 +356,137 @@ def test_reference_quality_uses_working_resolution_and_active_config(monkeypatch
     assert result["ref_quality_reason"] == "roi_too_small"
     assert result["sus_quality_reason"] == "roi_too_small"
     assert result["ref_combined_cue"] is None
+
+
+def _fixed_face_box(monkeypatch) -> None:
+    """Hold detection constant to isolate acquisition changes from face detection."""
+    import imageguard.forensics.auxiliary.face_roi_cross_compare as module
+
+    monkeypatch.setattr(
+        module, "_detect_face_roi",
+        lambda arr, gray, block, cfg=None: ((154, 53, 113, 145), True, "test_face"),
+    )
+
+
+def test_clipped_exposure_control_does_not_become_reference_anomaly(monkeypatch) -> None:
+    _fixed_face_box(monkeypatch)
+    reference = _face_frame()
+    exposed = np.clip(reference.astype(np.float32) * 3.0, 0, 255).astype(np.uint8)
+    base = _base_result(score=0.2)
+
+    out = apply_reference_cue(base, _doc(reference), _doc(exposed))
+
+    # Before the clipping gate this acquisition-only change produced cue 0.5232.
+    assert out.evidence["sus_roi_contrast"] > 8.0  # existing contrast gate alone passes
+    assert out.evidence["sus_roi_clipped_fraction"] > 0.2
+    assert out.evidence["sus_quality_reason"] == "clipped_pixels"
+    assert out.evidence["ref_status"] == "quality_unavailable"
+    assert out.evidence["ref_combined_cue"] is None
+    assert out.evidence["reference_cue_flag"] is False
+    assert out.verdict is base.verdict
+    assert out.score == base.score
+
+
+@pytest.mark.parametrize(("gain", "offset"), [(1.0, -20.0), (1.0, 20.0), (0.7, 0.0), (1.2, 0.0)])
+def test_moderate_exposure_change_remains_comparable_without_false_flag(gain, offset) -> None:
+    reference = _face_frame()
+    exposed = np.clip(reference.astype(np.float32) * gain + offset, 0, 255).astype(np.uint8)
+    out = apply_reference_cue(_base_result(), _doc(reference), _doc(exposed))
+
+    assert out.evidence["ref_status"] == "no_difference_flag"
+    assert out.evidence["ref_alignment_correlation"] > 0.95
+    assert out.evidence["ref_combined_cue"] < REFERENCE_CUE_MIN
+    assert out.evidence["reference_cue_flag"] is False
+
+
+def test_large_exposure_difference_abstains_instead_of_comparing_texture(monkeypatch) -> None:
+    _fixed_face_box(monkeypatch)
+    reference = _face_frame()
+    darkened = (reference.astype(np.float32) * 0.2).astype(np.uint8)
+    out = apply_reference_cue(_base_result(), _doc(reference), _doc(darkened))
+
+    assert out.evidence["sus_quality_reason"] == ""
+    assert out.evidence["ref_contrast_ratio"] < 0.5
+    assert out.evidence["ref_status"] == "comparison_unavailable"
+    assert out.evidence["ref_comparison_reason"] == "exposure_mismatch"
+    assert out.evidence["ref_combined_cue"] is None
+    assert out.evidence["reference_cue_flag"] is False
+
+
+def test_small_detection_crop_shift_is_aligned_without_texture_warp(monkeypatch) -> None:
+    _fixed_face_box(monkeypatch)
+    reference = _face_frame()
+    shifted = cv2.warpAffine(
+        reference, np.float32([[1, 0, 4], [0, 1, 4]]), (320, 320),
+        flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REFLECT,
+    )
+    out = apply_reference_cue(_base_result(), _doc(reference), _doc(shifted))
+
+    assert out.evidence["ref_status"] == "no_difference_flag"
+    assert out.evidence["ref_alignment_correlation"] > 0.95
+    assert 1 <= out.evidence["ref_alignment_dx"] <= 4
+    assert 1 <= out.evidence["ref_alignment_dy"] <= 4
+    assert out.evidence["ref_alignment_reverse_error"] <= 1
+    assert out.evidence["ref_combined_cue"] < REFERENCE_CUE_MIN
+
+
+def test_pose_mismatch_does_not_generate_reference_flag(monkeypatch) -> None:
+    _fixed_face_box(monkeypatch)
+    reference = _face_frame()
+    # The smoothed control gives a high cue when frontal, but should not be
+    # compared as corresponding skin patches after a substantial pose change.
+    rotated = cv2.warpAffine(
+        _face_frame(smooth_face=True),
+        cv2.getRotationMatrix2D((210, 125), 25, 1.0), (320, 320),
+        borderMode=cv2.BORDER_REFLECT,
+    )
+    base = _base_result()
+    out = apply_reference_cue(base, _doc(reference), _doc(rotated))
+
+    assert out.evidence["ref_status"] == "comparison_unavailable"
+    assert out.evidence["ref_comparison_reason"] == "structure_mismatch"
+    assert out.evidence["ref_alignment_correlation"] < 0.85
+    assert out.evidence["reference_cue_flag"] is False
+    assert out.evidence["ref_combined_cue"] is None
+    assert out.verdict is base.verdict
+    assert out.score == base.score
+
+
+def test_crop_beyond_alignment_budget_abstains(monkeypatch) -> None:
+    _fixed_face_box(monkeypatch)
+    reference = _face_frame()
+    shifted = cv2.warpAffine(
+        reference, np.float32([[1, 0, 8], [0, 1, 8]]), (320, 320),
+        flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_REFLECT,
+    )
+    out = apply_reference_cue(_base_result(), _doc(reference), _doc(shifted))
+
+    assert out.evidence["ref_status"] == "comparison_unavailable"
+    assert out.evidence["ref_comparison_reason"] == "alignment_limit"
+    assert out.evidence["ref_combined_cue"] is None
+    assert out.evidence["reference_cue_flag"] is False
+
+
+def test_no_low_frequency_structure_does_not_get_spurious_perfect_ncc(monkeypatch) -> None:
+    import imageguard.forensics.auxiliary.face_roi_cross_compare as module
+
+    monkeypatch.setattr(
+        module, "_detect_face_roi",
+        lambda arr, gray, block, cfg=None: ((0, 0, 96, 96), True, "test_face"),
+    )
+    yy, xx = np.indices((96, 96))
+    checker = (100 + 40 * ((yy + xx) % 2)).astype(np.uint8)
+    reference = np.repeat(checker[:, :, None], 3, axis=2)
+    shifted_luma = reference + 1
+
+    out = apply_reference_cue(_base_result(), _doc(reference), _doc(shifted_luma))
+
+    assert out.evidence["ref_roi_contrast"] == 40.0  # raw contrast is insufficient assurance
+    assert out.evidence["ref_status"] == "comparison_unavailable"
+    assert out.evidence["ref_comparison_reason"] == "insufficient_structure"
+    assert out.evidence["ref_alignment_correlation"] is None
+    assert out.evidence["ref_combined_cue"] is None
+
+    same = compare_face_rois(_doc(reference), _doc(reference.copy()))
+    assert same["same_frame"] is True
+    assert same["ref_combined_cue"] == 0.0  # exact equality does not need NCC

@@ -18,6 +18,19 @@ nhóm dấu hiệu cùng hỗ trợ, phân biệt rõ cờ bất thường với
 và bỏ việc cộng điểm do mặt đứng yên/ảnh tham chiếu. Chế độ hai camera dùng
 khai báo bố cục và ranh giới rõ ràng; ảnh ngang rộng không tự bị chia đôi.
 
+Lượt cải thiện tiếp theo bổ sung kiểm chứng hai mắt cho fallback màu da,
+ưu tiên ROI đủ chất lượng và kiểm tra phơi sáng/căn dịch nhỏ khi so mốc.
+Dependency được giới hạn `opencv-python>=4.10,<5` để giữ API Haar Cascade;
+trên build thiếu cascade, báo cáo hiện rõ khả năng detector bị giảm.
+
+Có thể **học trọng số từ dữ liệu có nhãn của nhóm** bằng logistic regression
+trên 13 đặc trưng DIP, không cần GPU hoặc thư viện học sâu. Dùng
+`scripts/train_deepfake_model.py`, đánh giá mô hình cố định trên test bằng
+`scripts/evaluate_deepfake_cues.py --model ...`, rồi chọn **Nạp mô hình DIP…**
+trong giao diện. Mặc định vẫn dùng heuristic; repo không kèm trọng số Deepfake
+đã huấn luyện. Quy trình học giữ các frame cùng nguồn trong cùng fold,
+chuẩn hóa riêng trên fold train và kiểm tra trùng nguồn/ảnh khi chạy test.
+
 **Chưa có số đo độ chính xác Deepfake trên bộ ảnh thật/giả có nhãn.**
 Để thực nghiệm cho đồ án, dùng [`docs/deepfake-evaluation.md`](docs/deepfake-evaluation.md)
 và `scripts/evaluate_deepfake_cues.py`: báo coverage, tỷ lệ bật cờ riêng trên
@@ -74,14 +87,14 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/security-error-handling.md`](docs/security-error-handling.md) | safe_open, giới hạn tài nguyên |
 | [`docs/dataset-strategy.md`](docs/dataset-strategy.md) | synthforge, CoMoFoD, split |
 | [`docs/evaluation-methodology.md`](docs/evaluation-methodology.md) | Metric R1–R5, runner |
-| [`docs/deepfake-evaluation.md`](docs/deepfake-evaluation.md) | Phạm vi Deepfake, manifest, coverage và kiểm tra rò rỉ dev/test |
+| [`docs/deepfake-evaluation.md`](docs/deepfake-evaluation.md) | Manifest, huấn luyện DIP, grouped CV, test, coverage và chống rò rỉ dữ liệu |
 | [`docs/experiments.md`](docs/experiments.md) | Ghi chép thử nghiệm |
 | [`docs/failure-cases.md`](docs/failure-cases.md) | Mẫu lỗi đã quan sát |
 | [`docs/limitations.md`](docs/limitations.md) | Giới hạn đã biết, không thêm số mới |
 | [`docs/ingest.md`](docs/ingest.md) | Quét thư mục, custody |
 | [`docs/enhancement-study.md`](docs/enhancement-study.md) | Nghiên cứu tăng cường xem |
 | [`docs/modelforge.md`](docs/modelforge.md) | Model-forge / ONNX (design) |
-| [`docs/ml-extension.md`](docs/ml-extension.md) | Hướng ML (design-only) |
+| [`docs/ml-extension.md`](docs/ml-extension.md) | Logistic DIP hiện có và hướng mạng sâu (design-only) |
 | [`docs/splicing-study.md`](docs/splicing-study.md) | Splicing cues (exploratory) |
 | [`docs/image-processing-toolkit.md`](docs/image-processing-toolkit.md) | Thư viện toán tử Xử lý ảnh số thuần NumPy (`ipkit`) phục vụ hiệu chuẩn & phân tích phụ trợ |
 | [`docs/keypoint-calibration-study.md`](docs/keypoint-calibration-study.md) | Nghiên cứu offline false-cue keypoint (không đổi ngưỡng shipped) |

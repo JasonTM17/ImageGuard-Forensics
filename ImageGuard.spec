@@ -1,17 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 hiddenimports = []
 hiddenimports += collect_submodules('imageguard')
+haar_data = collect_data_files('cv2', includes=['data/haarcascade_frontalface_default.xml'])
+if not haar_data:
+    raise RuntimeError('Missing Haar Cascade XML; install the supported OpenCV 4 dependency before building.')
 
 
 a = Analysis(
     ['imageguard_gui.py'],
     pathex=[os.path.abspath('.')],
     binaries=[],
-    datas=[('configs', 'configs')],
+    datas=[('configs', 'configs')] + haar_data,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

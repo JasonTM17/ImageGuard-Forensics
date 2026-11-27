@@ -8,6 +8,9 @@ svc.analyze(AnalysisRequest(
     cancel=threading.Event | None,
     progress_cb=lambda frac, stage: ...,
     include_exif=True,
+    reference_path=Path | None,
+    deepfake_model_path=Path | None,
+    deepfake_model_sha256=str | None,
 )) -> ForensicReport | ErrorResult
 ```
 
@@ -22,6 +25,11 @@ svc.analyze(AnalysisRequest(
   thay vì raise; lỗi từng method được cô lập thành `AlgorithmResult` với
   verdict `ERROR`.
 - `progress_cb` được gọi từ worker thread — UI phải marshal qua signal.
+- `deepfake_model_path` chỉ áp dụng cho spec `deepfake`: nạp JSON đã học,
+  kiểm tra feature schema/config/checksum rồi giữ quality gate của DIP.
+  `deepfake_model_sha256` tùy chọn ghim file được UI/CLI chọn; mismatch trả
+  method `ERROR`, không âm thầm quay về heuristic. Không truyền model thì
+  giữ nhánh mặc định. Hash model và heuristic baseline nằm trong evidence.
 - Lỗi persistence (DB/artifact) không huỷ kết quả: service thêm cảnh báo vào
   `report.limitations` và vẫn trả `ForensicReport`.
   Mỗi lượt lưu giành quyền sở hữu UUID/thư mục artifact mới trước khi ghi.

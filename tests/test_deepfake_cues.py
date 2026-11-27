@@ -59,13 +59,16 @@ def _synthetic_face_frame(smooth_face: bool = False) -> np.ndarray:
     return frame
 
 
-def test_deepfake_cues_skin_haar_dip_detects_face_roi() -> None:
+def test_deepfake_cues_skin_haar_dip_detects_face_roi(monkeypatch) -> None:
+    # Isolate this fallback/blur control. A real Haar cascade may select a
+    # tighter box on this drawing and produce different exploratory cues.
+    monkeypatch.setattr(cv2.data, "haarcascades", "")
     frame = _synthetic_face_frame(smooth_face=True)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     (rx, ry, rw, rh), face_detected, roi_source = _detect_face_roi(frame, gray, 8)
     assert face_detected is True
-    assert roi_source in {"skin_haar_dip", "haar_cascade"}
+    assert roi_source == "skin_haar_dip"
     # ROI phải bám vào nửa phải phía trên (quanh tâm x=210, y=125), không phải fallback (80,80).
     assert rx >= 135 and rx + rw <= 290
     assert ry >= 35 and ry + rh <= 220
@@ -76,7 +79,7 @@ def test_deepfake_cues_skin_haar_dip_detects_face_roi() -> None:
     assert res.evidence["cue_flag"] is True
     assert res.score is not None and 0.35 <= res.score <= 1.0
     assert res.mask is not None and np.count_nonzero(res.mask) > 0
-    assert res.evidence["roi_source"] in {"skin_haar_dip", "haar_cascade"}
+    assert res.evidence["roi_source"] == "skin_haar_dip"
     for key in ("smooth_cue", "seam_cue", "lbp_cue", "lbp_chi2", "freq_cue", "spectral_rolloff"):
         assert key in res.evidence
 

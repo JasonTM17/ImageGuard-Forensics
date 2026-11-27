@@ -29,10 +29,16 @@ mới, dùng source hiện tại thay vì mặc định executable cũ đã ch�
 ```
 
 Lệnh in ra stdout cùng cấu trúc JSON mà ứng dụng lưu khi phân tích (báo cáo dấu hiệu).
-Nếu thoát mã khác 0, đó là `ErrorResult` (ví dụ file không đọc được), không phải một verdict
-forensics trên ảnh. Giữa hai lần chạy trên cùng file, chỉ `report_id`, `created_at` và
+Exit 1 là `ErrorResult` đầu vào (ví dụ file không đọc được); exit 2 là lỗi
+tham số/cấu hình/model. Các mã này không phải verdict forensics trên ảnh.
+Giữa hai lần chạy trên cùng file, chỉ `report_id`, `created_at` và
 `methods[].duration_ms` có thể thay đổi; các trường forensic còn lại giữ nguyên khi cùng
 byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
+
+Nếu đã huấn luyện mô hình DIP theo [giao thức Deepfake](deepfake-evaluation.md),
+thêm `--methods deepfake --deepfake-model <model.json> --config <thresholds.yaml>`.
+Model phải khớp bộ trích đặc trưng và cấu hình đã dùng khi fit. Không có model
+đi kèm repo; tùy chọn này không tải model từ Internet.
 
 ## Quy trình phân tích
 
@@ -83,6 +89,16 @@ Với ảnh tải lên, bật *Dấu hiệu Deepfake / AI* hoặc chọn *Chế 
 Điểm chỉ số trên thang 0–1 không phải xác suất ảnh giả. `NO_INDICATION` cũng
 không chứng minh ảnh thật. Muốn đo chất lượng trên dữ liệu có nhãn, dùng
 [hướng dẫn đánh giá Deepfake](deepfake-evaluation.md).
+
+**Dùng mô hình đã học:** bấm *Nạp mô hình DIP…* trong nhóm Phương pháp và
+chọn JSON đã huấn luyện/đánh giá. Chọn hợp lệ sẽ bật phương pháp Deepfake và
+xóa kết quả cũ để tránh lẫn mô hình. File không hợp lệ giữ lựa chọn trước và
+báo lý do; *Dùng trọng số mặc định* quay lại heuristic. Khi chạy, GUI khóa
+việc đổi model; nếu file bị sửa sau khi chọn, cần chọn lại. Card kết quả ghi
+rõ nhánh learned, chỉ số chưa hiệu chuẩn và nhắc nếu ảnh thuộc dữ liệu dev.
+Ảnh không đủ điều kiện vẫn không có score; heatmap không phải mask của
+classifier. Mô hình chỉ áp dụng ở tab Phân tích, chưa thay nhánh preview
+camera hoặc hỗ trợ ảnh ghép hai camera.
 
 Trong hộp thoại camera, webcam mặc định chụp 5 khung. Ảnh xem trước và khung
 vừa chụp hiện các trụ cột khám phá trên khung gốc. Điểm đứng yên hiện khi bước

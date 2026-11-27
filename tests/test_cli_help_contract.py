@@ -30,7 +30,7 @@ _HELP_CASES: list[tuple[Sequence[str], tuple[str, ...]]] = [
     (["gui"], ("image",)),
     (
         ["analyze"],
-        ("file", "--methods", "--no-persist", "keypoint,block,ela"),
+        ("file", "--methods", "--no-persist", "--deepfake-model", "--config", "keypoint,block,ela"),
     ),
     (["ingest"], ("watch", "once")),
     (["ingest", "once"], ("directory", "--config")),

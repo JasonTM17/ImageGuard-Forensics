@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -59,6 +59,8 @@ class AnalyzeScreen(QWidget):
         self._report: ForensicReport | None = None
         self._doc = None
         self._ref_store = SessionReferenceStore()
+        self._deepfake_model_path: Path | None = None
+        self._deepfake_model_sha256: str | None = None
         self._build()
 
     def _build(self) -> None:
@@ -162,6 +164,21 @@ class AnalyzeScreen(QWidget):
             apply_a11y(c, a11y_name)
             methods_grid.addWidget(c, i // 2, i % 2)
         methods_outer.addLayout(methods_grid)
+        model_row = QHBoxLayout()
+        self.btn_deepfake_model = QPushButton(strings.BTN_DEEPFAKE_MODEL)
+        self.btn_deepfake_model_clear = QPushButton(strings.BTN_DEEPFAKE_MODEL_CLEAR)
+        apply_a11y(self.btn_deepfake_model, strings.BTN_DEEPFAKE_MODEL)
+        apply_a11y(self.btn_deepfake_model_clear, strings.BTN_DEEPFAKE_MODEL_CLEAR)
+        self.btn_deepfake_model.clicked.connect(self._pick_deepfake_model)
+        self.btn_deepfake_model_clear.clicked.connect(self._clear_deepfake_model)
+        self.btn_deepfake_model_clear.setEnabled(False)
+        model_row.addWidget(self.btn_deepfake_model)
+        model_row.addWidget(self.btn_deepfake_model_clear)
+        methods_outer.addLayout(model_row)
+        self.lbl_deepfake_model = QLabel(strings.DEEPFAKE_MODEL_DEFAULT)
+        self.lbl_deepfake_model.setTextFormat(Qt.TextFormat.PlainText)
+        self.lbl_deepfake_model.setWordWrap(True)
+        methods_outer.addWidget(self.lbl_deepfake_model)
         rl.addWidget(methods_box)
 
         self.btn_run = QPushButton(strings.BTN_RUN)
@@ -263,6 +280,43 @@ class AnalyzeScreen(QWidget):
     def _show_busy_open(self) -> None:
         self.lbl_status.setText(strings.MSG_BUSY_CANNOT_OPEN)
 
+    def _pick_deepfake_model(self) -> None:
+        if self._worker is not None:
+            return
+        selected, _ = QFileDialog.getOpenFileName(
+            self, strings.BTN_DEEPFAKE_MODEL, "", "ImageGuard DIP model (*.json)"
+        )
+        if not selected:
+            return
+        from imageguard.forensics.auxiliary.deepfake_model import (
+            config_digest,
+            load_model,
+        )
+
+        path = Path(selected)
+        try:
+            model = load_model(path, expected_config_sha256=config_digest(self._svc.cfg.raw))
+        except (OSError, ValueError) as error:
+            self.lbl_err.setText(strings.DEEPFAKE_MODEL_LOAD_ERROR.format(
+                reason=redact_paths_in_message(str(error))))
+            return
+        self._deepfake_model_path = path
+        self._deepfake_model_sha256 = model["model_sha256"]
+        self.lbl_deepfake_model.setText(strings.DEEPFAKE_MODEL_SELECTED.format(name=path.name))
+        self.btn_deepfake_model_clear.setEnabled(True)
+        self.chk_df.setChecked(True)
+        self.lbl_err.setText("")
+        self._clear_results()
+
+    def _clear_deepfake_model(self) -> None:
+        if self._worker is not None:
+            return
+        self._deepfake_model_path = None
+        self._deepfake_model_sha256 = None
+        self.lbl_deepfake_model.setText(strings.DEEPFAKE_MODEL_DEFAULT)
+        self.btn_deepfake_model_clear.setEnabled(False)
+        self._clear_results()
+
     # --- file ---
     def _pick_file(self) -> None:
         if self._worker is not None:
@@ -360,6 +414,8 @@ class AnalyzeScreen(QWidget):
         self.btn_preset_default.setEnabled(not running)
         self.btn_preset_camera.setEnabled(not running)
         self.btn_preset_all.setEnabled(not running)
+        self.btn_deepfake_model.setEnabled(not running)
+        self.btn_deepfake_model_clear.setEnabled(not running and self._deepfake_model_path is not None)
         self.btn_run.setEnabled(not running and self._path is not None)
         self.btn_send_enhance.setEnabled(not running and self._path is not None)
         self.btn_cancel.setEnabled(running)
@@ -440,7 +496,9 @@ class AnalyzeScreen(QWidget):
         self._cancel_event = threading.Event()
         req = AnalysisRequest(
             path=self._path, methods=methods, cancel=self._cancel_event,
-            reference_path=self._ref_store.get_reference())
+            reference_path=self._ref_store.get_reference(),
+            deepfake_model_path=self._deepfake_model_path,
+            deepfake_model_sha256=self._deepfake_model_sha256)
         self._worker = AnalysisWorker(self._svc, req)
         self._worker.signals.progress.connect(self._on_progress)
         self._worker.signals.result.connect(self._on_result)

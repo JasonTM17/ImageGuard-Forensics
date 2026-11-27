@@ -1,7 +1,8 @@
-"""Lấy mẫu và biến đổi hình học: đúng quy ước tọa độ, khớp warpAffine."""
+"""Geometry conventions and exact interpolation, with independent analytic oracles."""
 
 from __future__ import annotations
 
+import math
 import warnings
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def _texture() -> np.ndarray:
 
 
 def _assert_within_one(ours: np.ndarray, ref: np.ndarray) -> None:
-    """Sai biệt tối đa giữa nội suy NumPy và nội suy OpenCV không quá 1."""
+    """Allow final uint8 rounding when both methods use the same sample locations."""
     assert ours.shape == ref.shape
     delta = np.abs(ours.astype(np.int16) - ref.astype(np.int16))
     assert int(delta.max()) <= 1
@@ -55,6 +56,15 @@ def test_public_exports():
 def test_bilinear_center_of_tiny_image_is_88():
     out = sample_bilinear(_TINY, np.array([0.5]), np.array([0.5]))
     assert int(out[0]) == 88  # (0 + 100 + 50 + 200) / 4 = 87.5 -> rint = 88
+
+
+def test_bilinear_retains_precision_between_interpolation_table_entries():
+    # Exact linear interpolation is 0.9*0 + 0.1*255 = 25.5 -> 26.
+    # OpenCV 4 INTER_LINEAR can round x=0.1 to 3/32 and give 24 instead;
+    # the teaching implementation must not copy that quantization.
+    edge = np.array([[0, 255], [0, 255]], dtype=np.uint8)
+    sampled = sample_bilinear(edge, np.array([0.0]), np.array([0.1]))
+    np.testing.assert_array_equal(sampled, np.array([26], dtype=np.uint8))
 
 
 def test_nearest_rounds_half_up_to_column_one():
@@ -115,36 +125,47 @@ def test_bilinear_translate_matches_opencv():
     _assert_within_one(translate(src, tx, ty, interpolation="bilinear"), ref)
 
 
-def test_bilinear_scale_matches_opencv():
-    src = _texture()
+def _bilinear_surface() -> np.ndarray:
+    # On this small domain every value is an integer in [10, 160]. Bilinear
+    # interpolation reproduces f(x,y)=10+3x+5y+xy exactly between samples.
+    yy, xx = np.indices((9, 11), dtype=np.float64)
+    return (10 + 3 * xx + 5 * yy + xx * yy).astype(np.uint8)
+
+
+def _assert_analytic_surface(ours: np.ndarray, source_x, source_y) -> None:
+    inside = (source_x >= 0) & (source_x <= 10) & (source_y >= 0) & (source_y <= 8)
+    assert int(inside.sum()) > ours.size // 2, "the oracle must cover most output pixels"
+    expected = np.rint(
+        10 + 3 * source_x[inside] + 5 * source_y[inside] + source_x[inside] * source_y[inside]
+    ).astype(np.uint8)
+    np.testing.assert_array_equal(ours[inside], expected)
+
+
+def test_bilinear_scale_preserves_analytic_surface():
+    # warpAffine(INTER_LINEAR) is not a full-precision oracle: OpenCV 4 uses
+    # INTER_BITS=5/INTER_TAB_SIZE=32 and a fixed-point interpolation table.
+    # High-contrast textures can therefore differ by more than one gray level.
+    # https://docs.opencv.org/4.x/da/d54/group__imgproc__transform.html
+    src = _bilinear_surface()
     sx, sy = 1.7, 0.6
-    matrix = np.array([[sx, 0.0, 0.0], [0.0, sy, 0.0]], dtype=np.float32)
-    dsize = (round(src.shape[1] * sx), round(src.shape[0] * sy))
-    ref = cv2.warpAffine(
-        src,
-        matrix,
-        dsize,
-        flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0,
-    )
-    _assert_within_one(scale(src, sx, sy, interpolation="bilinear"), ref)
+    out = scale(src, sx, sy, interpolation="bilinear")
+    assert out.shape == (round(src.shape[0] * sy), round(src.shape[1] * sx))
+    yy, xx = np.indices(out.shape, dtype=np.float64)
+    _assert_analytic_surface(out, xx / sx, yy / sy)
 
 
-def test_bilinear_rotate_matches_opencv():
-    src = _texture()
+@pytest.mark.parametrize("angle", [-23.0, 23.0])
+def test_bilinear_rotate_preserves_analytic_surface(angle):
+    src = _bilinear_surface()
     h, w = src.shape[:2]
-    angle = 23.0
-    matrix = cv2.getRotationMatrix2D(((w - 1) / 2.0, (h - 1) / 2.0), angle, 1.0)
-    ref = cv2.warpAffine(
-        src,
-        matrix,
-        (w, h),
-        flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0,
-    )
-    _assert_within_one(rotate(src, angle, interpolation="bilinear"), ref)
+    out = rotate(src, angle, interpolation="bilinear")
+    assert out.shape == src.shape
+    yy, xx = np.indices(out.shape, dtype=np.float64)
+    cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+    theta = math.radians(angle)
+    source_x = cx + math.cos(theta) * (xx - cx) - math.sin(theta) * (yy - cy)
+    source_y = cy + math.sin(theta) * (xx - cx) + math.cos(theta) * (yy - cy)
+    _assert_analytic_surface(out, source_x, source_y)
 
 
 def test_nearest_integer_translation_matches_opencv_exactly():

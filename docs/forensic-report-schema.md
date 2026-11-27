@@ -117,24 +117,38 @@ Giá trị `null` trong evidence có nghĩa field không áp dụng hoặc khôn
 
 ### `deepfake_cues`: cờ dấu hiệu và điều kiện áp dụng
 
-Từ bản sửa 2026-11-27, `variant` là `dip_6pillar_deepfake_cues_v2`.
-`calibration_status="uncalibrated"`, `score_is_probability=false`; điểm không
-gian không được cộng thêm bởi burst hay ảnh tham chiếu.
+Từ lượt cải thiện ROI 2026-11-27, `variant` là `dip_6pillar_deepfake_cues_v3`.
+Nhánh mặc định có `calibration_status="uncalibrated"`; nhánh mô hình học có
+`decision_source="learned_dip"` và `calibration_status="not_probability_calibrated"`.
+Cả hai có `score_is_probability=false`; điểm không gian không được cộng thêm
+bởi burst hay ảnh tham chiếu.
 
 | Trường evidence | Ý nghĩa |
 | --- | --- |
-| `cue_flag` | Có cờ không gian: đủ điều kiện đo, vượt ngưỡng và được ít nhất hai nhóm dấu hiệu hỗ trợ |
+| `cue_flag` | Cờ quyết định không gian: nhánh mặc định cần ngưỡng và hai nhóm hỗ trợ; nhánh learned dùng margin ≥ 0 sau quality gate |
 | `cue_unavailable`, `unavailable_reason` | Thiếu mặt, ROI nhỏ/ít tương phản, thiếu nền, ảnh quá nhỏ hoặc bị hủy; `score=null` |
 | `support_families` | Các nhóm `texture`, `frequency`, `boundary` vượt mức hỗ trợ; không phải bằng chứng độc lập về ảnh giả |
 | `roi_rect`, `roi_rect_working` | `[x, y, width, height]` trên ảnh gốc và bản làm việc; `roi_coordinate_space="original_pixels"` áp dụng cho `roi_rect` |
 | `capture_layout`, `capture_split_x` | Bố cục được khai báo; ranh giới pixel ảnh gốc khi ghép hai camera |
+| `haar_cascade_status`, `face_detector_backend` | Khả năng nạp Haar thực tế; thể hiện rõ trường hợp chỉ có fallback màu da |
 | `reference_cue_flag`, `ref_status` | Cờ và trạng thái đối chiếu mốc riêng; có thể đổi `no_indication` thành `inconclusive`, không cộng score |
+| `ref_comparison_reason`, `ref_alignment_correlation`, `ref_alignment_dx/dy` | Lý do không so được mốc, tương đồng cấu trúc và dịch nguyên ở ROI chuẩn hóa |
+| `ref_roi_clipped_fraction`, `sus_roi_clipped_fraction` | Tỷ lệ pixel vùng mặt gần đen/trắng bão hòa; lỗi quality không tạo cue |
 | `temporal_status`, `temporal_reason`, `temporal_static_score` | Chẩn đoán độ tĩnh của burst, không đổi score hay verdict |
+| `model_status`, `model_sha256`, `feature_schema` | Mô hình tùy chọn đã áp dụng hay chưa và định danh model/features |
+| `model_decision_score`, `decision_threshold`, `decision_rule` | Margin logistic trước sigmoid và ngưỡng/quy tắc của điểm hiện tại |
+| `heuristic_score`, `heuristic_cue_flag` | Điểm/cờ mặc định trước khi áp dụng mô hình đã học, giữ làm đối chứng |
+| `model_in_training_data` | Hash ảnh có trong ledger phát triển; không coi kết quả này là test độc lập |
+| `heatmap_scope` | Với learned model: `heuristic_texture_diagnostic_only`; không sinh mask định vị từ classifier |
 
 Không suy `cue_flag` từ `verdict=inconclusive`: cùng verdict có thể do thiếu
 dữ liệu hoặc do dấu hiệu cần đối chiếu. Số đo vùng trung tâm khi chưa thấy
 mặt chỉ dùng chẩn đoán và không tạo mask. `fft_hf_conc8` là diagnostic cũ;
 phép đo phổ hiện dùng năng lượng top 1% bin đã chuẩn hóa theo kích thước ROI.
+Vector học cũng loại `fft_hf_conc8`. Khi learned model không áp dụng được,
+`model_status=unavailable`, `score=null`; không tự thay bằng một điểm heuristic
+có vẻ là kết quả mô hình. Khi file model sai/hash đổi/cấu hình không khớp,
+service trả `ERROR` cho method theo quy tắc cô lập lỗi chung.
 
 ## Enum `Verdict` (đóng)
 

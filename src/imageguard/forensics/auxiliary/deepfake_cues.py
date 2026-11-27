@@ -24,11 +24,12 @@ from __future__ import annotations
 import threading
 import time
 from numbers import Real
+from pathlib import Path
 
 import cv2
 import numpy as np
 
-from imageguard.core.config import ThresholdSet
+from imageguard.core.config import ThresholdSet, load_thresholds
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.core.preprocess import (
@@ -87,6 +88,26 @@ def _capture_split(doc: ImageDocument) -> int | None:
         raise ValueError("capture_split_x phải nằm bên trong ảnh ghép")
     return split
 
+
+def _load_haar_cascade():
+    """Return a usable detector and explicit status for custom OpenCV builds."""
+    cascade_cls = getattr(cv2, "CascadeClassifier", None)
+    if not callable(cascade_cls):
+        return None, "missing_classifier"
+    haar_dir = getattr(getattr(cv2, "data", None), "haarcascades", "")
+    if not haar_dir:
+        return None, "missing_cascade_data"
+    cascade_path = Path(haar_dir) / "haarcascade_frontalface_default.xml"
+    if not cascade_path.is_file():
+        return None, "missing_cascade_data"
+    try:
+        cascade = cascade_cls(str(cascade_path))
+        if cascade.empty():
+            return None, "cascade_load_failed"
+    except (cv2.error, OSError, ValueError):
+        return None, "cascade_load_failed"
+    return cascade, "available"
+
 # 8 láng giềng ngược/cùng chiều kim đồng hồ khớp quy tắc ipkit/features_basic.py.
 _LBP_OFFSETS: tuple[tuple[int, int], ...] = (
     (-1, -1),
@@ -113,13 +134,20 @@ def _block_means_from_integral(integ: np.ndarray, bh: int, bw: int, bs: int) -> 
 
 
 def _verify_face_candidate_sat(gray_u8: np.ndarray, x: int, y: int, rw: int, rh: int) -> bool:
-    """Kiểm chứng ứng viên khuôn mặt bằng Haar two_v (dải mắt/má) & đối xứng trái-phải (C6)."""
+    """Require two localized eye-like regions, not skin color or symmetry alone.
+
+    This conservative classical fallback is for roughly frontal faces. It can
+    miss profiles, occluded eyes and strong pose changes; no match is preferable
+    to labeling a shaded wall/arm/ball as a face. These geometric checks are
+    exploratory defaults, not a learned face detector or a real-world accuracy
+    claim. Haar cascade candidates do not depend on skin-color thresholds.
+    """
     roi = gray_u8[y : y + rh, x : x + rw]
     if roi.shape[0] < 24 or roi.shape[1] < 24:
         return False
 
-    # Chuẩn hóa kích thước trung gian nhỏ để đo đối xứng cấu trúc ổn định và cực nhanh.
-    norm = cv2.resize(roi, (48, 48), interpolation=cv2.INTER_AREA).astype(np.float32)
+    norm = cv2.resize(roi, (64, 64), interpolation=cv2.INTER_AREA).astype(np.float32)
+    norm = cv2.GaussianBlur(norm, (3, 3), 0.8)
     integ = cv2.integral(norm)
 
     def _box_mean(x0: int, y0: int, x1: int, y1: int) -> float:
@@ -127,47 +155,114 @@ def _verify_face_candidate_sat(gray_u8: np.ndarray, x: int, y: int, rw: int, rh:
         s = integ[y1, x1] - integ[y0, x1] - integ[y1, x0] + integ[y0, x0]
         return float(s / area)
 
-    # Dải mắt (18%..44% chiều cao, lõi ngang) vs dải má/mũi dưới (48%..74% chiều cao).
-    eye_mean = _box_mean(8, 9, 40, 21)
-    cheek_mean = _box_mean(8, 23, 40, 36)
-    haar_two_v = abs(cheek_mean - eye_mean)
-    eye_std = float(np.std(norm[9:22, 8:40]))
-
-    # Đối xứng gương trái-phải sau khi trừ trung bình sáng để chịu ánh sáng lệch nhẹ.
-    left = norm[:, :24]
-    right = norm[:, 24:][:, ::-1]
+    left = norm[:, :32]
+    right = norm[:, 32:][:, ::-1]
     left_c = left - float(np.mean(left))
     right_c = right - float(np.mean(right))
     l1_sym = 1.0 - float(np.mean(np.abs(left_c - right_c))) / 128.0
+    if l1_sym < 0.55:
+        return False
 
-    # Khuôn mặt thật hoặc mô phỏng có chi tiết vùng mắt + tương phản Haar + đối xứng trái-phải.
-    return (haar_two_v >= 2.5 or eye_std >= 4.0) and l1_sym >= 0.55
+    # A broad intensity gradient has no localized dark response. A horizontal
+    # stripe remains one connected region, unlike two separated eyes. Compute
+    # components before assigning left/right so a stripe cannot masquerade as
+    # one eye in each independently cropped window.
+    contrast = float(np.percentile(norm, 95) - np.percentile(norm, 5))
+    min_delta = max(3.0, 0.06 * contrast)
+    local_mean = cv2.GaussianBlur(norm, (0, 0), 3.0)
+    dark = ((local_mean - norm) >= min_delta).astype(np.uint8)
+    dark[:10, :] = 0
+    dark[38:, :] = 0
+    dark[:, :4] = 0
+    dark[:, 60:] = 0
+    dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    count, _, stats, centers = cv2.connectedComponentsWithStats(dark, 8)
+    eyes = []
+    for index in range(1, count):
+        ex, ey, ew, eh, area = (int(value) for value in stats[index])
+        cx, cy = (float(value) for value in centers[index])
+        if not (6 <= area <= 160 and 3 <= ew <= 22 and 2 <= eh <= 15):
+            continue
+        if ey <= 10 or ey + eh >= 38:
+            continue
+        if not (10 <= cx <= 27 or 37 <= cx <= 54):
+            continue
+        eyes.append((cx, cy, area, _box_mean(ex, ey, ex + ew, ey + eh)))
+
+    for lx, ly, la, left_eye in eyes:
+        if lx > 27:
+            continue
+        for rx_eye, ry_eye, ra, right_eye in eyes:
+            if rx_eye < 37 or abs(ly - ry_eye) > 7:
+                continue
+            if not (16 <= rx_eye - lx <= 42) or min(la, ra) / max(la, ra) < 0.25:
+                continue
+            mx, my = round((lx + rx_eye) / 2), round((ly + ry_eye) / 2)
+            bridge = _box_mean(mx - 3, my - 3, mx + 4, my + 4)
+            cheek_l = _box_mean(10, 36, 28, 49)
+            cheek_r = _box_mean(36, 36, 54, 49)
+            if (
+                cheek_l - left_eye >= min_delta
+                and cheek_r - right_eye >= min_delta
+                and bridge - max(left_eye, right_eye) >= min_delta
+            ):
+                return True
+
+    return False
 
 
 def _detect_face_roi(
     work_arr: np.ndarray,
     gray_u8: np.ndarray,
     block_size: int,
+    cfg: ThresholdSet | None = None,
 ) -> tuple[tuple[int, int, int, int], bool, str]:
-    """Định vị ROI khuôn mặt 3 tầng: Haar Cascade -> YCrCb/HSV Skin + SAT Haar -> Central."""
+    """Prefer measurable face candidates, then a conservative skin/SAT fallback.
+
+    ``cfg`` is optional for older callers. Candidate ranking uses the same
+    quality thresholds as the downstream analysis, including user overrides.
+    """
     h, w = gray_u8.shape
     min_dim = max(32, block_size * 2)
+    cfg = cfg or load_thresholds()
+    min_side = _setting(cfg, "min_face_side", 64, 16, 512)
+    min_contrast = _setting(cfg, "min_roi_contrast", 8.0, 0, 255)
+    min_reference = _setting(cfg, "min_reference_blocks", 4, 1, 4096)
+
+    def candidate_key(rect):
+        x, y, rw, rh = rect
+        crop = gray_u8[y:y + rh, x:x + rw]
+        contrast = float(np.percentile(crop, 95) - np.percentile(crop, 5))
+        bh, bw = h // block_size, w // block_size
+        reference_count = 0
+        if bh and bw:
+            _, _, reference = _roi_masks((bh, bw), rect, block_size)
+            reference_count = int(np.count_nonzero(reference))
+        checks = (
+            min(rw, rh) >= min_side,
+            contrast >= min_contrast,
+            reference_count >= min_reference,
+        )
+        return all(checks), sum(checks), rw * rh, contrast, -y, -x
 
     # Tầng 1: OpenCV Haar Cascade (nếu bản build hỗ trợ và tìm được file XML).
-    haar_dir = getattr(getattr(cv2, "data", None), "haarcascades", "")
-    cascade_cls = getattr(cv2, "CascadeClassifier", None)
-    if haar_dir and cascade_cls is not None:
-        cascade = cascade_cls(f"{haar_dir}haarcascade_frontalface_default.xml")
-        if not cascade.empty():
-            faces = cascade.detectMultiScale(
-                gray_u8,
-                scaleFactor=1.1,
-                minNeighbors=4,
-                minSize=(min_dim, min_dim),
-            )
-            if len(faces) > 0:
-                x, y, rw, rh = max(faces, key=lambda rect: int(rect[2]) * int(rect[3]))
-                return (int(x), int(y), int(rw), int(rh)), True, "haar_cascade"
+    haar_rect = None
+    cascade, _status = _load_haar_cascade()
+    if cascade is not None:
+        faces = cascade.detectMultiScale(
+            gray_u8,
+            scaleFactor=1.1,
+            minNeighbors=4,
+            minSize=(min_dim, min_dim),
+        )
+        if len(faces) > 0:
+            candidates = [
+                _clip_half_roi(tuple(int(value) for value in rect), (h, w))
+                for rect in faces
+            ]
+            haar_rect = max(candidates, key=candidate_key)
+            if candidate_key(haar_rect)[0]:
+                return haar_rect, True, "haar_cascade"
 
     # Tầng 2: Phân đoạn màu da YCrCb + HSV + hình thái học (C4) + kiểm chứng Haar SAT (C6).
     if work_arr.ndim == 3 and work_arr.shape[2] >= 3:
@@ -198,7 +293,6 @@ def _detect_face_roi(
         n_lbl, _, stats, _ = cv2.connectedComponentsWithStats(skin_mask, 8)
         min_area = max(min_dim * min_dim, int(0.015 * h * w))
         best_rect: tuple[int, int, int, int] | None = None
-        best_area = 0
         for i in range(1, n_lbl):
             x = int(stats[i, cv2.CC_STAT_LEFT])
             y = int(stats[i, cv2.CC_STAT_TOP])
@@ -210,12 +304,18 @@ def _detect_face_roi(
             aspect = rw / float(max(rh, 1))
             if not (0.45 <= aspect <= 1.85):
                 continue
-            if _verify_face_candidate_sat(gray_u8, x, y, rw, rh) and area > best_area:
-                best_area = area
-                best_rect = (x, y, rw, rh)
+            if _verify_face_candidate_sat(gray_u8, x, y, rw, rh):
+                candidate = (x, y, rw, rh)
+                if best_rect is None or candidate_key(candidate) > candidate_key(best_rect):
+                    best_rect = candidate
 
-        if best_rect is not None:
+        if best_rect is not None and (haar_rect is None or candidate_key(best_rect)[0]):
             return best_rect, True, "skin_haar_dip"
+
+    if haar_rect is not None:
+        # Preserve a genuine cascade detection when no candidate is usable;
+        # the analysis reports its exact quality failure instead of a score.
+        return haar_rect, True, "haar_cascade"
 
     # Tầng 3: Fallback về vùng trung tâm khi ảnh xám hoặc không có khuôn mặt.
     return (w // 4, h // 4, max(1, w // 2), max(1, h // 2)), False, "central_fallback"
@@ -629,10 +729,10 @@ class DeepfakeCues:
             sigma_l = _sigma_grid(gray_l.astype(np.float32), k_eff, bs_eff)
             sigma_r = _sigma_grid(gray_r.astype(np.float32), k_eff, bs_eff)
             rect_l, face_l, src_l = _detect_face_roi(
-                left, gray_l, bs_eff
+                left, gray_l, bs_eff, cfg
             )
             rect_r, face_r, src_r = _detect_face_roi(
-                right, gray_r, bs_eff
+                right, gray_r, bs_eff, cfg
             )
             rect_l = _clip_half_roi(rect_l, gray_l.shape)
             rect_r = _clip_half_roi(rect_r, gray_r.shape)
@@ -682,7 +782,7 @@ class DeepfakeCues:
         else:
             sigma = _sigma_grid(gray, k_eff, bs_eff)
             (rx, ry, rw, rh), face_detected, roi_source = _detect_face_roi(
-                work.array, gray_u8, bs_eff
+                work.array, gray_u8, bs_eff, cfg
             )
             rx, ry, rw, rh = _clip_half_roi((rx, ry, rw, rh), gray_u8.shape)
 
@@ -917,6 +1017,14 @@ class DeepfakeCues:
         heatmap: np.ndarray | None = None,
         params_hash: str = "",
     ) -> AlgorithmResult:
+        _cascade, haar_status = _load_haar_cascade()
+        limitations = list(limitations)
+        if haar_status != "available":
+            limitations.insert(
+                min(1, len(limitations)),
+                "OpenCV không cung cấp Haar Cascade dùng được; chỉ còn định vị màu da/cấu trúc "
+                "thận trọng, có thể bỏ sót vùng mặt. Cài môi trường OpenCV 4 theo pyproject.toml.",
+            )
         return AlgorithmResult(
             method=MethodName.DEEPFAKE_CUES,
             verdict=verdict,
@@ -925,7 +1033,11 @@ class DeepfakeCues:
             mask=mask,
             heatmap=heatmap,
             evidence={
-                "variant": "dip_6pillar_deepfake_cues_v2",
+                "variant": "dip_6pillar_deepfake_cues_v3",
+                "haar_cascade_status": haar_status,
+                "face_detector_backend": (
+                    "haar_with_skin_fallback" if haar_status == "available" else "skin_fallback_only"
+                ),
                 "calibration_status": "uncalibrated",
                 "score_is_probability": False,
                 "cue_flag": False,

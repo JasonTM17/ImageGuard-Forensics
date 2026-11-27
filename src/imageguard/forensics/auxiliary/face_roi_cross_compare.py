@@ -7,7 +7,13 @@ verdict khi cả hai ROI đều được phát hiện là mặt. Đây là tín 
 phá bổ sung cho ``DeepfakeCues`` — theo contract AUX_METHODS nó chỉ có thể
 nâng ``NO_INDICATION`` → ``INCONCLUSIVE``, KHÔNG BAO GIỜ ``SUSPICIOUS``.
 
-Ba đo lường trên ROI đã chuẩn hoá 96×96 (dùng lại ``_detect_face_roi`` và
+Trước khi đo, kiểm tra clipping, độ tương phản tương đối và cấu trúc của hai
+ROI. Căn dịch nguyên nhỏ trên ảnh low-pass, kiểm tra hai chiều rồi lấy hai
+crop tương ứng từ pixel gốc; không warp/làm mịn ảnh dùng để đo vi kết cấu.
+Pose/crop không tương thích được báo không đủ điều kiện đối chiếu, không
+coi sai biệt đó là dấu hiệu can thiệp. Đây không phải kiểm tra danh tính.
+
+Ba đo lường trên crop tương ứng trong ROI chuẩn hoá 96×96 (dùng lại ``_detect_face_roi`` và
 ``_fft_highfreq_cue`` của deepfake_cues, LBP/χ² của ``ipkit.features_basic``):
 
 1. residual MAE — chênh lệch mức năng lượng nhiễu phần dư (|img − median3|)
@@ -62,6 +68,16 @@ _W_RESIDUAL = 0.30
 _W_LBP = 0.45
 _W_FFT = 0.25
 
+# Conservative comparability defaults, exercised on synthetic controls only.
+# NCC is computed on low-pass structure; it is not an identity or fake score.
+_MAX_CLIPPED_FRACTION = 0.20
+_MIN_CONTRAST_RATIO = 0.5
+_MAX_CONTRAST_RATIO = 2.0
+_ALIGN_MARGIN = 6  # search ±6 px; boundary hits abstain instead of extrapolating
+_MIN_STRUCTURE_STD = 1.0
+_MIN_STRUCTURE_CORRELATION = 0.85
+_MAX_REVERSE_ERROR = 1
+
 
 @dataclass(frozen=True, slots=True)
 class _FaceSample:
@@ -70,6 +86,7 @@ class _FaceSample:
     source: str
     min_side: int
     contrast: float
+    clipped_fraction: float
     quality_reason: str
 
 
@@ -91,11 +108,12 @@ def _face_roi_96(
     work, _ = aux_working_copy(doc, cfg)
     arr = work.array
     gray = _gray_u8(arr)
-    rect, detected, source = _detect_face_roi(arr, gray, _BLOCK)
+    rect, detected, source = _detect_face_roi(arr, gray, _BLOCK, cfg=cfg)
     x, y, rw, rh = _clip_half_roi(rect, gray.shape)
     roi = gray[y : y + rh, x : x + rw]
     min_side = min(rw, rh)
     contrast = float(np.percentile(roi, 95) - np.percentile(roi, 5))
+    clipped_fraction = float(np.mean((roi <= 2) | (roi >= 253)))
     minimum_side = _setting(cfg, "min_face_side", 64, 16, 512)
     minimum_contrast = _setting(cfg, "min_roi_contrast", 8.0, 0, 255)
     reason = ""
@@ -105,6 +123,8 @@ def _face_roi_96(
         reason = "roi_too_small"
     elif contrast < minimum_contrast:
         reason = "low_contrast"
+    elif clipped_fraction > _MAX_CLIPPED_FRACTION:
+        reason = "clipped_pixels"
     return _FaceSample(
         pixels=(
             cv2.resize(roi, (ROI_SIDE, ROI_SIDE), interpolation=cv2.INTER_AREA)
@@ -114,6 +134,7 @@ def _face_roi_96(
         source=source,
         min_side=min_side,
         contrast=contrast,
+        clipped_fraction=clipped_fraction,
         quality_reason=reason,
     )
 
@@ -136,6 +157,61 @@ def _same_array(a: ImageDocument, b: ImageDocument) -> bool:
         arr_a.shape == arr_b.shape
         and arr_a.dtype == arr_b.dtype
         and bool(np.array_equal(arr_a, arr_b))
+    )
+
+
+def _align_comparable_rois(
+    reference: np.ndarray, suspect: np.ndarray,
+) -> tuple[np.ndarray | None, np.ndarray | None, dict]:
+    """Bounded integer correspondence without resampling the measured texture.
+
+    Gaussian low-pass images are used ONLY to estimate translation and check
+    pose/framing agreement. Forward and reverse normalized correlations must
+    agree. Features are then computed on equally sized original-pixel crops.
+    Reject a peak at the search boundary: the required motion may be larger.
+    """
+    margin = _ALIGN_MARGIN
+    r_low = cv2.GaussianBlur(reference.astype(np.float32), (0, 0), 2.0)
+    s_low = cv2.GaussianBlur(suspect.astype(np.float32), (0, 0), 2.0)
+    r_template = r_low[margin:-margin, margin:-margin]
+    s_template = s_low[margin:-margin, margin:-margin]
+    info = {
+        "ref_comparison_reason": "",
+        "ref_alignment_correlation": None,
+        "ref_alignment_dx": None,
+        "ref_alignment_dy": None,
+        "ref_alignment_reverse_error": None,
+    }
+    if min(float(r_template.std()), float(s_template.std())) < _MIN_STRUCTURE_STD:
+        info["ref_comparison_reason"] = "insufficient_structure"
+        return None, None, info
+    forward = cv2.matchTemplate(s_low, r_template, cv2.TM_CCOEFF_NORMED)
+    reverse = cv2.matchTemplate(r_low, s_template, cv2.TM_CCOEFF_NORMED)
+    _, f_score, _, f_xy = cv2.minMaxLoc(forward)
+    _, r_score, _, r_xy = cv2.minMaxLoc(reverse)
+    dx, dy = int(f_xy[0]) - margin, int(f_xy[1]) - margin
+    rdx, rdy = int(r_xy[0]) - margin, int(r_xy[1]) - margin
+    correlation = min(f_score, r_score)
+    reverse_error = max(abs(dx + rdx), abs(dy + rdy))
+    info.update({
+        "ref_alignment_correlation": round(float(correlation), 4),
+        "ref_alignment_dx": dx,
+        "ref_alignment_dy": dy,
+        "ref_alignment_reverse_error": reverse_error,
+    })
+    if not np.isfinite(correlation) or correlation < _MIN_STRUCTURE_CORRELATION:
+        info["ref_comparison_reason"] = "structure_mismatch"
+    elif max(abs(dx), abs(dy), abs(rdx), abs(rdy)) >= margin:
+        info["ref_comparison_reason"] = "alignment_limit"
+    elif reverse_error > _MAX_REVERSE_ERROR:
+        info["ref_comparison_reason"] = "alignment_inconsistent"
+    if info["ref_comparison_reason"]:
+        return None, None, info
+    side = reference.shape[0] - 2 * margin
+    return (
+        reference[margin:-margin, margin:-margin],
+        suspect[margin + dy:margin + dy + side, margin + dx:margin + dx + side],
+        info,
     )
 
 
@@ -172,12 +248,46 @@ def compare_face_rois(
         "sus_roi_min_side": sus.min_side,
         "ref_roi_contrast": round(ref.contrast, 4),
         "sus_roi_contrast": round(sus.contrast, 4),
+        "ref_roi_clipped_fraction": round(ref.clipped_fraction, 4),
+        "sus_roi_clipped_fraction": round(sus.clipped_fraction, 4),
+        "ref_comparison_reason": "",
+        "ref_contrast_ratio": None,
+        "ref_alignment_correlation": None,
+        "ref_alignment_dx": None,
+        "ref_alignment_dy": None,
+        "ref_alignment_reverse_error": None,
         "reference_sha256": reference.sha256,
         "suspect_sha256": suspect.sha256,
     }
     if ref.pixels is None or sus.pixels is None:
         return comparison
-    ref_roi, sus_roi = ref.pixels, sus.pixels
+    if same_frame:
+        # Exact equality is stronger than a registration estimate. Repeated or
+        # flat low-pass structure must not invent uncertainty for the same frame.
+        return {
+            **comparison,
+            "ref_combined_cue": 0.0,
+            "ref_residual_gap": 0.0,
+            "ref_residual_cue": 0.0,
+            "ref_lbp_chi2": 0.0,
+            "ref_lbp_cue": 0.0,
+            "ref_fft_peak_delta": 0.0,
+            "ref_fft_cue": 0.0,
+            "ref_contrast_ratio": 1.0,
+            "ref_alignment_correlation": 1.0,
+            "ref_alignment_dx": 0,
+            "ref_alignment_dy": 0,
+            "ref_alignment_reverse_error": 0,
+        }
+    contrast_ratio = sus.contrast / max(ref.contrast, 1e-6)
+    comparison["ref_contrast_ratio"] = round(contrast_ratio, 4)
+    if not _MIN_CONTRAST_RATIO <= contrast_ratio <= _MAX_CONTRAST_RATIO:
+        comparison["ref_comparison_reason"] = "exposure_mismatch"
+        return comparison
+    ref_roi, sus_roi, alignment = _align_comparable_rois(ref.pixels, sus.pixels)
+    comparison.update(alignment)
+    if ref_roi is None or sus_roi is None:
+        return comparison
 
     residual_gap = abs(_residual_level(ref_roi) - _residual_level(sus_roi))
     residual_cue = float(np.clip(residual_gap / _RESIDUAL_GAP_SPAN, 0.0, 1.0))
@@ -200,11 +310,6 @@ def compare_face_rois(
             1.0,
         )
     )
-    if same_frame:
-        # Trùng byte → mọi đo lường đã là 0; chốt rõ ràng để contract không
-        # lệ thuộc dung sai số học.
-        combined = 0.0
-
     return {
         **comparison,
         "ref_combined_cue": round(combined, 4),
@@ -281,7 +386,8 @@ def apply_reference_cue(
     )
     quality_ok = not cmp["ref_quality_reason"] and not cmp["sus_quality_reason"]
     flagged = (
-        available and both_faces and quality_ok and not cmp["same_frame"]
+        available and both_faces and quality_ok and not cmp["ref_comparison_reason"]
+        and not cmp["same_frame"]
         and cue is not None and cue >= REFERENCE_CUE_MIN
     )
     if not available:
@@ -310,6 +416,24 @@ def apply_reference_cue(
                     f"cue tham chiếu không áp dụng — vùng mặt {label} thiếu tương phản "
                     f"(p95−p5={cmp[f'{prefix}_roi_contrast']:.2f} trước resize)"
                 )
+            elif reason == "clipped_pixels":
+                limitations.append(
+                    f"cue tham chiếu không áp dụng — vùng mặt {label} có quá nhiều pixel "
+                    "cháy sáng hoặc mất chi tiết vùng tối; hãy chụp lại với phơi sáng phù hợp"
+                )
+    elif cmp["ref_comparison_reason"]:
+        status = "comparison_unavailable"
+        reason = cmp["ref_comparison_reason"]
+        if reason == "exposure_mismatch":
+            explanation = "độ tương phản/phơi sáng giữa hai vùng mặt khác nhau quá lớn"
+        elif reason == "insufficient_structure":
+            explanation = "chưa đủ cấu trúc sáng tối ổn định để xác nhận hai vùng tương ứng"
+        else:
+            explanation = "pose hoặc vị trí vùng mặt chưa khớp trong phạm vi căn dịch nhỏ"
+        limitations.append(
+            f"cue tham chiếu không áp dụng — {explanation}; "
+            "hãy chụp cùng góc nhìn và điều kiện sáng"
+        )
     elif cmp["same_frame"]:
         status = "same_frame"
         limitations.append(
@@ -351,6 +475,9 @@ def apply_reference_cue(
                 key: cmp[key] for key in (
                     "ref_quality_reason", "sus_quality_reason", "ref_roi_min_side",
                     "sus_roi_min_side", "ref_roi_contrast", "sus_roi_contrast",
+                    "ref_roi_clipped_fraction", "sus_roi_clipped_fraction",
+                    "ref_comparison_reason", "ref_contrast_ratio", "ref_alignment_correlation",
+                    "ref_alignment_dx", "ref_alignment_dy", "ref_alignment_reverse_error",
                 )
             },
         }

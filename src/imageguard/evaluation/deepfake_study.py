@@ -1,7 +1,8 @@
 """Evaluate exploratory face cues without turning abstentions into negatives.
 
-This module measures cue behavior on independently labelled images. It does not
-train a classifier, tune a threshold, or interpret the cue score as probability.
+This module measures cue behavior and exports DIP features on labelled images.
+An optional fixed model is evaluated only on test, after a provenance audit.
+It never trains, tunes a threshold, or interprets a score as probability.
 """
 
 from __future__ import annotations
@@ -22,6 +23,14 @@ from imageguard.core.enums import Verdict
 from imageguard.core.errors import ErrorResult
 from imageguard.core.io import safe_open
 from imageguard.forensics.auxiliary.deepfake_cues import DeepfakeCues
+from imageguard.forensics.auxiliary.deepfake_model import (
+    EXTRACTOR_VARIANT,
+    FEATURE_SCHEMA,
+    config_digest,
+    features_from_evidence,
+    validate_model,
+)
+from imageguard.forensics.auxiliary.learned_deepfake import LearnedDeepfakeCues
 
 
 def _digest(value: object) -> str:
@@ -58,6 +67,8 @@ def validate_manifest(manifest: dict, root: Path) -> list[dict]:
                 raise ValueError(f"each sample requires a nonempty string {key}")
         if sample["label"] not in {"real", "fake"} or sample["split"] not in {"dev", "test"}:
             raise ValueError("labels must be real/fake and splits must be dev/test")
+        if any(sample[key] != sample[key].strip() for key in ("id", "source_group")):
+            raise ValueError("id and source_group must not have leading/trailing whitespace")
         if "condition" in sample and (not isinstance(sample["condition"], str) or not sample["condition"].strip()):
             raise ValueError("condition must be a nonempty string when supplied")
         path = _image_path(root, sample["path"])
@@ -129,7 +140,7 @@ def score_roc_auc(scores: list[float], labels: list[bool]) -> float | None:
     return (positive_rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
 
 
-def summarize_samples(rows: list[dict]) -> dict:
+def summarize_samples(rows: list[dict], *, ranking_key: str = "score") -> dict:
     """Keep excluded samples visible, especially for asymmetric face coverage."""
     eligible = [row for row in rows if row["exclusion_reason"] is None]
     by_class = {}
@@ -155,14 +166,16 @@ def summarize_samples(rows: list[dict]) -> dict:
         "exclusions": dict(sorted(Counter(row["exclusion_reason"] for row in rows if row["exclusion_reason"]).items())),
         "by_class": by_class,
         "score_roc_auc_eligible": score_roc_auc(
-            [row["score"] for row in eligible],
+            [row[ranking_key] for row in eligible],
             [row["label"] == "fake" for row in eligible],
         ),
+        "auc_ranking_field": ranking_key,
     }
 
 
 def run_deepfake_study(
     manifest: dict, root: Path, *, split: str = "test", cfg: ThresholdSet | None = None,
+    model: dict | None = None,
 ) -> dict:
     """Run shipped face cues at one fixed configuration on a labelled split."""
     if split not in {"dev", "test"}:
@@ -173,12 +186,18 @@ def run_deepfake_study(
         raise ValueError(f"manifest has no {split} samples")
     cfg = cfg or load_thresholds()
     hashes, unhashed = _content_hashes(samples, root, cfg.limit("max_file_bytes", limits.MAX_FILE_BYTES))
-    analyzer = DeepfakeCues()
+    if model is not None:
+        if split != "test":
+            raise ValueError("a learned model may only be evaluated on test; use grouped OOF for dev")
+        model = validate_model(model, expected_config_sha256=config_digest(cfg.raw))
+        _assert_model_holdout(model, selected, hashes)
+    analyzer = DeepfakeCues() if model is None else LearnedDeepfakeCues(model)
     rows: list[dict] = []
     for sample in selected:
-        row = {key: sample[key] for key in ("id", "label", "source_group")}
+        row = {key: sample[key] for key in ("id", "label", "source_group", "split")}
         row.update(condition=sample.get("condition", "original"), sha256=hashes.get(sample["id"]),
-                   score=None, cue_flag=None, verdict=None, exclusion_reason=None)
+                   score=None, cue_flag=None, verdict=None, exclusion_reason=None,
+                   features=None, feature_exclusion_reason=None)
         doc = safe_open(_image_path(root, sample["path"]), cfg)
         if isinstance(doc, ErrorResult):
             row["exclusion_reason"] = f"input:{doc.code.value}"
@@ -211,18 +230,48 @@ def run_deepfake_study(
                 else:
                     row["score"] = result.score
                     row["cue_flag"] = result.evidence["cue_flag"]
+                    try:
+                        row["features"] = features_from_evidence(result.evidence)
+                    except ValueError:
+                        row["feature_exclusion_reason"] = "invalid_feature_vector"
+                    if model is not None:
+                        row["heuristic_score"] = result.evidence["heuristic_score"]
+                        row["heuristic_cue_flag"] = result.evidence["heuristic_cue_flag"]
+                        row["model_decision_score"] = result.evidence["model_decision_score"]
         rows.append(row)
-    return {
-        "protocol": "deepfake-cue-study-v1",
+    ranking_key = "score" if model is None else "model_decision_score"
+    report = {
+        "protocol": "deepfake-cue-study-v2",
         "scope": "frame-level exploratory cue evaluation; scores are not probabilities; no authenticity verdict",
         "split": split,
         "manifest_sha256": _digest(manifest),
-        "config_sha256": _digest(cfg.raw),
+        "config_sha256": config_digest(cfg.raw),
         "config": cfg.raw,
+        "feature_schema": FEATURE_SCHEMA,
+        "extractor_variant": EXTRACTOR_VARIANT,
+        "decision_source": "heuristic" if model is None else "learned_dip",
+        "model_sha256": None if model is None else model["model_sha256"],
         "environment": {"python": platform.python_version(), "opencv": cv2.__version__, "numpy": np.__version__},
         "integrity": {"n_manifest_samples": len(samples), "n_hashed": len(hashes), "unhashed_ids": unhashed},
-        "summary": summarize_samples(rows),
-        "by_condition": {condition: summarize_samples([row for row in rows if row["condition"] == condition])
+        "summary": summarize_samples(rows, ranking_key=ranking_key),
+        "by_condition": {condition: summarize_samples([row for row in rows if row["condition"] == condition],
+                                                       ranking_key=ranking_key)
                          for condition in sorted({row["condition"] for row in rows})},
         "samples": rows,
     }
+    if model is not None:
+        baseline_rows = [{**row, "score": row.get("heuristic_score"),
+                          "cue_flag": row.get("heuristic_cue_flag")} for row in rows]
+        report["heuristic_baseline_summary"] = summarize_samples(baseline_rows)
+    return report
+
+
+def _assert_model_holdout(model: dict, selected: list[dict], hashes: dict[str, str]) -> None:
+    """Reject overlap even when test is supplied as a separate manifest."""
+    training = model["training"]["samples"]
+    ids = {row["id"] for row in training}
+    groups = {row["source_group"] for row in training}
+    image_hashes = {row["sha256"] for row in training if row.get("sha256")}
+    for row in selected:
+        if row["id"] in ids or row["source_group"] in groups or hashes.get(row["id"]) in image_hashes:
+            raise ValueError(f"test sample overlaps model development data: {row['id']!r}")

@@ -138,8 +138,10 @@ block. Chỉ cue khám phá — không verdict độc lập ([`docs/algorithms.m
 ### 2.7 So sánh ngắn với học sâu end-to-end
 
 Đồ án chọn pipeline cổ điển có giải thích (mask, evidence JSON) thay vì mạng
-ảnh-vào-nhãn-ra — phù hợp phạm vi môn và yêu cầu audit ngưỡng. Hướng ML chỉ
-design: [`docs/ml-extension.md`](../ml-extension.md).
+ảnh-vào-nhãn-ra — phù hợp phạm vi môn và yêu cầu audit ngưỡng. Nhánh mở rộng
+logistic trên 13 đặc trưng DIP đã có luồng huấn luyện/kiểm thử theo nhóm nguồn,
+nhưng chưa kèm trọng số hay kết quả Deepfake thực nghiệm. Hướng mạng sâu còn
+ở thiết kế: [`docs/ml-extension.md`](../ml-extension.md).
 
 **Nguồn:** [`docs/algorithms.md`](../algorithms.md);
 [`docs/algorithms/02-keypoint.md`](../algorithms/02-keypoint.md);
@@ -818,6 +820,7 @@ Kiến trúc phân lớp hiện tại cho phép mở rộng sang các bài toán
      - **Trụ cột 6 — Đối xứng cấu trúc khuôn mặt trái–phải (`_facial_hog_symmetry_cue`):** Tính độ lệch đặc trưng gradient HOG và 7 bất biến Hu giữa nửa khuôn mặt trái và nửa phải lật ngang (`hog_asym`).
    - **Contract & Hợp nhất 5 trạng thái:** `DeepfakeCues` nằm trong nhóm `AUX_METHODS` của `fusion.py` — chỉ trả `INCONCLUSIVE`, `NO_INDICATION` hoặc `NOT_APPLICABLE`, tuyệt đối không overclaim hay trả `SUSPICIOUS_INDICATION` đơn lẻ; toàn bộ chỉ số thành phần và nguồn ROI (`roi_source`) được lưu vào `evidence` kèm `heatmap` đa lớp để đối chiếu trên GUI. Không có mặt, ROI nhỏ/ít tương phản hoặc thiếu nền thì `score=null`, `cue_unavailable=true`; cờ không gian `cue_flag` tách biệt với thiếu dữ liệu. Điểm vượt ngưỡng phải có ít nhất hai nhóm texture/phổ/biên hỗ trợ. Giao thức thực nghiệm và giới hạn: [`docs/deepfake-evaluation.md`](../deepfake-evaluation.md).
    - **Sửa sai lệch theo kích thước của trụ FFT (2026-11-27):** Cách dùng top-8 bin trước đây làm cùng loại nhiễu có điểm cao hơn ở ROI nhỏ. Bản sửa dùng năng lượng `|FFT|²` trong top 1% bin cao tần, chuẩn hóa theo tỷ lệ bin thực tế và tham chiếu nhiễu trắng `1 − log(q)`; `fft_hf_conc8` chỉ còn là diagnostic. Các đối chứng nhiều seed/kích thước kiểm tra lỗi số học, không phải bằng chứng về độ chính xác Deepfake. Vải, màn hình và texture tuần hoàn thật vẫn có thể bật tín hiệu; các ngưỡng chưa hiệu chuẩn trên dữ liệu thật/giả.
+   - **Mở rộng học trọng số DIP:** `deepfake_training.py` fit logistic regression NumPy trên 13 đặc trưng, class-balanced loss + L2, cross-validation theo source_group với scaler fit riêng từng fold. JSON model gắn version/config/provenance; `learned_deepfake.py` giữ điều kiện ROI và dùng sigmoid margin cho chỉ số 0–1 chưa hiệu chuẩn, ngưỡng 0.5. Model không sinh mask; heuristic score được lưu riêng. GUI có lựa chọn nạp model; evaluator test chặn trùng nguồn/ID/hash với dev và so baseline cùng cohort. Đây là khả năng phần mềm, chưa phải kết quả nhận diện trên dữ liệu Deepfake thật.
    - **Hai phép đối chiếu cùng phiên:** (a) mốc PNG lossless, không EXIF/GPS, có hash và hạn 8 giờ; so ROI 96×96 bằng residual/LBP/FFT. `reference_cue_flag` chỉ có thể nâng `NO_INDICATION` lên `INCONCLUSIVE`, không cộng điểm không gian và không hỗ trợ ảnh ghép hai camera. (b) burst 4–6 khung có manifest/hash; `temporal_static_score` chỉ mô tả độ tĩnh của vùng mặt, không đổi score/verdict vì người thật cũng có thể đứng yên. Cả hai không xác nhận danh tính, live-camera hay tính xác thực của ảnh.
 
 ### 7.4 Kết luận

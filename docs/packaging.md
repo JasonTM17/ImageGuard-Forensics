@@ -24,6 +24,9 @@ powershell -ExecutionPolicy Bypass -File scripts/build_app.ps1
   `PATH` bị đóng gói nhầm, làm Qt không nạp được. Wrapper ngăn nguồn DLL đó
   lọt vào bundle và phục hồi `PATH` sau khi build.
 - `configs/` bundle kèm qua spec — thresholds đọc được trong exe.
+- Haar frontal-face XML được đưa rõ ràng vào `cv2/data/` qua spec. Build
+  thiếu asset sẽ dừng; CI kiểm tra XML trong bundle trước startup smoke.
+  Runtime chuẩn dùng OpenCV `>=4.10,<5` để có `CascadeClassifier`.
 - Onedir (không phải onefile): Qt apps start nhanh hơn, dễ debug.
 - DB + artifacts tạo runtime tại `data/` cạnh exe — user có thể xóa sạch.
 
@@ -33,6 +36,10 @@ CI dùng wrapper và kiểm tra executable khởi động ở chế độ offscr
 đủ lâu để tạo SQLite mới bên cạnh file exe. Trước khi demo, mở bản vừa build,
 nạp ảnh, chạy phân tích rồi kiểm tra overlay, verdict và lịch sử. Script báo
 lỗi nếu PyInstaller trả exit code khác 0.
+
+Với Deepfake, kiểm tra evidence `haar_cascade_status=available`. Nếu nạp
+model DIP đã huấn luyện, chọn JSON ngoài bundle qua **Nạp mô hình DIP…**;
+không có trọng số đã học được nhúng mặc định vào executable.
 
 ```powershell
 dist\ImageGuard\ImageGuard.exe   # mở app, chạy 1 phân tích mẫu

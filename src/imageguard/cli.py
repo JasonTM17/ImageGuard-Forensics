@@ -45,6 +45,9 @@ def main() -> None:
         parents=[_ver],
     )
     analyze_p.add_argument("file", type=Path, help="file ảnh cần phân tích")
+    analyze_p.add_argument("--config", type=Path, help="cấu hình ngưỡng cố định dùng khi huấn luyện/đánh giá")
+    analyze_p.add_argument("--deepfake-model", type=Path,
+                           help="mô hình DIP JSON đã học trên dev; cần --methods deepfake")
     analyze_p.add_argument(
         "--methods",
         default=_METHODS_DEFAULT_STR,
@@ -141,6 +144,8 @@ def main() -> None:
 
 
 def _run_analyze_command(args: argparse.Namespace) -> None:
+    from yaml import YAMLError
+
     from imageguard.core.config import load_thresholds
     from imageguard.core.errors import ErrorResult
     from imageguard.core.models import ForensicReport
@@ -155,10 +160,31 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
     from imageguard.storage.db import make_session_factory
     from imageguard.storage.repository import AnalysisRepository, ImageRepository
 
-    cfg = load_thresholds()
+    try:
+        cfg = load_thresholds(getattr(args, "config", None))
+    except (OSError, ValueError, YAMLError) as error:
+        print(f"error: cannot load configuration: {error}", file=sys.stderr)
+        raise SystemExit(2) from error
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     if not methods:
         methods = list(DEFAULT_METHODS)
+    model_path = getattr(args, "deepfake_model", None)
+    model_sha256 = None
+    if model_path is not None:
+        from imageguard.forensics.auxiliary.deepfake_model import (
+            config_digest,
+            load_model,
+        )
+
+        if "deepfake" not in methods:
+            print("error: --deepfake-model requires --methods deepfake", file=sys.stderr)
+            raise SystemExit(2)
+        try:
+            model = load_model(model_path, expected_config_sha256=config_digest(cfg.raw))
+            model_sha256 = model["model_sha256"]
+        except (OSError, ValueError) as error:
+            print(f"error: cannot use deepfake model: {error}", file=sys.stderr)
+            raise SystemExit(2) from error
 
     sf = None
     if args.no_persist:
@@ -175,7 +201,8 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
         svc = AnalysisService(cfg, ImageRepository(sf), analyses_repo, store)
 
     try:
-        req = AnalysisRequest(path=args.file, methods=methods)
+        req = AnalysisRequest(path=args.file, methods=methods, deepfake_model_path=model_path,
+                              deepfake_model_sha256=model_sha256)
         result = svc.analyze(req)
     finally:
         if sf is not None:

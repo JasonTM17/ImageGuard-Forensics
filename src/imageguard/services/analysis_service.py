@@ -48,6 +48,8 @@ class AnalysisRequest:
     progress_cb: ProgressCB = None
     include_exif: bool = True
     reference_path: Path | None = None  # ảnh tham chiếu phiên cho deepfake cue
+    deepfake_model_path: Path | None = None  # opt-in model JSON trained on labelled dev
+    deepfake_model_sha256: str | None = None  # pin the model selected by the caller
 
 
 class _ReferenceOpenError(Exception):
@@ -95,7 +97,22 @@ class AnalysisService:
                 break
             _progress(req.progress_cb, 0.1 + 0.7 * i / len(specs), spec)
             try:
-                r = load_method(spec).analyze(doc, self.cfg, req.cancel)
+                method = load_method(spec)
+                if spec in {"deepfake", "deepfake_cues"} and req.deepfake_model_path is not None:
+                    from imageguard.forensics.auxiliary.deepfake_model import (
+                        config_digest,
+                        load_model,
+                    )
+                    from imageguard.forensics.auxiliary.learned_deepfake import (
+                        LearnedDeepfakeCues,
+                    )
+
+                    model = load_model(req.deepfake_model_path,
+                                       expected_config_sha256=config_digest(self.cfg.raw))
+                    if req.deepfake_model_sha256 is not None and model["model_sha256"] != req.deepfake_model_sha256:
+                        raise ValueError("deepfake model changed since selection; select it again")
+                    method = LearnedDeepfakeCues(model)
+                r = method.analyze(doc, self.cfg, req.cancel)
             except Exception as e:  # noqa: BLE001 - method isolation: method crash/cancel không được huỷ pipeline
                 r = _error_result(spec, e)
             if r.method is MethodName.DEEPFAKE_CUES:

@@ -88,7 +88,7 @@ def test_service_passes_quality_thresholds_to_reference_comparison(tmp_path, mon
 
     monkeypatch.setattr(
         comparison, "_detect_face_roi",
-        lambda arr, gray, block: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
+        lambda arr, gray, block, cfg=None: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
     )
     monkeypatch.setattr(
         service, "load_method",
