@@ -51,6 +51,11 @@ Trên `pull_request` và `push` vào `main`, workflow `ci` chạy trên
 `pytest -q` với `QT_QPA_PLATFORM=offscreen`. Job song song `test-py313` lặp
 cùng bước trên Python 3.13 (không thay job `test` làm required check).
 
+Job `test-linux` chạy Python 3.13 trên `ubuntu-24.04`, cài thư viện Qt hệ thống
+rồi chạy Ruff và toàn bộ pytest với `QT_QPA_PLATFORM=offscreen`. Job này không
+dùng `continue-on-error`; xem [kiểm tra cloud 2026-11-27](cloud_stability_2026-11-27.md)
+về hồi quy đường dẫn Windows trên Linux, model JSON và vòng đời Qt worker.
+
 ## Độ phủ kiểm thử (đo ngày 2026-11-24, CI trên commit `c034a92`)
 
 Chạy bằng `QT_QPA_PLATFORM=offscreen` và `pytest --cov=src/imageguard --cov-report=term-missing` (số đo CI `windows-latest` job `test`/`test-py313`):

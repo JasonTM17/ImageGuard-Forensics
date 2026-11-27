@@ -66,6 +66,7 @@ class HistoryScreen(QWidget):
         self.table.setColumnHidden(4, True)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         lay.addWidget(self.table)
         btns = QHBoxLayout()
         self.btn_reopen = QPushButton(strings.BTN_REOPEN)
@@ -96,9 +97,7 @@ class HistoryScreen(QWidget):
         self.refresh()
 
     def _on_selection_changed(self) -> None:
-        has_row = (
-            self.table.rowCount() > 0 and self.table.currentRow() >= 0
-        )
+        has_row = self._selected_id() is not None
         self.btn_reopen.setEnabled(has_row)
         self.btn_export.setEnabled(has_row)
         self.btn_delete.setEnabled(has_row)
@@ -133,12 +132,17 @@ class HistoryScreen(QWidget):
             self.table.setItem(i, 3, _table_cell(str(r["n_methods"])))
             self.table.setItem(i, 4, _table_cell(r["id"]))
         self._on_selection_changed()
+        self.lbl_empty.setText(strings.EMPTY_HISTORY if not rows else "")
         self.lbl_empty.setVisible(not rows)
 
     def _selected_id(self) -> str | None:
-        row = self.table.currentRow()
-        if row < 0:
+        # Accessibility can select a cell/row without moving the current index;
+        # clearSelection can also leave that current index pointing at old data.
+        # Route every action through the actual, unambiguous selection.
+        rows = {index.row() for index in self.table.selectedIndexes()}
+        if len(rows) != 1:
             return None
+        row = rows.pop()
         item = self.table.item(row, 4)
         return item.text() if item else None
 

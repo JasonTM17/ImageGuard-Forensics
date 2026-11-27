@@ -49,7 +49,13 @@ def config_digest(value: dict) -> str:
 def _number(value: object, label: str, low: float, high: float) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
         raise ValueError(f"{label} must be a finite number")  # noqa: TRY004 - one validation error contract
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError) as error:
+        # JSON integers can exceed float64 while fitting within the model file
+        # size limit. Keep malformed numeric input in the validation contract
+        # used by the GUI and CLI instead of leaking an uncaught OverflowError.
+        raise ValueError(f"{label} must be a finite number in [{low}, {high}]") from error
     if not math.isfinite(number) or not low <= number <= high:
         raise ValueError(f"{label} must be finite and in [{low}, {high}]")
     return number

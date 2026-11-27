@@ -492,6 +492,7 @@ class AnalyzeScreen(QWidget):
             return
         self._clear_results()  # ẩn banner/export/cards cũ trước khi run mới
         self.lbl_err.setText("")
+        self.lbl_status.setText("")
         self.progress.setValue(0)
         self._cancel_event = threading.Event()
         req = AnalysisRequest(
@@ -521,11 +522,13 @@ class AnalyzeScreen(QWidget):
         self._worker = None
         self._set_running(False)
         self._clear_results()
+        self.lbl_status.setText("")
         self.lbl_err.setText(redact_paths_in_message(msg))
 
     def _on_result(self, out) -> None:
         self._worker = None
         self._set_running(False)
+        self.lbl_status.setText("")
         if isinstance(out, ErrorResult):
             self._clear_results()
             self.lbl_err.setText(f"{out.code.value}: {redact_paths_in_message(out.message)}")

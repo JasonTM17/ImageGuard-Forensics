@@ -123,6 +123,7 @@ FMT_OVERLAY_TWIN = OVERLAY_PAIRS_FMT
 STATUS_ENHANCE_CANCELLED = "Đã hủy tăng cường."
 STATUS_ANALYZE_CANCELLING = "Đang dừng phân tích…"
 STATUS_ANALYZE_CANCELLED = "Đã hủy phân tích."
+STATUS_CLOSING_JOBS = "Đang dừng tác vụ trước khi đóng…"
 
 HIST_COL_TIME = "Thời gian"
 HIST_COL_IMAGE = "Ảnh"

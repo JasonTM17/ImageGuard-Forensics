@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -152,18 +151,17 @@ class ExperimentRepository:
 
 
 def _assert_relative(rel: str) -> None:
-    if not rel:
-        # Path("") không có parts/anchor/drive — lọt qua mọi kiểm tra dưới
-        # và để lại row artifact không truy cập được bởi abs_path.
-        raise ValueError(f"DB chỉ lưu relative path an toàn: {rel!r}")
-    p = Path(rel)
+    # DB files can be copied between hosts. Check both path syntaxes without
+    # relying on os.path, whose rules change with the current platform.
+    posix = PurePosixPath(rel)
+    windows = PureWindowsPath(rel)
     unsafe = (
-        ".." in p.parts
-        or os.path.isabs(rel)
-        or p.is_absolute()
-        or p.anchor
-        or p.drive
-        or rel.startswith(("\\\\", "//"))
+        not posix.parts
+        or not windows.parts
+        or ".." in posix.parts
+        or ".." in windows.parts
+        or posix.anchor
+        or windows.anchor
     )
     if unsafe:
         raise ValueError(f"DB chỉ lưu relative path an toàn: {rel!r}")

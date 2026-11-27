@@ -263,13 +263,18 @@ def test_abs_path_only_ever_returns_paths_inside_root(
     assert _resolved(path).startswith(_resolved(root) + os.sep)
 
 
+@pytest.mark.parametrize("rel", [
+    "sub/../report.json",
+    r"sub\..\report.json",
+    r"sub/..\report.json",
+])
 def test_abs_path_normalises_parent_segments_that_stay_inside(
-    tmp_path: Path,
+    rel: str, tmp_path: Path,
 ) -> None:
     root = tmp_path / "art"
     store = ArtifactStore(root)
 
-    path = store.abs_path("sub/../report.json")
+    path = store.abs_path(rel)
 
     assert path == (root / "report.json").resolve()
 
@@ -278,12 +283,25 @@ def test_abs_path_normalises_parent_segments_that_stay_inside(
     "rel",
     [
         "",
+        ".",
+        "sub/..",
         "..",
         "../escape",
+        r"..\escape",
         "a/../../escape",
+        r"a\..\..\escape",
+        r"a/..\../escape",
         "/absolute",
+        r"\absolute",
         "C:/absolute",
+        r"C:\absolute",
+        "C:relative",
+        "C:",
         "\\\\server\\share\\file.png",
+        "//server/share/file.png",
+        r"\\?\C:\absolute",
+        r"\\?\UNC\server\share\file.png",
+        r"\\.\C:\absolute",
     ],
 )
 def test_abs_path_rejects_empty_absolute_and_escaping_rels(
@@ -292,6 +310,40 @@ def test_abs_path_rejects_empty_absolute_and_escaping_rels(
     store = ArtifactStore(tmp_path / "art")
     with pytest.raises(ValueError):
         store.abs_path(rel)
+
+
+@pytest.mark.parametrize("rel", ["aid/report.json", r"aid\report.json"])
+def test_read_relative_paths_uses_same_file_for_both_separator_styles(
+    rel: str, tmp_path: Path,
+) -> None:
+    store = ArtifactStore(tmp_path / "art")
+    store.put_bytes("aid", "report.json", b"portable report")
+
+    assert store.read(rel) == b"portable report"
+    assert store.abs_path(rel) == (store.root / "aid" / "report.json").resolve()
+
+
+@pytest.mark.parametrize("rel", ["aid/report.json", r"aid\report.json"])
+def test_abs_path_rejects_symlink_escape_with_either_separator(
+    rel: str, tmp_path: Path,
+) -> None:
+    store = ArtifactStore(tmp_path / "art")
+    store.root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "report.json"
+    secret.write_bytes(b"outside root")
+    try:
+        (store.root / "aid").symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        if os.name != "nt" or getattr(exc, "winerror", None) != 1314:
+            raise
+        pytest.skip("Windows symlink privilege is unavailable")
+
+    with pytest.raises(ValueError):
+        store.read(rel)
+
+    assert secret.read_bytes() == b"outside root"
 
 
 def test_put_bytes_overwrite_keeps_latest_and_no_temp_files(
@@ -639,10 +691,24 @@ def test_list_returns_detached_rows_with_eager_relations(
 @pytest.mark.parametrize(
     "rel_path",
     [
+        ".",
         "../escape.png",
+        r"..\escape.png",
         "a/../../escape.png",
+        r"a\..\..\escape.png",
+        r"a/..\../escape.png",
+        "a/../report.png",
+        r"a\..\report.png",
         "C:/absolute.png",
+        r"C:\absolute.png",
+        "C:relative.png",
+        "C:",
+        r"\rooted.png",
         "\\\\server\\share\\x.png",
+        "//server/share/x.png",
+        r"\\?\C:\absolute.png",
+        r"\\?\UNC\server\share\x.png",
+        r"\\.\C:\absolute.png",
     ],
 )
 def test_add_artifact_rejects_unsafe_rel_paths(
@@ -670,6 +736,8 @@ def test_add_artifact_rejects_unsafe_rel_paths(
 def test_assert_relative_accepts_safe_paths() -> None:
     _assert_relative("aid/report.json")
     _assert_relative("aid/mask.png")
+    _assert_relative(r"aid\report.json")
+    _assert_relative(r"aid\mask.png")
 
 
 def test_ordinary_ascii_ids_and_relative_paths_still_work(

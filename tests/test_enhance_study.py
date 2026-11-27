@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -106,6 +107,7 @@ def test_enhance_study_keeps_source_immutable_and_records_limits(tmp_path: Path)
     assert _files_with_bytes(set_dir) == before
 
 
+@pytest.mark.skipif(os.name != "nt", reason="junction creation requires Windows mklink /J")
 def test_output_junction_into_source_is_refused(tmp_path: Path) -> None:
     set_dir = tmp_path / "source"
     generate_set(1, seed=3, out_dir=set_dir, size=(64, 64), tier="easy")
@@ -121,6 +123,33 @@ def test_output_junction_into_source_is_refused(tmp_path: Path) -> None:
     )
     if created.returncode != 0:
         pytest.skip(f"junction was not created: {created.stderr.strip()}")
+
+    with pytest.raises(ValueError, match="source set"):
+        run_study(
+            set_dir,
+            out_dir,
+            seed=3,
+            degradations=["jpeg"],
+            restorers=["unsharp"],
+            methods=["noise"],
+        )
+
+    assert _files_with_bytes(set_dir) == before
+
+
+def test_output_symlink_into_source_is_refused(tmp_path: Path) -> None:
+    set_dir = tmp_path / "source"
+    generate_set(1, seed=3, out_dir=set_dir, size=(64, 64), tier="easy")
+    before = _files_with_bytes(set_dir)
+    out_dir = tmp_path / "out"
+    link = out_dir / "enhance_study" / "images"
+    link.parent.mkdir(parents=True)
+    try:
+        link.symlink_to(set_dir, target_is_directory=True)
+    except OSError as exc:
+        if os.name != "nt" or getattr(exc, "winerror", None) != 1314:
+            raise
+        pytest.skip("Windows symlink privilege is unavailable; junction is tested separately")
 
     with pytest.raises(ValueError, match="source set"):
         run_study(

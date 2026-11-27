@@ -10,7 +10,7 @@ import os
 import re
 import secrets
 import shutil
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import cv2
 import numpy as np
@@ -109,11 +109,16 @@ class ArtifactStore:
         return self.put_bytes(analysis_id, filename, buf.tobytes())
 
     def abs_path(self, rel: str) -> Path:
-        if not rel or Path(rel).is_absolute():
+        # Reports may move between Windows and POSIX. A drive-relative path
+        # (C:file), rooted path (\file), or UNC path is unsafe on either host;
+        # is_absolute() alone does not reject the first two on Windows.
+        if not rel or PureWindowsPath(rel).anchor or Path(rel).is_absolute():
             raise ValueError(f"rel_path thoát khỏi artifact root: {rel!r}")
         root = self.root.resolve()
-        p = (root / rel).resolve()
-        if not _contained(root, p):
+        # Accept both separator spellings for safe relative paths, so a
+        # backslash traversal cannot turn into a harmless filename on POSIX.
+        p = (root / rel.replace("\\", "/")).resolve()
+        if p == root or not _contained(root, p):
             raise ValueError(f"rel_path thoát khỏi artifact root: {rel!r}")
         return p
 

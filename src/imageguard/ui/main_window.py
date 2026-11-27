@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
 from imageguard.services.analysis_service import AnalysisService
@@ -24,6 +25,10 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(strings.APP_TITLE)
         self.resize(1200, 800)
         self.setAcceptDrops(True)
+        self._closing = False
+        self._close_timer = QTimer(self)
+        self._close_timer.setInterval(50)
+        self._close_timer.timeout.connect(self._finish_close_when_idle)
         central = QWidget()
         self.setCentralWidget(central)
         lay = QVBoxLayout(central)
@@ -52,7 +57,37 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(_refresh)
         lay.addWidget(self.tabs, 1)
 
+    def _jobs_running(self) -> bool:
+        # A result can already be queued while QRunnable.run is still returning.
+        # Wait for the actual pools, not just the screen's _worker reference.
+        return any(screen._pool.activeThreadCount() > 0 for screen in (self.analyze, self.enhance))
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if not self._jobs_running():
+            self._close_timer.stop()
+            self._closing = False
+            self.tabs.setEnabled(True)
+            self.statusBar().clearMessage()
+            super().closeEvent(event)
+            return
+        event.ignore()
+        if not self._closing:
+            self._closing = True
+            self.tabs.setEnabled(False)
+            self.analyze._cancel()
+            self.enhance._cancel()
+            self.statusBar().showMessage(strings.STATUS_CLOSING_JOBS)
+        # Cancellation is cooperative. Keep processing queued signals and paint
+        # events while a native operation reaches its next safe checkpoint.
+        self._close_timer.start()
+
+    def _finish_close_when_idle(self) -> None:
+        if not self._jobs_running():
+            self.close()
+
     def _open_in_enhance(self, path: Path) -> None:
+        if self._closing:
+            return
         self.tabs.setCurrentWidget(self.enhance)
         self.enhance.load_path(path)
         idx = self.enhance.combo_op.findData("super_res")
@@ -60,12 +95,15 @@ class MainWindow(QMainWindow):
             self.enhance.combo_op.setCurrentIndex(idx)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        if event.mimeData().hasUrls():
+        if not self._closing and event.mimeData().hasUrls():
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
     def dropEvent(self, event: QDropEvent) -> None:
+        if self._closing:
+            event.ignore()
+            return
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if urls:
