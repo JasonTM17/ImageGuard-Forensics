@@ -45,6 +45,7 @@ METHOD_LABEL = {
     "deepfake_cues": "Dấu hiệu Deepfake / AI (biên khuôn mặt & phổ)",
     "deepfake_ml": "Deepfake ML — GenConViT (model học sâu)",
     "deepfake_screen_coc": "Deepfake qua màn hình — CoC Xception",
+    "deepfake_ensemble": "Nhận diện Deepfake tổng hợp (ensemble nhiều mô hình)",
     "deepfake": "Dấu hiệu Deepfake / AI",
 }
 

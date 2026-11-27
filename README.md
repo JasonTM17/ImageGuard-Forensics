@@ -36,6 +36,14 @@ chuẩn hóa riêng trên fold train và kiểm tra trùng nguồn/ảnh khi ch�
 và `scripts/evaluate_deepfake_cues.py`: báo coverage, tỷ lệ bật cờ riêng trên
 ảnh thật/giả, AUC điểm và toàn bộ lý do mẫu không đủ điều kiện.
 
+**Bộ nhận diện tổng hợp `deepfake_ensemble`** chạy đồng thời cues/DIP đã học,
+GenConViT-ED và CoC Xception rồi gộp điểm fake bằng trung bình có trọng số
+(cấu hình ở section `deepfake_ensemble` trong `configs/thresholds.yaml`, xem
+`src/imageguard/forensics/ml/deepfake_ensemble.py`). Chấm điểm từng detector và
+ensemble trên bộ có nhãn bằng `scripts/evaluate_deepfake_ensemble.py` (coverage,
+AUC, accuracy/precision/recall/F1 tại ngưỡng cố định). Chạy một ảnh:
+`python -m imageguard analyze <ảnh> --methods deepfake_ensemble --no-persist`.
+
 ## Quick start (Windows / PowerShell)
 
 ```powershell

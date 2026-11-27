@@ -106,6 +106,34 @@ thông thường không tự được coi là hai camera. Script không đánh g
 đồng bộ hai cảm biến hay tín hiệu temporal của video. Muốn đánh giá video,
 cần giao thức lấy frame và tổng hợp theo video riêng.
 
+## So sánh nhiều detector và chấm điểm ensemble (`deepfake_ensemble`)
+
+`deepfake_ensemble` là bộ nhận diện tổng hợp chạy đồng thời các detector deepfake
+(cues 6 trụ cột hoặc DIP đã học, GenConViT-ED, CoC Xception) rồi gộp điểm theo
+**trung bình có trọng số** với trọng số đọc từ section `deepfake_ensemble` trong
+`configs/thresholds.yaml`. Detector không chạy được trên một ảnh bị loại khỏi
+trung bình và ghi rõ trong `evidence.members`; cần tối thiểu `min_members` detector
+khả dụng, nếu không verdict là `INCONCLUSIVE`. Điểm tổng hợp vẫn là chỉ số
+heuristic, không phải xác suất.
+
+Để chấm điểm từng detector và ensemble trên bộ có nhãn cho báo cáo đồ án:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_deepfake_ensemble.py `
+  --manifest data\deepfake\manifest.json `
+  --root data\deepfake `
+  --split test `
+  --config configs\thresholds.yaml `
+  --output data\deepfake\test_ensemble.json
+```
+
+Báo cáo JSON gồm, cho mỗi detector và cho ensemble: coverage, ROC AUC của điểm
+trên mẫu đủ điều kiện, và accuracy/precision/recall/F1 tại ngưỡng cố định của
+detector đó (không chỉnh ngưỡng trong lúc chạy). Thêm `--model <dip.json>` để
+đánh giá cả nhánh DIP đã học (chỉ trên `test`, đã kiểm tra không trùng dữ liệu
+phát triển). Phân tích một ảnh đơn lẻ qua CLI/GUI bằng
+`--methods deepfake_ensemble` (kết hợp `--deepfake-model` nếu có DIP model).
+
 ## Học trọng số từ ảnh có nhãn và nạp vào ứng dụng
 
 ### 1. Chuẩn bị nguồn dữ liệu

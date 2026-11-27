@@ -47,7 +47,7 @@ def main() -> None:
     analyze_p.add_argument("file", type=Path, help="file ảnh cần phân tích")
     analyze_p.add_argument("--config", type=Path, help="cấu hình ngưỡng cố định dùng khi huấn luyện/đánh giá")
     analyze_p.add_argument("--deepfake-model", type=Path,
-                           help="mô hình DIP JSON đã học trên dev; cần --methods deepfake")
+                           help="mô hình DIP JSON đã học trên dev; cần --methods deepfake hoặc deepfake_ensemble")
     analyze_p.add_argument(
         "--methods",
         default=_METHODS_DEFAULT_STR,
@@ -176,8 +176,8 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
             load_model,
         )
 
-        if "deepfake" not in methods:
-            print("error: --deepfake-model requires --methods deepfake", file=sys.stderr)
+        if not {"deepfake", "deepfake_ensemble"} & set(methods):
+            print("error: --deepfake-model requires --methods deepfake or deepfake_ensemble", file=sys.stderr)
             raise SystemExit(2)
         try:
             model = load_model(model_path, expected_config_sha256=config_digest(cfg.raw))

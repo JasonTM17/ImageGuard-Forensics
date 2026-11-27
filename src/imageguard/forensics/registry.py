@@ -21,6 +21,7 @@ METHOD_SPECS = {
     "deepfake": "imageguard.forensics.auxiliary.deepfake_cues:DeepfakeCues",
     "deepfake_ml": "imageguard.forensics.ml.deepfake_genconvit:DeepfakeGenConViT",
     "deepfake_screen": "imageguard.forensics.ml.deepfake_screen_coc:DeepfakeScreenCoC",
+    "deepfake_ensemble": "imageguard.forensics.ml.deepfake_ensemble:DeepfakeEnsemble",
 }
 
 

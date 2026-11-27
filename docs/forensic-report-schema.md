@@ -166,7 +166,7 @@ Giá trị string trên JSON **không** dùng `forged` / `fake`. Ý nghĩa vận
 
 ## Enum `MethodName` (đóng, giá trị `method`)
 
-`copy_move_keypoint`, `copy_move_block`, `ela`, `exif_audit`, `noise_inconsistency`, `noise_local`, `frequency_analysis`, `splicing_cues`, `deepfake_cues`, `deepfake_ml`, `deepfake_screen_coc`.
+`copy_move_keypoint`, `copy_move_block`, `ela`, `exif_audit`, `noise_inconsistency`, `noise_local`, `frequency_analysis`, `splicing_cues`, `deepfake_cues`, `deepfake_ml`, `deepfake_screen_coc`, `deepfake_ensemble`.
 
 CLI `--methods` nhận alias registry (`keypoint`, `block`, `ela`, …); JSON luôn dùng **giá trị đầy đủ** ở trên.
 

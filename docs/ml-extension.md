@@ -17,6 +17,11 @@ cho miền deepfake phát qua màn hình bị camera quay lại, sau khi căn ch
 theo 5 landmark. Xem [cài đặt và giấy phép](third-party-models.md) cùng
 [giới hạn](limitations.md#deepfake-ml-deepfake_ml-genconvit-ed).
 
+`deepfake_ensemble` (`forensics/ml/deepfake_ensemble.py`) chạy cả ba detector
+deepfake (cues/DIP đã học, GenConViT-ED, CoC Xception) rồi gộp điểm fake [0,1]
+bằng trung bình có trọng số đọc từ `configs/thresholds.yaml` — xem
+[đánh giá ensemble](deepfake-evaluation.md#so-sánh-nhiều-detector-và-chấm-điểm-ensemble-deepfake_ensemble).
+
 Phần U-Net định vị copy-move dưới đây vẫn là thiết kế chưa triển khai.
 
 ## Vì sao để design-only

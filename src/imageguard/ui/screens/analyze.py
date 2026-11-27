@@ -121,11 +121,11 @@ class AnalyzeScreen(QWidget):
             lambda: self._apply_method_preset(["keypoint", "block", "ela"])
         )
         self.btn_preset_camera.clicked.connect(
-            lambda: self._apply_method_preset(["ela", "noise_local", "freq", "deepfake", "deepfake_ml", "deepfake_screen"])
+            lambda: self._apply_method_preset(["ela", "noise_local", "freq", "deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble"])
         )
         self.btn_preset_all.clicked.connect(
             lambda: self._apply_method_preset(
-                ["keypoint", "block", "ela", "noise", "noise_local", "freq", "splicing", "deepfake", "deepfake_ml", "deepfake_screen"]
+                ["keypoint", "block", "ela", "noise", "noise_local", "freq", "splicing", "deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble"]
             )
         )
         preset_row.addWidget(self.btn_preset_default)
@@ -149,6 +149,8 @@ class AnalyzeScreen(QWidget):
         self.chk_dfml.setChecked(False)
         self.chk_dfscreen = QCheckBox(strings.METHOD_LABEL["deepfake_screen_coc"])
         self.chk_dfscreen.setChecked(False)
+        self.chk_dfens = QCheckBox(strings.METHOD_LABEL["deepfake_ensemble"])
+        self.chk_dfens.setChecked(False)
         method_checks = (
             ("copy_move_keypoint", self.chk_kp),
             ("copy_move_block", self.chk_bl),
@@ -160,6 +162,7 @@ class AnalyzeScreen(QWidget):
             ("deepfake_cues", self.chk_df),
             ("deepfake_ml", self.chk_dfml),
             ("deepfake_screen_coc", self.chk_dfscreen),
+            ("deepfake_ensemble", self.chk_dfens),
         )
         for i, (method_key, c) in enumerate(method_checks):
             label = strings.METHOD_LABEL[method_key]
@@ -374,6 +377,7 @@ class AnalyzeScreen(QWidget):
             "deepfake": self.chk_df,
             "deepfake_ml": self.chk_dfml,
             "deepfake_screen": self.chk_dfscreen,
+            "deepfake_ensemble": self.chk_dfens,
         }
         for spec, chk in mapping.items():
             chk.setChecked(spec in selected)
@@ -501,6 +505,8 @@ class AnalyzeScreen(QWidget):
             m.append("deepfake_ml")
         if self.chk_dfscreen.isChecked():
             m.append("deepfake_screen")
+        if self.chk_dfens.isChecked():
+            m.append("deepfake_ensemble")
         return m
 
     def _run(self) -> None:

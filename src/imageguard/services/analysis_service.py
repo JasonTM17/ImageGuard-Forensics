@@ -98,20 +98,28 @@ class AnalysisService:
             _progress(req.progress_cb, 0.1 + 0.7 * i / len(specs), spec)
             try:
                 method = load_method(spec)
-                if spec in {"deepfake", "deepfake_cues"} and req.deepfake_model_path is not None:
+                if spec in {"deepfake", "deepfake_cues", "deepfake_ensemble"} and req.deepfake_model_path is not None:
                     from imageguard.forensics.auxiliary.deepfake_model import (
                         config_digest,
                         load_model,
-                    )
-                    from imageguard.forensics.auxiliary.learned_deepfake import (
-                        LearnedDeepfakeCues,
                     )
 
                     model = load_model(req.deepfake_model_path,
                                        expected_config_sha256=config_digest(self.cfg.raw))
                     if req.deepfake_model_sha256 is not None and model["model_sha256"] != req.deepfake_model_sha256:
                         raise ValueError("deepfake model changed since selection; select it again")
-                    method = LearnedDeepfakeCues(model)
+                    if spec == "deepfake_ensemble":
+                        from imageguard.forensics.ml.deepfake_ensemble import (
+                            DeepfakeEnsemble,
+                        )
+
+                        method = DeepfakeEnsemble(model)
+                    else:
+                        from imageguard.forensics.auxiliary.learned_deepfake import (
+                            LearnedDeepfakeCues,
+                        )
+
+                        method = LearnedDeepfakeCues(model)
                 r = method.analyze(doc, self.cfg, req.cancel)
             except Exception as e:  # noqa: BLE001 - method isolation: method crash/cancel không được huỷ pipeline
                 r = _error_result(spec, e)
@@ -294,6 +302,7 @@ _SPEC_TO_METHOD: dict[str, MethodName] = {
     "deepfake": MethodName.DEEPFAKE_CUES,
     "deepfake_ml": MethodName.DEEPFAKE_ML,
     "deepfake_screen": MethodName.DEEPFAKE_SCREEN_COC,
+    "deepfake_ensemble": MethodName.DEEPFAKE_ENSEMBLE,
     "exif": MethodName.EXIF_AUDIT,
 }
 

@@ -28,3 +28,4 @@ class MethodName(str, Enum):
     DEEPFAKE_CUES = "deepfake_cues"
     DEEPFAKE_ML = "deepfake_ml"
     DEEPFAKE_SCREEN_COC = "deepfake_screen_coc"
+    DEEPFAKE_ENSEMBLE = "deepfake_ensemble"
