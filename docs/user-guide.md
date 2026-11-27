@@ -47,7 +47,12 @@ byte file, cùng `--methods`, cùng bản build và cùng ngưỡng.
    - *Copy-Move block (DCT)*: baseline kinh điển, chậm hơn nhưng độc lập.
    - *ELA*: chỉ có ý nghĩa với JPEG; PNG/BMP sẽ hiện "Không áp dụng".
    - *Noise inconsistency / Frequency / Splicing cues / Dấu hiệu Deepfake / AI (biên khuôn mặt & phổ)* (L2 — `deepfake`): bằng chứng
-     khám phá (`AUX_METHODS`) — KHÔNG BAO GIỜ tự kết luận. Khi chụp khung hình mới từ Camera trong tab Phân tích, hệ thống tự bật ô kiểm *Dấu hiệu Deepfake / AI* để kiểm tra trực tiếp trên ảnh cảm biến gốc.
+     khám phá (`AUX_METHODS`) — KHÔNG BAO GIỜ tự kết luận.
+   - *Deepfake ML — GenConViT* (L3 — `deepfake_ml`, tùy chọn, cần tải model theo
+     `docs/third-party-models.md`): classifier học sâu chấm crop khuôn mặt, có thể
+     trả *Có dấu hiệu đáng ngờ* khi điểm vượt ngưỡng. Ảnh không có mặt → không áp dụng.
+     Chỉ dùng phi thương mại (licence weights CC BY-NC 4.0).
+ Khi chụp khung hình mới từ Camera trong tab Phân tích, hệ thống tự bật ô kiểm *Dấu hiệu Deepfake / AI* để kiểm tra trực tiếp trên ảnh cảm biến gốc.
 4. **Phân tích** — thanh progress theo stage; nút "Hủy" dừng mềm giữa
    stages (cooperative cancel).
 5. **Đọc kết quả** —

@@ -79,6 +79,32 @@ nhiễu thuần (~0.003), nhưng có thể bật trên texture tuần hoàn tự
 dệt, nan chớp). Khi chưa định vị được vùng mặt, đỉnh phổ và biên của nền lặp
 cần thêm tín hiệu kết cấu để bật cờ. Quy tắc này vẫn chỉ phục vụ sàng lọc.
 
+## Deepfake ML (`deepfake_ml`, GenConViT-ED)
+
+Method ML đầu tiên, khác hẳn `deepfake_cues`: classifier train trên
+DFDC/FF++/Celeb-DF/DeepfakeTIMIT nên CÓ THỂ trả `SUSPICIOUS_INDICATION` khi
+`fake_frac ≥ fake_thresh` (mặc định 0.7). Giới hạn:
+
+- Chỉ áp dụng khi phát hiện được khuôn mặt đủ lớn (YuNet); ảnh không có mặt
+  → `NOT_APPLICABLE`. Nhiều mặt: chỉ chấm mặt lớn nhất.
+- `fake_frac` là tỉ lệ sigmoid heuristic của classifier, KHÔNG phải xác suất
+  đã hiệu chuẩn. Ngưỡng 0.7/0.3 là provisional — chỉ mới kiểm chứng tách
+  real/fake trên cohort mẫu nhỏ (12 video từ repo tác giả, nguồn không độc
+  lập với model), chưa hiệu chuẩn trên dữ liệu thực địa. Cohort smoke 12 video mẫu
+  (2026-11-27): pipeline chạy end-to-end đúng; 2 video fake theo tên file đạt
+  0.90/0.96 fake_frac; video khớp pattern tên gốc FF++ (`28__talking_angry_couch`)
+  đạt 0.12 — nhất quán orientation đúng; 5/12 video đạt ≤0.12. Tuy nhiên cohort
+  không có ground-truth đáng tin nên KHÔNG chứng minh độ chính xác.
+- Face detection dùng YuNet thay dlib của pipeline gốc — sai lệch tiền xử
+  lý đã biết; mặt nghiêng/che khuất có thể bị bỏ sót → `NOT_APPLICABLE`
+  thay vì cảnh báo.
+- Generator/codec/nén mạng xã hội ngoài phân phối train (2023-2024) có thể
+  trượt — deepfake mới hơn có thể không bị gắn cờ, ảnh thật nén nặng có thể
+  bị điểm cao. `NO_INDICATION` không chứng minh ảnh thật.
+- Weights gốc CC BY-NC 4.0 — chỉ dùng phi thương mại (docs/third-party-models.md).
+- `SUSPICIOUS_INDICATION` từ method này promote overall verdict qua fusion —
+  vẫn là dấu hiệu cần đối chiếu chuyên gia, không phải bằng chứng giả mạo.
+
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
 Giới hạn tài nguyên `safe_open` (100 MB, 80 MP) và SSRF khi bật ingest HTTP — [`docs/security-error-handling.md`](security-error-handling.md), [`docs/ingest.md`](ingest.md). DNS rebinding vẫn là rủi ro còn lại khi dùng HTTP snapshot.

@@ -1,4 +1,8 @@
-# ML Extension — Level 3 Design (design-only, chưa implement)
+# ML Extension — Level 3 Design
+
+> Trạng thái 2026-11-27: deepfake ML (`deepfake_ml`, GenConViT-ED) đã implement
+> theo hướng ONNX tuỳ chọn tại `forensics/ml/` — xem docs/third-party-models.md.
+> Phần U-Net copy-move bên dưới vẫn design-only.
 
 ## Vì sao để design-only
 

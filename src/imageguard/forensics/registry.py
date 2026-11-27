@@ -19,6 +19,7 @@ METHOD_SPECS = {
     "freq": "imageguard.forensics.auxiliary.freq_view:FreqView",
     "splicing": "imageguard.forensics.auxiliary.splicing:SplicingCues",
     "deepfake": "imageguard.forensics.auxiliary.deepfake_cues:DeepfakeCues",
+    "deepfake_ml": "imageguard.forensics.ml.deepfake_genconvit:DeepfakeGenConViT",
 }
 
 

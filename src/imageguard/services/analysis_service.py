@@ -275,6 +275,7 @@ _SPEC_TO_METHOD: dict[str, MethodName] = {
     "freq": MethodName.FREQUENCY_ANALYSIS,
     "splicing": MethodName.SPLICING_CUES,
     "deepfake": MethodName.DEEPFAKE_CUES,
+    "deepfake_ml": MethodName.DEEPFAKE_ML,
     "exif": MethodName.EXIF_AUDIT,
 }
 

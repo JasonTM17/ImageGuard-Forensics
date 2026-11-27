@@ -26,3 +26,4 @@ class MethodName(str, Enum):
     FREQUENCY_ANALYSIS = "frequency_analysis"
     SPLICING_CUES = "splicing_cues"
     DEEPFAKE_CUES = "deepfake_cues"
+    DEEPFAKE_ML = "deepfake_ml"
