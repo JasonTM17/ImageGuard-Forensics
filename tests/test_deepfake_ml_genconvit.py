@@ -6,8 +6,11 @@ Hai lớp: unit thuần (không cần model — monkeypatch) và model-dependent
 
 from __future__ import annotations
 
+import json
+import sys
 import threading
 from pathlib import Path
+from types import ModuleType
 
 import cv2
 import numpy as np
@@ -24,6 +27,12 @@ from imageguard.forensics.ml.deepfake_genconvit import (
     verdict_for_score,
 )
 from imageguard.forensics.registry import load_method
+from imageguard.services.analysis_service import (
+    AnalysisRequest,
+    AnalysisService,
+    report_to_dict,
+)
+from imageguard.storage.artifacts import ArtifactStore
 from tests.test_deepfake_cues import _doc, _synthetic_face_frame
 
 MODEL_PRESENT = (
@@ -126,6 +135,81 @@ def test_cancel_returns_early(monkeypatch) -> None:
 
 def test_registry_loads_deepfake_ml() -> None:
     assert type(load_method("deepfake_ml")).__name__ == "DeepfakeGenConViT"
+
+
+@pytest.fixture
+def inference_report(monkeypatch, tmp_path):
+    # Exercise real ingress, registry, method, and fusion without model assets.
+    path = tmp_path / "input.png"
+    ok, png = cv2.imencode(".png", np.full((128, 128, 3), 100, dtype=np.uint8))
+    assert ok
+    path.write_bytes(png.tobytes())
+    monkeypatch.setitem(sys.modules, "onnxruntime", ModuleType("onnxruntime"))
+    monkeypatch.setattr(dgc, "model_integrity_error", lambda: None)
+    monkeypatch.setattr(dgc, "yunet_integrity_error", lambda: None)
+    monkeypatch.setattr(
+        dgc, "detect_primary_face", lambda *_args: ((20, 20, 64, 64), 0.9)
+    )
+
+    def analyze(output):
+        class StubSession:
+            def run(self, _names, _feeds):
+                if isinstance(output, Exception):
+                    raise output
+                return [output]
+
+        monkeypatch.setattr(dgc, "_session", StubSession)
+        report = AnalysisService(store=ArtifactStore(tmp_path / "artifacts")).analyze(
+            AnalysisRequest(path=path, methods=["deepfake_ml"], include_exif=False)
+        )
+        return report_to_dict(report)
+
+    return analyze
+
+
+@pytest.mark.parametrize(
+    "logits",
+    [
+        pytest.param(np.array([[np.inf, -10]], dtype=np.float32), id="infinity"),
+        pytest.param(np.array([[np.nan, -10]], dtype=np.float32), id="nan"),
+        pytest.param(
+            np.array([[10, -10], [10, -10]], dtype=np.float32), id="wrong-batch"
+        ),
+        pytest.param(np.array([[10, -10]], dtype=np.int64), id="wrong-dtype"),
+    ],
+)
+def test_malformed_logits_cannot_score_or_promote(inference_report, logits) -> None:
+    report = inference_report(logits)
+    (result,) = report["methods"]
+    assert result["method"] == MethodName.DEEPFAKE_ML.value
+    assert result["verdict"] == Verdict.ERROR.value
+    assert result["score"] is None
+    assert result["has_mask"] is False
+    assert report["overall_verdict"] == Verdict.INCONCLUSIVE.value
+    json.dumps(report, allow_nan=False)
+
+
+def test_inference_exception_does_not_leak_message(inference_report) -> None:
+    marker = "PRIVATE_BACKEND_MESSAGE"
+    report = inference_report(RuntimeError(marker))
+    (result,) = report["methods"]
+    assert result["verdict"] == Verdict.ERROR.value
+    assert result["evidence"]["error_stage"] == "inference"
+    assert result["evidence"]["error_type"] == "RuntimeError"
+    assert marker not in json.dumps(report, allow_nan=False)
+
+
+def test_valid_logits_preserve_verdict_and_score(inference_report) -> None:
+    report = inference_report(np.array([[10, -10]], dtype=np.float32))
+    (result,) = report["methods"]
+    assert (
+        result["verdict"]
+        == report["overall_verdict"]
+        == Verdict.SUSPICIOUS_INDICATION.value
+    )
+    assert result["score"] == 1.0
+    assert result["has_mask"] is True
+    json.dumps(report, allow_nan=False)
 
 
 # ---------- model-dependent (skip khi thiếu weights) ----------

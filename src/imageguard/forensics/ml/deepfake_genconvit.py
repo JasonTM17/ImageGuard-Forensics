@@ -111,8 +111,16 @@ def preprocess_crop(crop_bgr: np.ndarray) -> np.ndarray:
 
 def infer_sigmoids(tensor: np.ndarray) -> np.ndarray:
     """Trả sigmoid logits (N,2) — cột 0 = fake, cột 1 = real (quy ước tác giả)."""
-    logits = _session().run(None, {"input": tensor})[0]
-    return (1.0 / (1.0 + np.exp(-logits))).astype(np.float64)
+    (logits,) = _session().run(["output"], {"input": tensor})
+    if (
+        not isinstance(logits, np.ndarray)
+        or logits.shape != (tensor.shape[0], 2)
+        or not np.issubdtype(logits.dtype, np.floating)
+        or not np.isfinite(logits).all()
+    ):
+        raise ValueError("invalid GenConViT logits")
+    with np.errstate(over="ignore", under="ignore"):
+        return (1.0 / (1.0 + np.exp(-logits))).astype(np.float64)
 
 
 def aggregate_fake_frac(sigmoids: np.ndarray) -> tuple[float, float, float]:
@@ -207,7 +215,20 @@ class DeepfakeGenConViT:
 
         crop = crop_face(doc.array, rect, INPUT_SIZE)
         tensor = preprocess_crop(crop)
-        sigmoids = infer_sigmoids(tensor)
+        try:
+            sigmoids = infer_sigmoids(tensor)
+        except Exception as exc:  # noqa: BLE001 - inference boundary: hide backend details
+            return self._done(
+                Verdict.ERROR,
+                None,
+                t0,
+                ["GenConViT-ED không trả được đầu ra hợp lệ"] + lim,
+                {
+                    **evidence,
+                    "error_stage": "inference",
+                    "error_type": type(exc).__name__,
+                },
+            )
         fake_frac, sig_fake, sig_real = aggregate_fake_frac(sigmoids)
 
         fake_thresh = float(cfg.value("deepfake_ml", "fake_thresh"))
