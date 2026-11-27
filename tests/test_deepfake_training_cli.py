@@ -23,6 +23,9 @@ REPO = Path(__file__).resolve().parents[1]
 
 def _cli(*arguments: str | Path) -> subprocess.CompletedProcess:
     environment = os.environ.copy()
+    # Redirected Windows processes can inherit a non-UTF-8 code page. Both
+    # study scripts must emit UTF-8 JSON and support Vietnamese artifact names.
+    environment["PYTHONIOENCODING"] = "ascii"
     source_path = str(REPO / "src")
     environment["PYTHONPATH"] = source_path + (os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
     return subprocess.run(
@@ -51,11 +54,12 @@ def test_training_evaluation_and_analyze_clis_share_one_validated_model(tmp_path
                             "split": split, "source_group": f"generated_source_{group}"})
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"version": 1, "samples": samples}), encoding="utf-8")
-    model_path, audit_path = tmp_path / "model.json", tmp_path / "dev_audit.json"
+    model_path, audit_path = tmp_path / "mô_hình_đã_học.json", tmp_path / "dev_audit.json"
 
     trained = _cli("scripts/train_deepfake_model.py", "--manifest", manifest, "--root", tmp_path,
                    "--folds", "3", "--output", model_path, "--report", audit_path)
     assert trained.returncode == 0, trained.stderr
+    assert model_path.name in trained.stdout
     model = load_model(model_path)
     audit = json.loads(audit_path.read_text(encoding="utf-8"))
     assert model["training"]["n_fitted"] == 6
