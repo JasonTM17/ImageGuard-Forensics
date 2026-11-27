@@ -221,7 +221,7 @@ def _with_reference_cue(
         ref_doc = safe_open(ref_path, cfg)
         if isinstance(ref_doc, ErrorResult):
             raise _ReferenceOpenError(ref_doc.code.value)
-        return apply_reference_cue(result, ref_doc, doc)
+        return apply_reference_cue(result, ref_doc, doc, cfg=cfg)
     except Exception as exc:  # noqa: BLE001 - reference chỉ là cue phụ: lỗi không được huỷ kết quả gốc
         result.limitations.append(
             "bỏ qua so sánh ảnh tham chiếu phiên — không mở/dùng được "

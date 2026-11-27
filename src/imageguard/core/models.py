@@ -29,6 +29,10 @@ class ImageDocument:
     exif: dict[str, Any] = field(default_factory=dict)
     resolution_reduced: bool = False  # True nếu working copy bị downscale
     scale_factor: float = 1.0  # work_size = original * scale_factor
+    # Capture layout is explicit provenance, never inferred from aspect ratio.
+    # split_x is in this document's pixel coordinates, including unequal cameras.
+    capture_layout: str = "single"
+    capture_split_x: int | None = None
 
 
 @dataclass(slots=True)

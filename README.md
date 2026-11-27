@@ -6,6 +6,23 @@
 
 Khung báo cáo đồ án: [`docs/report/capstone-skeleton.md`](docs/report/capstone-skeleton.md).
 
+### Phần Deepfake hiện làm được gì?
+
+Đây là nhánh **sàng lọc dấu hiệu trên vùng mặt bằng xử lí ảnh cổ điển**;
+chưa có mô hình học sâu đã huấn luyện phân loại Deepfake. Điểm 0–1 là chỉ
+số chưa hiệu chuẩn, không phải xác suất ảnh giả. Không tìm thấy mặt, ROI quá
+nhỏ/thiếu tương phản hoặc không có nền đối chiếu thì không cấp điểm.
+
+Bản sửa 2026-11-27 chuẩn hóa phép đo phổ theo kích thước ROI, yêu cầu nhiều
+nhóm dấu hiệu cùng hỗ trợ, phân biệt rõ cờ bất thường với thiếu dữ liệu,
+và bỏ việc cộng điểm do mặt đứng yên/ảnh tham chiếu. Chế độ hai camera dùng
+khai báo bố cục và ranh giới rõ ràng; ảnh ngang rộng không tự bị chia đôi.
+
+**Chưa có số đo độ chính xác Deepfake trên bộ ảnh thật/giả có nhãn.**
+Để thực nghiệm cho đồ án, dùng [`docs/deepfake-evaluation.md`](docs/deepfake-evaluation.md)
+và `scripts/evaluate_deepfake_cues.py`: báo coverage, tỷ lệ bật cờ riêng trên
+ảnh thật/giả, AUC điểm và toàn bộ lý do mẫu không đủ điều kiện.
+
 ## Quick start (Windows / PowerShell)
 
 ```powershell
@@ -57,6 +74,7 @@ Chi tiết GUI, lịch sử, xuất Markdown: [`docs/user-guide.md`](docs/user-g
 | [`docs/security-error-handling.md`](docs/security-error-handling.md) | safe_open, giới hạn tài nguyên |
 | [`docs/dataset-strategy.md`](docs/dataset-strategy.md) | synthforge, CoMoFoD, split |
 | [`docs/evaluation-methodology.md`](docs/evaluation-methodology.md) | Metric R1–R5, runner |
+| [`docs/deepfake-evaluation.md`](docs/deepfake-evaluation.md) | Phạm vi Deepfake, manifest, coverage và kiểm tra rò rỉ dev/test |
 | [`docs/experiments.md`](docs/experiments.md) | Ghi chép thử nghiệm |
 | [`docs/failure-cases.md`](docs/failure-cases.md) | Mẫu lỗi đã quan sát |
 | [`docs/limitations.md`](docs/limitations.md) | Giới hạn đã biết, không thêm số mới |

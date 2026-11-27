@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import numpy as np
 
+from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
+from imageguard.forensics.auxiliary.deepfake_cues import DeepfakeCues
 from imageguard.ui import strings
 from imageguard.ui.widgets.camera_deepfake_preview import (
     format_burst_deepfake_preview,
     format_deepfake_preview,
 )
-from tests.test_deepfake_cues import _synthetic_face_frame
+from tests.test_deepfake_cues import _doc, _synthetic_face_frame
 
 
 def test_format_deepfake_preview_smooth_face_disclaimer_and_verdict() -> None:
@@ -27,8 +29,10 @@ def test_format_deepfake_preview_smooth_face_disclaimer_and_verdict() -> None:
 def test_still_face_burst_is_exploratory_not_a_deepfake_label() -> None:
     frame = _synthetic_face_frame(smooth_face=False)
     text = format_burst_deepfake_preview([frame.copy() for _ in range(5)])
+    spatial = DeepfakeCues().analyze(_doc(frame, "base.png"), load_thresholds())
     assert "temporal_static_score:" in text
-    assert strings.VERDICT_LABEL["inconclusive"] in text
+    assert strings.VERDICT_LABEL[spatial.verdict.value] in text
+    assert "không cộng vào điểm" in text
     assert Verdict.SUSPICIOUS_INDICATION.value not in text
     assert "đã xác định giả" not in text.lower()
 
@@ -68,3 +72,30 @@ def test_camera_preview_explains_small_frame() -> None:
 
     assert strings.VERDICT_LABEL["not_applicable"] in text
     assert "ảnh quá nhỏ (32x32)" in text
+
+
+def test_empty_burst_has_actionable_message_instead_of_index_error() -> None:
+    text = format_burst_deepfake_preview([])
+
+    assert strings.DEEPFAKE_PREVIEW_NO_FRAMES in text
+    assert "temporal_static_score:" not in text
+
+
+def test_preview_shows_score_scale_and_quality_reason() -> None:
+    from imageguard.core.enums import MethodName
+    from imageguard.core.models import AlgorithmResult
+    from imageguard.ui.widgets.camera_deepfake_preview import _format_result
+
+    result = AlgorithmResult(
+        method=MethodName.DEEPFAKE_CUES,
+        verdict=Verdict.INCONCLUSIVE,
+        score=0.2,
+        score_definition="uncalibrated exploratory spatial cue",
+        evidence={"face_detected": True, "calibration_status": "uncalibrated"},
+        limitations=["Ánh sáng không đồng đều; cần thêm mẫu đối chiếu."],
+    )
+    text = _format_result(result)
+
+    assert "0.200/1" in text
+    assert "không phải xác suất thật/giả" in text
+    assert result.limitations[0] in text

@@ -12,6 +12,7 @@ engine không bao giờ crash vì input xấu.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from io import BytesIO
 from pathlib import Path
@@ -26,6 +27,42 @@ from imageguard.core.enums import Verdict
 from imageguard.core.errors import ErrorCode, ErrorResult
 from imageguard.core.metadata import extract_exif
 from imageguard.core.models import ImageDocument
+
+CAPTURE_LAYOUT_KEY = "ImageGuard.CaptureLayout"
+
+
+def _capture_layout(
+    info: dict, size: tuple[int, int], orientation: object = 1
+) -> tuple[str, int | None]:
+    """Read an explicit layout hint; image shape/name alone never implies two cameras.
+
+    PNG text is an input declaration, not authenticated sensor provenance.
+    Bind it to the encoded dimensions and discard it after an EXIF transform
+    because the saved vertical split no longer describes the displayed pixels.
+    """
+    marker = info.get(CAPTURE_LAYOUT_KEY)
+    if not isinstance(marker, str) or len(marker) > 512 or orientation not in (None, 1):
+        return "single", None
+    try:
+        declared = json.loads(marker)
+    except (ValueError, TypeError):
+        return "single", None
+    if not isinstance(declared, dict):
+        return "single", None
+    split = declared.get("split_x")
+    width, _height = size
+    if (
+        type(declared.get("version")) is not int
+        or declared["version"] != 1
+        or declared.get("layout") != "dual_side_by_side"
+        or type(declared.get("width")) is not int
+        or type(declared.get("height")) is not int
+        or (declared["width"], declared["height"]) != size
+        or type(split) is not int
+        or not 0 < split < width
+    ):
+        return "single", None
+    return "dual_side_by_side", split
 
 
 def _sniff_format(head: bytes) -> str | None:
@@ -108,8 +145,13 @@ def safe_open(
         )
 
     # Decode thật + exif_transpose (sai orientation = mask lệch toạ độ).
+    capture_layout, capture_split_x = "single", None
     try:
         with Image.open(BytesIO(raw)) as im:
+            if fmt == "png":
+                capture_layout, capture_split_x = _capture_layout(
+                    im.info, im.size, im.getexif().get(274, 1)
+                )
             im = ImageOps.exif_transpose(im)
             rgb = np.asarray(im.convert("RGB"), dtype=np.uint8)
     except Exception as e:  # noqa: BLE001 - ranh giới decode: Pillow raise nhiều loại, ảnh hỏng không được crash engine
@@ -131,6 +173,8 @@ def safe_open(
         file_bytes=len(raw),
         file_name=p.name,
         exif=exif,
+        capture_layout=capture_layout,
+        capture_split_x=capture_split_x,
     )
 
 

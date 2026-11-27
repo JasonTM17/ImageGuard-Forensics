@@ -115,6 +115,27 @@ Mỗi phần tử tương ứng một `AlgorithmResult` sau khi **loại bỏ** 
 
 Giá trị `null` trong evidence có nghĩa field không áp dụng hoặc không xuất được trên kênh JSON.
 
+### `deepfake_cues`: cờ dấu hiệu và điều kiện áp dụng
+
+Từ bản sửa 2026-11-27, `variant` là `dip_6pillar_deepfake_cues_v2`.
+`calibration_status="uncalibrated"`, `score_is_probability=false`; điểm không
+gian không được cộng thêm bởi burst hay ảnh tham chiếu.
+
+| Trường evidence | Ý nghĩa |
+| --- | --- |
+| `cue_flag` | Có cờ không gian: đủ điều kiện đo, vượt ngưỡng và được ít nhất hai nhóm dấu hiệu hỗ trợ |
+| `cue_unavailable`, `unavailable_reason` | Thiếu mặt, ROI nhỏ/ít tương phản, thiếu nền, ảnh quá nhỏ hoặc bị hủy; `score=null` |
+| `support_families` | Các nhóm `texture`, `frequency`, `boundary` vượt mức hỗ trợ; không phải bằng chứng độc lập về ảnh giả |
+| `roi_rect`, `roi_rect_working` | `[x, y, width, height]` trên ảnh gốc và bản làm việc; `roi_coordinate_space="original_pixels"` áp dụng cho `roi_rect` |
+| `capture_layout`, `capture_split_x` | Bố cục được khai báo; ranh giới pixel ảnh gốc khi ghép hai camera |
+| `reference_cue_flag`, `ref_status` | Cờ và trạng thái đối chiếu mốc riêng; có thể đổi `no_indication` thành `inconclusive`, không cộng score |
+| `temporal_status`, `temporal_reason`, `temporal_static_score` | Chẩn đoán độ tĩnh của burst, không đổi score hay verdict |
+
+Không suy `cue_flag` từ `verdict=inconclusive`: cùng verdict có thể do thiếu
+dữ liệu hoặc do dấu hiệu cần đối chiếu. Số đo vùng trung tâm khi chưa thấy
+mặt chỉ dùng chẩn đoán và không tạo mask. `fft_hf_conc8` là diagnostic cũ;
+phép đo phổ hiện dùng năng lượng top 1% bin đã chuẩn hóa theo kích thước ROI.
+
 ## Enum `Verdict` (đóng)
 
 Giá trị string trên JSON **không** dùng `forged` / `fake`. Ý nghĩa vận hành:

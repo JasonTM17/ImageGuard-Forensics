@@ -30,6 +30,7 @@ def _analyze(primary: Path) -> dict[str, object]:
         "temporal_static_score": method.evidence.get("temporal_static_score"),
         "temporal_face_detected": method.evidence.get("temporal_face_detected"),
         "temporal_frames": method.evidence.get("temporal_frame_count"),
+        "temporal_status": method.evidence.get("temporal_status"),
         "temporal_manifest_sha256": method.evidence.get("temporal_manifest_sha256"),
     }
 
@@ -73,7 +74,7 @@ def main() -> int:
         live = _analyze(primary)
         frozen = _analyze(_write_frozen_control(primary, root / "frozen"))
     live["capture_s"] = capture_s
-    print(json.dumps({"live_negative_control": live, "frozen_positive_control": frozen}, sort_keys=True))
+    print(json.dumps({"live_burst": live, "frozen_acquisition_control": frozen}, sort_keys=True))
     return 0
 
 

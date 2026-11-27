@@ -101,6 +101,12 @@ class SessionReferenceStore:
             raise ValueError(  # noqa: TRY004 - ErrorResult mã hoá nội dung ảnh không an toàn, không phải sai kiểu Python
                 "ảnh tham chiếu không hợp lệ hoặc vượt giới hạn an toàn"
             )
+        if doc.capture_layout != "single":
+            # Normalization removes metadata, so accepting a composite here
+            # would erase the layout and later bypass the comparison guard.
+            raise ValueError(
+                "mốc cùng phiên chỉ hỗ trợ khung từ một camera; hãy chọn một cảm biến"
+            )
         ok, encoded = cv2.imencode(".png", doc.array)
         if not ok:
             raise ValueError("không chuẩn hoá được ảnh tham chiếu")

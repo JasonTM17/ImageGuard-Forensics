@@ -124,6 +124,28 @@ def test_invalid_source_is_rejected_without_writing_reference(tmp_path: Path) ->
     assert not (store.root / "reference.json").exists()
 
 
+def test_dual_reference_rejected_before_normalization_and_preserves_existing(tmp_path: Path) -> None:
+    from imageguard.ingest.camera import _save_lossless_png
+
+    store = SessionReferenceStore(root=tmp_path / "ref")
+    single = tmp_path / "single.png"
+    single.write_bytes(_png_bytes(seed=1))
+    stored = store.set_reference(single)
+    before = stored.read_bytes()
+    sidecar_before = (store.root / "reference.json").read_bytes()
+    dual = _save_lossless_png(
+        np.zeros((80, 200, 3), np.uint8), tmp_path, "dual",
+        capture_layout="dual_side_by_side", capture_split_x=90,
+    )
+
+    with pytest.raises(ValueError, match="một camera"):
+        store.set_reference(dual)
+
+    assert store.get_reference() == stored
+    assert stored.read_bytes() == before
+    assert (store.root / "reference.json").read_bytes() == sidecar_before
+
+
 def test_reference_is_normalized_png_with_same_pixels(tmp_path: Path) -> None:
     store = SessionReferenceStore(root=tmp_path / "ref")
     rng = np.random.default_rng(11)

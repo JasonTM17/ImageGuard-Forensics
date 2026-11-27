@@ -216,7 +216,7 @@ def test_deepfake_formatting_runs_off_gui_thread(qtbot, monkeypatch, device):
     seen = []
     monkeypatch.setattr(camera, "capture_device_frame", lambda *_args: path)
 
-    def fake_format(frame):
+    def fake_format(frame, **_kwargs):
         seen.append(threading.get_ident())
         return "deepfake text"
 

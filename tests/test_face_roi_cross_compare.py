@@ -14,6 +14,7 @@ import re
 
 import cv2
 import numpy as np
+import pytest
 
 from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
@@ -127,8 +128,9 @@ def test_apply_reference_cue_bumps_no_indication_to_inconclusive() -> None:
     assert out.verdict is Verdict.INCONCLUSIVE
     assert out.verdict is not Verdict.SUSPICIOUS_INDICATION
     assert out.method is MethodName.DEEPFAKE_CUES
-    assert 0.20 < out.score <= 0.20 + REFERENCE_SCORE_MAX_DELTA + 1e-6
-    assert out.score - 0.20 <= REFERENCE_SCORE_MAX_DELTA + 1e-6
+    assert out.score == 0.20
+    assert out.evidence["reference_cue_flag"] is True
+    assert out.evidence["ref_status"] == "difference"
 
 
 def test_apply_reference_cue_same_frame_leaves_score_and_verdict() -> None:
@@ -186,6 +188,8 @@ def test_apply_reference_cue_preserves_fields_and_clean_evidence() -> None:
     # Evidence mới: chỉ sha256 + số đo cue — không đường dẫn, không flag.
     new_keys = set(out.evidence) - set(base.evidence)
     assert new_keys == {
+        "reference_cue_flag",
+        "ref_status",
         "reference_sha256",
         "suspect_sha256",
         "ref_combined_cue",
@@ -194,10 +198,22 @@ def test_apply_reference_cue_preserves_fields_and_clean_evidence() -> None:
         "ref_fft_peak_delta",
         "ref_face_detected",
         "sus_face_detected",
+        "ref_quality_reason",
+        "sus_quality_reason",
+        "ref_roi_min_side",
+        "sus_roi_min_side",
+        "ref_roi_contrast",
+        "sus_roi_contrast",
     }
     for key in new_keys:
         v = out.evidence[key]
-        if key.endswith("sha256"):
+        if key == "reference_cue_flag":
+            assert isinstance(v, bool)
+        elif key == "ref_status":
+            assert v == "difference"
+        elif key.endswith("quality_reason"):
+            assert v == ""
+        elif key.endswith("sha256"):
             assert isinstance(v, str) and _SHA_RE.match(v)
         else:
             assert isinstance(v, (int, float)) and not isinstance(v, bool)
@@ -211,6 +227,59 @@ def test_apply_reference_cue_keeps_other_verdicts() -> None:
         base = _base_result(score=0.5, verdict=verdict)
         out = apply_reference_cue(base, ref, sus)
         assert out.verdict is verdict
+        assert out.score == base.score
+
+
+def test_large_reference_difference_is_not_described_as_similarity() -> None:
+    ref = _doc(_face_frame(smooth_face=False), "ref.png", sha="a" * 64)
+    sus = _doc(_face_frame(smooth_face=True), "sus.png", sha="b" * 64)
+    out = apply_reference_cue(_base_result(verdict=Verdict.INCONCLUSIVE), ref, sus)
+
+    assert out.evidence["ref_status"] == "difference"
+    assert out.evidence["reference_cue_flag"] is True
+    assert any("lệch vi kết cấu" in text for text in out.limitations)
+    assert not any("tương đồng" in text for text in out.limitations)
+
+
+@pytest.mark.parametrize("unavailable", ["cue_unavailable", "cancelled"])
+def test_reference_cue_does_not_enrich_unavailable_base_result(unavailable: str) -> None:
+    ref = _doc(_face_frame(smooth_face=False), "ref.png", sha="a" * 64)
+    sus = _doc(_face_frame(smooth_face=True), "sus.png", sha="b" * 64)
+    base = _base_result(score=0.2)
+    base.evidence[unavailable] = True
+    out = apply_reference_cue(base, ref, sus)
+
+    assert out.score == base.score
+    assert out.verdict is base.verdict
+    assert out.evidence["ref_status"] == "unavailable"
+    assert out.evidence["reference_cue_flag"] is False
+
+
+@pytest.mark.parametrize("dual_input", ["reference", "suspect", "result"])
+def test_reference_does_not_compare_unmatched_sensor_halves(dual_input, monkeypatch) -> None:
+    import imageguard.forensics.auxiliary.face_roi_cross_compare as module
+
+    ref = _doc(_face_frame(), "ref.png", sha="a" * 64)
+    sus = _doc(_face_frame(smooth_face=True), "sus.png", sha="b" * 64)
+    result = _base_result(score=0.2)
+    if dual_input == "result":
+        result.evidence["dual_camera_mode"] = True
+    else:
+        doc = ref if dual_input == "reference" else sus
+        doc.capture_layout = "dual_side_by_side"
+        doc.capture_split_x = doc.width // 2
+
+    def unexpected_compare(*_args):
+        raise AssertionError("must select corresponding sensor halves before comparison")
+
+    monkeypatch.setattr(module, "compare_face_rois", unexpected_compare)
+    out = apply_reference_cue(result, ref, sus)
+
+    assert out.score == result.score
+    assert out.verdict is result.verdict
+    assert out.evidence["ref_status"] == "unsupported_capture_layout"
+    assert out.evidence["reference_cue_flag"] is False
+    assert "ref_combined_cue" not in out.evidence
 
 
 def test_reference_cue_requires_faces_in_both_frames() -> None:
@@ -227,3 +296,55 @@ def test_reference_cue_requires_faces_in_both_frames() -> None:
     assert out.evidence["ref_face_detected"] == 0
     assert out.evidence["sus_face_detected"] == 0
     assert any("cần phát hiện mặt ở cả hai khung" in x for x in out.limitations)
+
+
+@pytest.mark.parametrize("degraded_side", ["ref", "sus"])
+@pytest.mark.parametrize("degradation", ["roi_too_small", "low_contrast"])
+def test_reference_quality_is_checked_before_96px_resize(
+    degraded_side, degradation, monkeypatch
+) -> None:
+    import imageguard.forensics.auxiliary.face_roi_cross_compare as module
+
+    # Isolate a detected face so detection success cannot substitute for quality.
+    monkeypatch.setattr(
+        module, "_detect_face_roi",
+        lambda arr, gray, block: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
+    )
+    textured = np.random.default_rng(4).integers(40, 200, (128, 128, 3), dtype=np.uint8)
+    side = 32 if degradation == "roi_too_small" else 128
+    poor = np.full((side, side, 3), 120, dtype=np.uint8)
+    ref = _doc(poor if degraded_side == "ref" else textured, sha="a" * 64)
+    sus = _doc(poor if degraded_side == "sus" else textured, sha="b" * 64)
+    base = _base_result(score=0.2)
+
+    out = apply_reference_cue(base, ref, sus)
+
+    assert out.score == base.score
+    assert out.verdict is base.verdict
+    assert out.evidence["reference_cue_flag"] is False
+    assert out.evidence["ref_status"] == "quality_unavailable"
+    assert out.evidence[f"{degraded_side}_quality_reason"] == degradation
+    assert out.evidence[f"{degraded_side}_roi_min_side"] == side
+    assert out.evidence["ref_combined_cue"] is None
+    assert any("trước resize" in text for text in out.limitations)
+
+
+def test_reference_quality_uses_working_resolution_and_active_config(monkeypatch) -> None:
+    import imageguard.forensics.auxiliary.face_roi_cross_compare as module
+    from imageguard.core.config import load_thresholds
+
+    monkeypatch.setattr(
+        module, "_detect_face_roi",
+        lambda arr, gray, block: ((0, 0, gray.shape[1], gray.shape[0]), True, "test_face"),
+    )
+    large = np.random.default_rng(4).integers(40, 200, (256, 256, 3), dtype=np.uint8)
+    cfg = load_thresholds()
+    cfg.raw["limits"]["aux_max_side"]["value"] = 64
+    cfg.raw["deepfake"]["min_face_side"]["value"] = 80
+
+    result = compare_face_rois(_doc(large), _doc(large.copy()), cfg=cfg)
+
+    assert result["ref_roi_min_side"] == 64
+    assert result["ref_quality_reason"] == "roi_too_small"
+    assert result["sus_quality_reason"] == "roi_too_small"
+    assert result["ref_combined_cue"] is None

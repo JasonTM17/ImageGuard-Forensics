@@ -13,7 +13,7 @@ Pipeline 6 trụ cột Xử lý ảnh số (thuần NumPy + OpenCV + ``imageguar
      học (boundary extraction) + biến đổi Hough tìm đoạn biên thẳng bất thường.
   6. Đối xứng cấu trúc khuôn mặt trái–phải bằng đặc trưng HOG & 7 bất biến Hu.
 
-Hỗ trợ Dual-Camera Cross-Sensor khi nhận ảnh ghép từ 2 camera (W ≥ 2.1·H).
+Hỗ trợ ảnh ghép hai camera khi có capture_layout rõ ràng, không đoán từ tỷ lệ ảnh.
 
 Contract bắt buộc: thuộc ``AUX_METHODS`` — chỉ trả ``INCONCLUSIVE``,
 ``NO_INDICATION`` hoặc ``NOT_APPLICABLE``; KHÔNG BAO GIỜ trả ``SUSPICIOUS_INDICATION``.
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import threading
 import time
+from numbers import Real
 
 import cv2
 import numpy as np
@@ -49,8 +50,42 @@ from imageguard.ipkit import (
 
 SCORE_DEF = (
     "chỉ số kết hợp 6 trụ cột Xử lý ảnh (ROI da+SAT, nhiễu dư σ-Otsu, "
-    "LBP χ², phổ 2D FFT, Canny-Hough biên ghép & đối xứng HOG/Hu) — tín hiệu khám phá Deepfake/AI"
+    "LBP χ², phổ 2D FFT, Canny-Hough biên ghép & đối xứng HOG/Hu) — "
+    "chưa hiệu chuẩn, không phải xác suất Deepfake/AI"
 )
+
+
+def _setting(
+    cfg: ThresholdSet, key: str, default: float, low: float = 0.0, high: float = 1.0,
+) -> float:
+    """Read the normal threshold schema and validate legacy scalar overrides.
+
+    Earlier callers supplied scalars in ``cfg.raw['deepfake']``. Retain that
+    API, but never allow NaN/bools/out-of-range values to silently turn flags off.
+    """
+    section = cfg.raw.get("deepfake", {})
+    if not isinstance(section, dict):
+        raise ValueError("deepfake phải là mapping ngưỡng")  # noqa: TRY004 - matches ThresholdSet
+    node = section.get(key, default)
+    value = cfg.value("deepfake", key) if isinstance(node, dict) else node
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise ValueError(f"deepfake.{key} phải là số hữu hạn")  # noqa: TRY004 - matches ThresholdSet
+    value = float(value)
+    if not np.isfinite(value) or not low <= value <= high:
+        raise ValueError(f"deepfake.{key} phải nằm trong [{low}, {high}]")
+    return value
+
+
+def _capture_split(doc: ImageDocument) -> int | None:
+    """Return an explicitly declared camera boundary in document pixels."""
+    if doc.capture_layout == "single":
+        return None
+    if doc.capture_layout != "dual_side_by_side":
+        raise ValueError("capture_layout không được hỗ trợ")
+    split = doc.capture_split_x if doc.capture_split_x is not None else doc.width // 2
+    if isinstance(split, bool) or not isinstance(split, int) or not 0 < split < doc.width:
+        raise ValueError("capture_split_x phải nằm bên trong ảnh ghép")
+    return split
 
 # 8 láng giềng ngược/cùng chiều kim đồng hồ khớp quy tắc ipkit/features_basic.py.
 _LBP_OFFSETS: tuple[tuple[int, int], ...] = (
@@ -238,61 +273,79 @@ def _lbp_texture_cues(
 
 
 def _fft_highfreq_cue(roi_gray: np.ndarray) -> tuple[float, float, float, float]:
-    """Đo đỉnh tuần hoàn (magnitude p99.8/median), suy hao phổ 2D FFT & độ tập trung đỉnh (C3).
+    """Measure spectral anomalies; these are not Deepfake probabilities.
 
-    Trả ``(freq_cue, peak_ratio, spectral_rolloff, hf_conc8)`` — ``hf_conc8`` là
-    tỷ lệ năng lượng của 8 đỉnh HF lớn nhất trên tổng năng lượng vành HF.
+    Return ``(freq_cue, peak_ratio, spectral_rolloff, hf_conc8)``. The last
+    value remains the legacy top-eight *amplitude* share for diagnostics;
+    it depends on ROI size and is not used to make a decision.
+
+    Periodicity uses the power in a fixed top 1% of high-frequency bins.
+    For ideal white noise, each periodogram power is exponentially
+    distributed, so the mean of its upper fraction q relative to the whole
+    mean is ``1 - log(q)``. Normalize by that reference before scoring.
+    A Hann window makes neighboring bins dependent; the twofold margin
+    below is a conservative exploratory heuristic, not a significance test
+    or a threshold calibrated on real/fake photographs.
     """
     rh, rw = roi_gray.shape
     if rh < 16 or rw < 16 or np.ptp(roi_gray) == 0:
-        # Vùng phẳng không có phổ AC để suy ra mức suy hao cao tần.
+        # Flat crops have no AC spectrum from which to infer a rolloff.
         return 0.0, 1.0, 1.0, 0.0
     centered = roi_gray.astype(np.float32) - float(roi_gray.mean())
     win = np.outer(np.hanning(rh), np.hanning(rw)).astype(np.float32)
     mag = np.abs(np.fft.fftshift(np.fft.fft2(centered * win)))
     spec = np.log1p(mag)
 
+    # fftshift places DC at integer floor(size / 2), including even crops.
     yy, xx = np.ogrid[:rh, :rw]
-    cy, cx = (rh - 1) / 2.0, (rw - 1) / 2.0
-    norm_r = np.sqrt(((yy - cy) / max(cy, 1.0)) ** 2 + ((xx - cx) / max(cx, 1.0)) ** 2)
+    cy, cx = rh // 2, rw // 2
+    norm_r = np.sqrt(((yy - cy) / max(cy, 1)) ** 2 + ((xx - cx) / max(cx, 1)) ** 2)
     hf_mask = (norm_r >= 0.45) & (norm_r <= 0.95)
     mf_mask = (norm_r >= 0.15) & (norm_r < 0.45)
     if not np.any(hf_mask):
         return 0.0, 1.0, 1.0, 0.0
 
-    # Đỉnh tuần hoàn checkerboard đo trên biên độ tuyến tính (tránh bị log1p nén dải đỉnh).
     hf_mag = mag[hf_mask]
     hf_med = float(np.median(hf_mag)) + 1e-6
     hf_p998 = float(np.percentile(hf_mag, 99.8))
     peak_ratio = hf_p998 / hf_med
 
-    # Độ tập trung năng lượng: lưới upsampling tuần hoàn dồn năng lượng vào vài
-    # đỉnh Espectral cô lập, còn cấu trúc mặt thật (mắt/tóc) rải đều trên vành HF.
-    # Đo bằng top-8 |mag| / tổng |mag| của vành HF — face synthetic ~0.002, lưới
-    # 3px ~0.046 (cohort tests/test_deepfake_cues.py), xem warmup trong ledger plan.
-    hf_sorted = np.sort(hf_mag)[::-1]
-    hf_conc8 = float(hf_sorted[:8].sum() / (hf_sorted.sum() + 1e-9))
+    # Retain this raw statistic for existing report readers only. A fixed
+    # count of bins captures a larger share of noise in a smaller crop.
+    raw_top_count = min(8, hf_mag.size)
+    raw_top = np.partition(hf_mag, hf_mag.size - raw_top_count)[-raw_top_count:]
+    hf_conc8 = float(raw_top.sum() / (hf_mag.sum() + 1e-9))
+
+    # Actual spectral energy is |FFT|**2, not |FFT|. A fixed tail fraction
+    # and noise reference make the periodicity statistic comparable across
+    # crop areas without resizing away or inventing frequency artifacts.
+    TAIL_FRACTION = 0.01
+    NOISE_ENRICHMENT_FLOOR = 2.0
+    ENRICHMENT_FULL_SCALE = 6.0
+    hf_power = np.square(hf_mag.astype(np.float64))
+    tail_count = max(1, int(np.ceil(TAIL_FRACTION * hf_power.size)))
+    tail = np.partition(hf_power, hf_power.size - tail_count)[-tail_count:]
+    actual_fraction = tail_count / hf_power.size
+    tail_share = float(tail.sum() / max(float(hf_power.sum()), 1e-12))
+    expected_noise_enrichment = 1.0 - np.log(actual_fraction)
+    enrichment = (tail_share / actual_fraction) / expected_noise_enrichment
+    grid_score = float(np.clip(
+        (enrichment - NOISE_ENRICHMENT_FLOOR)
+        / (ENRICHMENT_FULL_SCALE - NOISE_ENRICHMENT_FLOOR),
+        0.0, 1.0,
+    ))
 
     hf_mean = float(np.mean(spec[hf_mask]))
     mf_mean = float(np.mean(spec[mf_mask])) if np.any(mf_mask) else hf_mean
     spectral_rolloff = hf_mean / (mf_mean + 1e-6)
-
-    # peak_ratio khoảng 8 trên ROI mặt webcam 196px là cấu trúc mặt thật
-    # (mắt, tóc), không phải lưới upsampling. Ngưỡng cũ bão hòa từ 5.5 nên
-    # mọi khung webcam ra freq_cue = 1. Checkerboard synthetic vẫn ~29.
     peak_score = float(np.clip((peak_ratio - 4.0) / 14.0, 0.0, 1.0))
     rolloff_score = float(np.clip((0.58 - spectral_rolloff) / 0.25, 0.0, 1.0))
-    # Lưới tuần hoàn (GAN/diffusion upsampling) có peak_ratio trung bình (~7.6 với
-    # chu kỳ 3px) NHƯNG năng lượng tập trung vào ít đỉnh → grid_score cao, trong khi
-    # mặt thật peak cao nhưng rải đều → grid_score ≈ 0. Nhờ đó dải peak 4..15 không
-    # còn bị recalibration của peak_score che khuất (Wukong claim 5, plan 261124-2152).
-    # Giới hạn đo được (cohort 20 seed): lưới NN upsampling biên hài thực (nhiều
-    # hài, conc8 ~0.003-0.004) KHÔNG tách được khỏi mặt bằng conc8; grid_score có thể
-    # bật trên texture tuần hoàn tự nhiên — xem docs/limitations.md.
-    grid_score = float(np.clip((hf_conc8 - 0.006) / 0.040, 0.0, 1.0))
     freq_cue = float(
         np.clip(
-            max(peak_score, 0.65 * peak_score + 0.35 * max(rolloff_score, grid_score)),
+            # A narrow periodic grid can occupy fewer than 0.2% of bins,
+            # especially in large crops. Its power evidence must not be
+            # capped at 0.35 merely because the percentile peak misses it.
+            max(peak_score, grid_score, 0.65 * peak_score + 0.35 * rolloff_score),
             0.0,
             1.0,
         )
@@ -401,12 +454,32 @@ def _sigma_grid(gray: np.ndarray, kernel: int, block: int) -> np.ndarray:
     return np.sqrt(np.clip(e2 - e1 * e1, 0.0, None)).astype(np.float32)
 
 
+def _roi_masks(
+    shape: tuple[int, int], rect: tuple[int, int, int, int], block: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Disjoint ROI, adjacent ring and reference blocks on one sensor only."""
+    bh, bw = shape
+    rx, ry, rw, rh = rect
+    bx0, by0 = min(bw - 1, max(0, rx // block)), min(bh - 1, max(0, ry // block))
+    bx1 = min(bw, max(bx0 + 1, (rx + rw + block - 1) // block))
+    by1 = min(bh, max(by0 + 1, (ry + rh + block - 1) // block))
+    inside = np.zeros(shape, dtype=bool)
+    inside[by0:by1, bx0:bx1] = True
+    dilated = cv2.dilate(inside.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    ring = dilated & ~inside
+    reference = ~dilated
+    if not np.any(reference):
+        reference = ~inside
+    return inside, ring, reference
+
+
 def _dual_working_halves(
-    source: np.ndarray, working_shape: tuple[int, int]
+    source: np.ndarray, working_shape: tuple[int, int], native_split: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Resize each sensor independently, including odd native/working widths."""
+    """Resize each sensor independently, including unequal capture widths."""
     height, width = working_shape
-    native_mid, working_mid = source.shape[1] // 2, width // 2
+    native_mid = source.shape[1] // 2 if native_split is None else native_split
+    working_mid = max(1, min(width - 1, round(native_mid * width / source.shape[1])))
     halves = (source[:, :native_mid], source[:, native_mid:])
     sizes = ((working_mid, height), (width - working_mid, height))
     return tuple(
@@ -427,21 +500,42 @@ def _clip_half_roi(rect: tuple[int, int, int, int], shape: tuple[int, int]) -> t
 
 def _cue_map_to_doc(
     grid: np.ndarray, doc: ImageDocument, side: str | None,
-    working_shape: tuple[int, int], interpolation: int,
+    working_shape: tuple[int, int], interpolation: int, block_size: int,
 ) -> np.ndarray:
-    if side is None:
-        return upscale_to_doc(grid, doc, interpolation)
     # Interpolate within the selected sensor, then place it. Resizing a padded
     # full-frame heatmap would bleed nonzero values across the camera boundary.
     height, width = working_shape
-    pixels = cv2.resize(grid, (width, height), interpolation=interpolation)
-    mid = doc.width // 2
+    covered_h, covered_w = grid.shape[0] * block_size, grid.shape[1] * block_size
+    pixels = np.zeros((height, width), dtype=grid.dtype)
+    pixels[:covered_h, :covered_w] = cv2.resize(
+        grid, (covered_w, covered_h), interpolation=interpolation
+    )
+    if side is None:
+        return upscale_to_doc(pixels, doc, interpolation)
+    mid = _capture_split(doc)
+    assert mid is not None
     x0, x1 = (0, mid) if side == "left" else (mid, doc.width)
     placed = np.zeros((doc.height, doc.width), dtype=grid.dtype)
     placed[:, x0:x1] = cv2.resize(
         pixels, (x1 - x0, doc.height), interpolation=interpolation
     )
     return placed
+
+
+def _roi_to_doc(
+    rect: tuple[int, int, int, int], doc: ImageDocument,
+    side: str | None, working_shape: tuple[int, int],
+) -> list[int]:
+    """Map a local working ROI to native pixels without crossing sensors."""
+    h, w = working_shape
+    split = _capture_split(doc)
+    start, end = (0, doc.width)
+    if side is not None and split is not None:
+        start, end = (0, split) if side == "left" else (split, doc.width)
+    x, y, rw, rh = rect
+    x0, x1 = round(x * (end - start) / w), round((x + rw) * (end - start) / w)
+    y0, y1 = round(y * doc.height / h), round((y + rh) * doc.height / h)
+    return [start + x0, y0, max(1, x1 - x0), max(1, y1 - y0)]
 
 
 class DeepfakeCues:
@@ -460,7 +554,22 @@ class DeepfakeCues:
             "tín hiệu khám phá từ 6 trụ cột xử lý ảnh cổ điển — không dùng mô hình Deep Learning",
             "da mịn tự nhiên, ánh sáng yếu hoặc nén mạng xã hội mạnh có thể gây dao động điểm số",
             "signal khám phá — cần kiểm tra đối chiếu với ngữ cảnh và detector khác",
+            "chỉ phân tích ROI được chọn; không xác nhận các khuôn mặt còn lại hoặc ảnh AI toàn cảnh",
         ]
+
+        thresh = _setting(cfg, "score_thresh", 0.35)
+        min_face_side = _setting(cfg, "min_face_side", 64, 16, 512)
+        min_reference_blocks = _setting(cfg, "min_reference_blocks", 4, 1, 4096)
+        min_roi_contrast = _setting(cfg, "min_roi_contrast", 8.0, 0, 255)
+        support_thresholds = {
+            key: _setting(cfg, key, default) for key, default in (
+                ("smooth_support", 0.45), ("region_support", 0.20),
+                ("lbp_support", 0.18), ("freq_support", 0.55),
+                ("seam_support", 0.65), ("hough_support", 0.70),
+            )
+        }
+        native_split = _capture_split(doc)
+        params_hash = cfg.snapshot_hash()
 
         work, scale = aux_working_copy(doc, cfg)
         aux_lim = aux_limitation(scale)
@@ -471,8 +580,6 @@ class DeepfakeCues:
         k_eff = 5 if k_eff >= 5 else 3  # cv2.medianBlur float32 chỉ nhận k=3 hoặc 5
         bs_eff = scaled_block(int(cfg.value("noise", "block")), scale)
         min_comp = max(2, int(cfg.value("noise", "min_region_blocks")) // 2)
-        df_overrides = cfg.raw.get("deepfake", {}) if isinstance(cfg.raw, dict) else {}
-        thresh = float(df_overrides.get("score_thresh", 0.35))
 
         gray_u8 = (
             work.array
@@ -488,21 +595,35 @@ class DeepfakeCues:
                 None,
                 t0,
                 [f"ảnh quá nhỏ ({w}x{h}) để chia lưới block {bs_eff}px"] + lim,
+                evidence={"cue_unavailable": True, "unavailable_reason": "image_too_small"},
+                params_hash=params_hash,
             )
 
         if cancelled(cancel):
-            return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
+            return self._done(
+                Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim,
+                evidence={"cue_unavailable": True, "unavailable_reason": "cancelled"},
+                params_hash=params_hash,
+            )
 
-        # Trụ cột 1: Định vị ROI khuôn mặt — hỗ trợ Dual-Camera Cross-Sensor nếu khung ghép đôi (W >= 2.1*H).
-        dual_camera_mode = w >= int(2.1 * h) and bw >= 8
+        # The layout comes from acquisition metadata or an explicit caller.
+        # Panoramas and ultrawide webcams must never be split automatically.
+        dual_camera_mode = native_split is not None
         dual_sigma_left: float | None = None
         dual_sigma_right: float | None = None
         dual_roi_side: str | None = None
         roi_offset_x = 0
 
         if dual_camera_mode:
-            mid_x = w // 2
-            left, right = _dual_working_halves(doc.array, (h, w))
+            mid_x = max(1, min(w - 1, round(native_split * w / doc.width)))
+            if min(mid_x, w - mid_x) // bs_eff < 4:
+                return self._done(
+                    Verdict.NOT_APPLICABLE, None, t0,
+                    ["một vùng camera quá nhỏ để đo texture/phổ"] + lim,
+                    evidence={"cue_unavailable": True, "unavailable_reason": "image_too_small",
+                              "dual_camera_mode": True}, params_hash=params_hash,
+                )
+            left, right = _dual_working_halves(doc.array, (h, w), native_split)
             gray_l = left if left.ndim == 2 else cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
             gray_r = right if right.ndim == 2 else cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
             sigma_l = _sigma_grid(gray_l.astype(np.float32), k_eff, bs_eff)
@@ -520,7 +641,20 @@ class DeepfakeCues:
             dual_sigma_left = round(sig_in_l, 3)
             dual_sigma_right = round(sig_in_r, 3)
 
-            if face_l != face_r:
+            def usable_face(rect, detected, candidate_gray, candidate_sigma):
+                x, y, fw, fh = rect
+                if not detected or min(fw, fh) < min_face_side:
+                    return False
+                crop = candidate_gray[y:y + fh, x:x + fw]
+                contrast = float(np.percentile(crop, 95) - np.percentile(crop, 5))
+                _, _, reference = _roi_masks(candidate_sigma.shape, rect, bs_eff)
+                return contrast >= min_roi_contrast and np.count_nonzero(reference) >= min_reference_blocks
+
+            usable_l = usable_face(rect_l, face_l, gray_l, sigma_l)
+            usable_r = usable_face(rect_r, face_r, gray_r, sigma_r)
+            if usable_l != usable_r:
+                choose_right = usable_r
+            elif face_l != face_r:
                 choose_right = face_r
             else:
                 choose_right = drop_r > drop_l + 0.05
@@ -550,31 +684,46 @@ class DeepfakeCues:
             (rx, ry, rw, rh), face_detected, roi_source = _detect_face_roi(
                 work.array, gray_u8, bs_eff
             )
+            rx, ry, rw, rh = _clip_half_roi((rx, ry, rw, rh), gray_u8.shape)
+
+        roi_rect = _roi_to_doc((rx, ry, rw, rh), doc, dual_roi_side, (h, w))
+        base_evidence = {
+            "roi_source": roi_source,
+            "dual_camera_mode": dual_camera_mode,
+            "dual_sigma_left": dual_sigma_left,
+            "dual_sigma_right": dual_sigma_right,
+            "dual_roi_side": dual_roi_side,
+            "capture_layout": doc.capture_layout,
+            "capture_split_x": native_split,
+            "face_detected": bool(face_detected),
+            "roi_rect": roi_rect,
+            "roi_rect_working": [rx + roi_offset_x, ry, rw, rh],
+            "roi_coordinate_space": "original_pixels",
+            "block": bs_eff,
+            "scale": round(scale, 4),
+            "decision_threshold": thresh,
+        }
+        unavailable_reason = ""
 
         if not face_detected:
+            unavailable_reason = "no_face"
             lim.insert(
                 0,
                 "Chưa định vị được vùng mặt trên khung này. "
-                "Phân tích khung đơn chỉ sàng lọc vùng trung tâm.",
+                "Không cấp điểm Deepfake; các số đo vùng trung tâm chỉ dùng minh họa xử lý ảnh.",
             )
+        elif min(rw, rh) < min_face_side:
+            unavailable_reason = "roi_too_small"
+            lim.insert(0, f"vùng mặt {rw}x{rh}px nhỏ hơn mức tối thiểu {min_face_side:g}px")
+        elif "skin_haar_dip" in roi_source:
+            lim.append("ROI từ màu da và cấu trúc sáng tối là ứng viên mặt; có thể nhầm vật thể cùng màu")
 
-        bx0 = min(bw - 1, max(0, rx // bs_eff))
-        by0 = min(bh - 1, max(0, ry // bs_eff))
-        bx1 = min(bw, max(bx0 + 1, (rx + rw + bs_eff - 1) // bs_eff))
-        by1 = min(bh, max(by0 + 1, (ry + rh + bs_eff - 1) // bs_eff))
-        inside_roi = np.zeros((bh, bw), dtype=bool)
-        inside_roi[by0:by1, bx0:bx1] = True
-
-        dilated_roi = cv2.dilate(inside_roi.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
-        seam_ring = dilated_roi & (~inside_roi)
-        outer_bg = ~dilated_roi
-        if not np.any(outer_bg):
-            outer_bg = ~inside_roi
-        if dual_camera_mode and not np.any(outer_bg):
+        inside_roi, seam_ring, outer_bg = _roi_masks((bh, bw), (rx, ry, rw, rh), bs_eff)
+        if np.count_nonzero(outer_bg) < min_reference_blocks:
             lim.insert(
                 0,
-                "không đủ nền cùng cảm biến trong nửa camera đã chọn "
-                "(ROI chiếm gần toàn bộ nửa) — không mượn nền camera còn lại"
+                "không đủ nền cùng cảm biến ngoài ROI để đối chiếu "
+                "— không dùng chính ROI hoặc camera còn lại làm nền"
             )
             return self._done(
                 Verdict.INCONCLUSIVE,
@@ -582,19 +731,13 @@ class DeepfakeCues:
                 t0,
                 lim,
                 evidence={
+                    **base_evidence,
                     "cue_unavailable": True,
-                    "roi_source": roi_source,
-                    "dual_camera_mode": dual_camera_mode,
-                    "dual_sigma_left": dual_sigma_left,
-                    "dual_sigma_right": dual_sigma_right,
-                    "dual_roi_side": dual_roi_side,
-                    "face_detected": face_detected,
-                    "roi_rect": [rx + roi_offset_x, ry, rw, rh],
-                    "block": bs_eff,
+                    "unavailable_reason": "insufficient_background",
+                    "reference_blocks": int(np.count_nonzero(outer_bg)),
                 },
+                params_hash=params_hash,
             )
-        if not np.any(outer_bg):
-            outer_bg = np.ones((bh, bw), dtype=bool)
 
         med_out = float(np.median(sigma[outer_bg]))
         med_in = float(np.median(sigma[inside_roi]))
@@ -618,7 +761,11 @@ class DeepfakeCues:
             seam_cue = 0.0
 
         if cancelled(cancel):
-            return self._done(Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim)
+            return self._done(
+                Verdict.INCONCLUSIVE, None, t0, ["cancelled"] + lim,
+                evidence={**base_evidence, "cue_unavailable": True, "unavailable_reason": "cancelled"},
+                params_hash=params_hash,
+            )
 
         # Trụ cột 3: Vi kết cấu LBP 8 lân cận & khoảng cách χ² ROI vs nền (C6).
         lbp_cue, lbp_chi2, flat_in, flat_out, flat_blocks = _lbp_texture_cues(
@@ -628,6 +775,10 @@ class DeepfakeCues:
         # Trụ cột 4: Phổ tần số 2D FFT (đỉnh checkerboard & suy hao cao tần hướng tâm).
         roi_f = gray[ry : ry + rh, rx : rx + rw]
         roi_u8 = gray_u8[ry : ry + rh, rx : rx + rw]
+        contrast = float(np.percentile(roi_u8, 95) - np.percentile(roi_u8, 5))
+        if not unavailable_reason and contrast < min_roi_contrast:
+            unavailable_reason = "low_contrast"
+            lim.insert(0, "vùng mặt thiếu tương phản; không đủ dữ liệu để cấp điểm Deepfake")
         freq_cue, peak_ratio, spectral_rolloff, hf_conc8 = _fft_highfreq_cue(roi_f)
 
         # Trụ cột 5 & 6: Biên ghép hình học (Canny + Boundary + Hough) & đối xứng HOG/Hu.
@@ -670,45 +821,47 @@ class DeepfakeCues:
             )
         )
 
-        # Nền lặp có thể kích hoạt cả FFT và biên. Khi chỉ xét vùng giữa,
-        # cần có bằng chứng kết cấu hỗ trợ trước khi bật cờ.
-        corroborated = True
-        if not face_detected:
-            residual_support = smooth_cue >= 0.45 and roi_flag_frac >= 0.20
-            lbp_support = lbp_cue >= 0.18
-            spectral_or_boundary_support = (
-                freq_cue >= 0.55 or seam_cue >= 0.65 or seam_hough_cue >= 0.70
-            )
-            corroborated = (
-                (residual_support and (lbp_support or seam_cue >= 0.30))
-                or ((residual_support or lbp_support) and spectral_or_boundary_support)
-            )
-            if not corroborated:
-                raw_score *= 0.55
-
-        score = round(raw_score, 4)
+        # Smoothing, LBP flattening and low-noise area describe the same family
+        # of effects. Counting all three as separate votes overstates support.
+        # Require at least two cue families; these are still uncalibrated and
+        # correlated observations, not independent evidence of a fake face.
+        texture_support = (
+            smooth_cue >= support_thresholds["smooth_support"]
+            and roi_flag_frac >= support_thresholds["region_support"]
+        ) or lbp_cue >= support_thresholds["lbp_support"]
+        spectral_support = freq_cue >= support_thresholds["freq_support"]
+        boundary_support = (
+            seam_cue >= support_thresholds["seam_support"]
+            or seam_hough_cue >= support_thresholds["hough_support"]
+        )
+        support = {
+            "texture": bool(texture_support), "frequency": bool(spectral_support),
+            "boundary": bool(boundary_support),
+        }
+        corroborated = sum(support.values()) >= 2
+        score = None if unavailable_reason else round(raw_score, 4)
 
         # Heatmap tổng hợp đa lớp: suy giảm nhiễu σ + mật độ phẳng LBP trong ROI.
         roi_weight = 0.30 + 0.70 * inside_roi.astype(np.float32)
         lbp_excess = np.clip((flat_blocks - flat_out) / max(1.0 - flat_out, 0.25), 0.0, 1.0)
         heat_blocks = (0.72 * sigma_drop + 0.28 * lbp_excess) * roi_weight
         heat_img = _cue_map_to_doc(
-            np.clip(heat_blocks, 0.0, 1.0), doc, dual_roi_side, (h, w), cv2.INTER_LINEAR
-        )
+            np.clip(heat_blocks, 0.0, 1.0), doc, dual_roi_side, (h, w), cv2.INTER_LINEAR, bs_eff
+        ) if not unavailable_reason else None
 
-        has_flag = corroborated and score >= thresh and (
-            kept_area > 0 or freq_cue >= 0.55 or seam_cue >= 0.65 or seam_hough_cue >= 0.70
-        )
+        has_flag = bool(not unavailable_reason and corroborated and raw_score >= thresh)
         if has_flag and kept_area == 0:
             # Nếu cờ kích hoạt từ phổ FFT/biên seam mà mask nhiễu block trống, tô vùng ROI.
             keep[inside_roi] = 1
         mask = (
-            _cue_map_to_doc((keep * 255).astype(np.uint8), doc, dual_roi_side, (h, w), cv2.INTER_NEAREST)
+            _cue_map_to_doc(
+                (keep * 255).astype(np.uint8), doc, dual_roi_side, (h, w), cv2.INTER_NEAREST, bs_eff
+            )
             if has_flag
             else None
         )
-        verdict = Verdict.INCONCLUSIVE if has_flag else Verdict.NO_INDICATION
-        if verdict == Verdict.INCONCLUSIVE:
+        verdict = Verdict.INCONCLUSIVE if has_flag or unavailable_reason else Verdict.NO_INDICATION
+        if has_flag:
             lim.insert(
                 0 if face_detected else 1,
                 f"phát hiện bất thường mịn/LBP/phổ vùng ROI (score={score:.2f}, "
@@ -723,14 +876,14 @@ class DeepfakeCues:
             mask=mask,
             heatmap=heat_img,
             evidence={
-                "roi_source": roi_source,
-                "dual_camera_mode": dual_camera_mode,
-                "dual_sigma_left": dual_sigma_left,
-                "dual_sigma_right": dual_sigma_right,
-                "dual_roi_side": dual_roi_side,
-                "face_detected": face_detected,
+                **base_evidence,
                 "corroborated": corroborated,
-                "roi_rect": [rx + roi_offset_x, ry, rw, rh],
+                "cue_flag": has_flag,
+                "cue_unavailable": bool(unavailable_reason),
+                "unavailable_reason": unavailable_reason or None,
+                "support_families": [name for name, active in support.items() if active],
+                "reference_blocks": int(np.count_nonzero(outer_bg)),
+                "roi_contrast": round(contrast, 3),
                 "sigma_in_median": round(med_in, 3),
                 "sigma_out_median": round(med_out, 3),
                 "smooth_cue": round(smooth_cue, 4),
@@ -745,12 +898,12 @@ class DeepfakeCues:
                 "fft_hf_conc8": round(hf_conc8, 5),
                 "seam_hough_cue": round(seam_hough_cue, 4),
                 "seam_hough_lines": seam_hough_lines,
+                "symmetry_cue": round(sym_cue, 4),
                 "hog_asym": round(hog_asym, 4),
                 "kept_blocks": kept_area,
-                "block": bs_eff,
-                "scale": round(scale, 4),
+                "roi_flag_fraction": round(roi_flag_frac, 4),
             },
-            params_hash=cfg.snapshot_hash(),
+            params_hash=params_hash,
         )
 
     def _done(
@@ -771,7 +924,15 @@ class DeepfakeCues:
             score_definition=SCORE_DEF,
             mask=mask,
             heatmap=heatmap,
-            evidence={"variant": "dip_4pillar_deepfake_cues", **(evidence or {})},
+            evidence={
+                "variant": "dip_6pillar_deepfake_cues_v2",
+                "calibration_status": "uncalibrated",
+                "score_is_probability": False,
+                "cue_flag": False,
+                "cue_unavailable": False,
+                "unavailable_reason": None,
+                **(evidence or {}),
+            },
             limitations=limitations,
             params_hash=params_hash,
             duration_ms=int((time.perf_counter() - t0) * 1000),

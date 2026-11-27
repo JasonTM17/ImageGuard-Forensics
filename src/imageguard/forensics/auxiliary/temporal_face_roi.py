@@ -1,10 +1,9 @@
 """Cue thời gian: vùng mặt trong burst khung có đứng yên bất thường không.
 
-Ngữ cảnh (plan v2): operator chụp burst 4–6 khung từ một camera. Nếu ROI mặt
-gần như không đổi qua các khung (ảnh tĩnh được phát lại / màn hình / frame
-đóng băng), đó là tín hiệu khám phá phụ cho ``DeepfakeCues`` — theo contract
-AUX_METHODS nó chỉ có thể nâng ``NO_INDICATION`` → ``INCONCLUSIVE``, KHÔNG BAO
-GIỜ ``SUSPICIOUS_INDICATION``.
+Operator chụp burst 4–6 khung từ một camera. ROI mặt gần như không đổi có
+thể do người đang đứng yên, camera ít nhiễu, ảnh tĩnh hoặc khung đóng băng.
+Đây là số đo chất lượng thu nhận, không phải bằng chứng Deepfake hay kiểm
+tra liveness. Vì vậy cue thời gian không thay đổi score/verdict của ảnh.
 
 Cách đo (``temporal_static_cue``):
 
@@ -19,10 +18,9 @@ Cách đo (``temporal_static_cue``):
    biến thiên → score 1.0; nhiễu độc lập từng khung hoặc chuyển động → score
    thấp.
 
-``apply_temporal_cue`` sao chép pattern ``apply_reference_cue``: chỉ nâng
-``NO_INDICATION`` → ``INCONCLUSIVE`` khi ``face_detected`` và score ≥
-``TEMPORAL_STATIC_MIN``; score gốc tăng tối đa ``TEMPORAL_SCORE_MAX_DELTA``
-(=0.15); evidence chỉ gồm số — không đường dẫn.
+``apply_temporal_cue`` bổ sung số đo, trạng thái và lý do vào evidence;
+score/verdict/score_definition gốc được giữ nguyên. Evidence không chứa
+đường dẫn hay dữ liệu định danh.
 """
 
 from __future__ import annotations
@@ -32,20 +30,17 @@ import time
 import cv2
 import numpy as np
 
-from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult
 from imageguard.forensics.auxiliary.deepfake_cues import _detect_face_roi
 
-# Ngưỡng cue thời gian: chỉ khi temporal_static_score ≥ mức này VÀ ROI được
-# nhận diện là mặt mới được nâng NO_INDICATION → INCONCLUSIVE. Giá trị hiệu
-# chuẩn trên cohort synthetic của tests/test_temporal_face_roi.py (khung giống
+# Ngưỡng mô tả độ tĩnh, không phải ngưỡng phân loại Deepfake. Giá trị chọn
+# trên cohort synthetic của tests/test_temporal_face_roi.py (khung giống
 # hệt → 1.0; nhiễu iid σ≈12 → ~0.66; nhiễu cảm biến nhẹ σ≈3 → ~0.98; dịch
 # chuyển 1px → ~0.1) — KHÔNG phải tỉ lệ chính xác trên dữ liệu thật.
 TEMPORAL_STATIC_MIN = 0.85
 
-# Trần điểm cộng thêm từ cue thời gian — cue chỉ dịch chuyển nhẹ score gốc,
-# không át tín hiệu 6 trụ cột sẵn có (frozen rule: |Δscore| ≤ 0.15).
-TEMPORAL_SCORE_MAX_DELTA = 0.15
+# Giữ tên public để tương thích caller cũ; cue thời gian không cộng điểm.
+TEMPORAL_SCORE_MAX_DELTA = 0.0
 
 _BLOCK = 8  # block_size cho _detect_face_roi (min_dim = 2×8 = 32px) — như face_roi_cross_compare
 _MIN_ROI_SIDE = 8  # ROI nhỏ hơn → không đủ pixel đo phương sai thời gian
@@ -179,14 +174,11 @@ def temporal_static_cue(frames_bgr: list[np.ndarray]) -> dict:
 def apply_temporal_cue(
     result: AlgorithmResult, frames_bgr: list[np.ndarray]
 ) -> AlgorithmResult:
-    """Áp cue thời gian lên kết quả deepfake có sẵn — trả AlgorithmResult mới.
+    """Ghi độ tĩnh của burst, giữ nguyên kết quả phân tích không gian.
 
-    Luật (contract AUX): chỉ nâng ``NO_INDICATION`` → ``INCONCLUSIVE`` khi
-    ``temporal_static_score >= TEMPORAL_STATIC_MIN`` và ROI được nhận diện là
-    mặt; không bao giờ ``SUSPICIOUS_INDICATION``. Score tăng tối đa
-    ``TEMPORAL_SCORE_MAX_DELTA``. Evidence mới chỉ gồm số — không đường dẫn.
-    mask/heatmap/limitations/score_definition được sao chép nguyên từ
-    ``result``.
+    Người thật có thể đứng yên và video giả có thể chuyển động; phép đo này
+    không phân biệt hai trường hợp đó. Chỉ bổ sung trạng thái thu nhận và
+    số đo vào evidence/limitations, không cộng vào score hoặc đổi verdict.
     """
     t0 = time.perf_counter()
     try:
@@ -195,63 +187,43 @@ def apply_temporal_cue(
         cue = _neutral_dict(0)
         cue["error"] = type(exc).__name__
 
-    score = result.score
-    verdict = result.verdict
     limitations = list(result.limitations)
     static = float(cue["temporal_static_score"])
+    evidence = dict(result.evidence)
     if cue.get("error"):
-        limitations.append(
+        status = "error"
+        reason = (
             "bỏ qua cue thời gian burst — không đo được "
             f"({cue['error']})"
         )
-        evidence = dict(result.evidence)
-        evidence["temporal_frame_count"] = 0
-        return AlgorithmResult(
-            method=result.method,
-            verdict=verdict,
-            score=score,
-            score_definition=result.score_definition,
-            mask=result.mask,
-            heatmap=result.heatmap,
-            evidence=evidence,
-            limitations=limitations,
-            params_hash=result.params_hash,
-            duration_ms=result.duration_ms + int((time.perf_counter() - t0) * 1000),
+    elif cue["frame_count"] < 2:
+        status = "insufficient_frames"
+        reason = "không đủ khung burst để đo cue thời gian"
+    elif not cue["face_detected"]:
+        status = "face_unavailable"
+        reason = (
+            f"burst {cue['frame_count']} khung: không phát hiện mặt — "
+            "cue thời gian không áp dụng"
         )
-
-    cue_applies = cue["frame_count"] >= 2 and bool(cue["face_detected"])
-    if score is not None and cue_applies:
-        score = round(min(1.0, score + TEMPORAL_SCORE_MAX_DELTA * static), 4)
-
-    if cue["frame_count"] >= 2:
-        if (
-            verdict is Verdict.NO_INDICATION
-            and cue["face_detected"]
-            and static >= TEMPORAL_STATIC_MIN
-        ):
-            verdict = Verdict.INCONCLUSIVE
-            limitations.append(
-                f"vùng mặt gần như đứng yên qua {cue['frame_count']} khung "
-                f"(temporal_static={static:.2f} ≥ {TEMPORAL_STATIC_MIN:.2f}) — "
-                "có thể ảnh tĩnh/màn hình phát lại, cần đối chiếu thêm"
-            )
-        elif not cue["face_detected"]:
-            limitations.append(
-                f"burst {cue['frame_count']} khung: temporal_static={static:.2f} "
-                "nhưng không phát hiện mặt — cue thời gian không áp dụng"
-            )
-        else:
-            limitations.append(
-                f"vùng mặt biến thiên theo thời gian qua {cue['frame_count']} "
-                f"khung (temporal_static={static:.2f})"
-            )
+    elif static >= TEMPORAL_STATIC_MIN:
+        status = "static"
+        reason = (
+            f"vùng mặt gần như đứng yên qua {cue['frame_count']} khung "
+            f"(temporal_static={static:.2f}) — người thật cũng có thể đứng yên; "
+            "độ tĩnh không phải bằng chứng Deepfake và không cộng vào điểm"
+        )
     else:
-        limitations.append("không đủ khung burst để đo cue thời gian")
+        status = "variable"
+        reason = (
+            f"vùng mặt biến thiên theo thời gian qua {cue['frame_count']} "
+            f"khung (temporal_static={static:.2f}) — chuyển động không chứng minh ảnh thật"
+        )
+    limitations.append(reason)
 
-    # Contract: evidence mới chỉ chứa số đo — không path, không cờ chuỗi.
-    evidence = dict(result.evidence)
     evidence.update(
         {
+            "temporal_status": status,
+            "temporal_reason": reason,
             "temporal_frame_count": int(cue["frame_count"]),
             "temporal_static_score": cue["temporal_static_score"],
             "temporal_luma_var": cue["luma_temporal_var"],
@@ -262,8 +234,8 @@ def apply_temporal_cue(
 
     return AlgorithmResult(
         method=result.method,
-        verdict=verdict,
-        score=score,
+        verdict=result.verdict,
+        score=result.score,
         score_definition=result.score_definition,
         mask=result.mask,
         heatmap=result.heatmap,

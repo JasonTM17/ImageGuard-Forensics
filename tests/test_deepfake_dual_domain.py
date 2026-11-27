@@ -7,14 +7,14 @@ medianBlur / LBP / Otsu tính toàn cục nên halo bộ lọc vẫn rò nhiễu
 ngay cả khi split khớp lưới block.
 
 Hợp đồng repair được chấp nhận (controller implement, tests này chỉ khóa):
-- heuristic hình học & luật chọn nửa giữ nguyên;
+- bố cục hai camera do metadata khai báo, không suy đoán từ tỉ lệ ảnh;
 - lưới block mỗi nửa gồm block hoàn chỉnh của nửa đó, ROI clip trong tọa độ local;
 - sau khi chọn, MỌI mảng cue (σ, LBP/micro-range, seam/nền, Otsu, FFT, HOG)
   chỉ lấy từ nửa đã chọn;
 - cue block map local map về pixel-rect nửa đó, zero-pad full working frame,
   upscale về doc; ``roi_rect`` vẫn tọa độ global;
 - downscale resize độc lập từng nửa nguồn;
-- đường số học ảnh đơn giữ nguyên.
+- ảnh đơn không có mặt phải bỏ ngỏ, giữ số đo chẩn đoán để minh họa.
 
 Kỳ vọng: RED trên integration v1 (sha256 deepfake_cues.py
 3e63b7e907589110d8c8df6104335e0ace8ea7a6330c4693eb63f5f1316eb88e),
@@ -22,8 +22,6 @@ GREEN sau khi controller sửa. Các control đơn ảnh/nền hợp lệ phải
 """
 
 from __future__ import annotations
-
-import hashlib
 
 import numpy as np
 import pytest
@@ -38,7 +36,10 @@ _H = 128
 _BS = 16  # noise.block trong thresholds.yaml → đổi config thì đổi expected grid.
 
 
-def _doc(arr: np.ndarray, name: str = "dual.png") -> ImageDocument:
+def _doc(
+    arr: np.ndarray, name: str = "dual.png", *,
+    capture_layout: str = "dual_side_by_side", capture_split_x: int | None = None,
+) -> ImageDocument:
     h, w = arr.shape[:2]
     return ImageDocument(
         array=arr,
@@ -49,6 +50,8 @@ def _doc(arr: np.ndarray, name: str = "dual.png") -> ImageDocument:
         sha256="d" * 64,
         file_bytes=int(arr.size),
         file_name=name,
+        capture_layout=capture_layout,
+        capture_split_x=capture_split_x,
     )
 
 
@@ -202,6 +205,9 @@ def test_dual_left_selected_roi_crossing_split_is_clipped_and_isolated(
         ],
     )
     cfg = load_thresholds()
+    # This test deliberately clips an 80px ROI to 50px to exercise the
+    # sensor boundary. Keep the size gate separate from that contract.
+    cfg.raw["deepfake"]["min_face_side"] = {"value": 32, "source": "test boundary clipping"}
     snaps = []
     for right_sigma in (0.0, 90.0):
         frame = _dual_frame(w, left_sigma=4.0, right_sigma=right_sigma)
@@ -278,7 +284,11 @@ def test_dual_heatmap_zero_outside_selected_half_odd_width(
     )
     frame = _dual_frame(w, left_sigma=1.0, right_sigma=30.0)
     # Vùng mặt mịn hơn nền → heat dương thật trong nửa phải (chống assert rỗng).
-    frame[16:112, mid + 20 : mid + 220] = _noise_half(96, 200, 2.0, seed=7)
+    patch = _noise_half(96, 200, 2.0, seed=7).astype(np.float32)
+    # A smooth illumination ramp preserves low residual noise while giving
+    # the ROI usable contrast; a featureless crop must now abstain.
+    patch += np.linspace(-20.0, 20.0, 200)[None, :, None]
+    frame[16:112, mid + 20 : mid + 220] = np.clip(patch, 0, 255).astype(np.uint8)
     res = DeepfakeCues().analyze(_doc(frame), load_thresholds())
 
     assert res.evidence["dual_roi_side"] == "right"
@@ -318,13 +328,15 @@ def test_dual_downscaled_frame_keeps_per_half_resize_isolation(
         frame = np.hstack(
             [
                 _noise_half(240, mid, left_sigma, 42),
-                _noise_half(240, 600 - mid, 4.0, 43),
+                _noise_half(240, 600 - mid, 8.0, 43),
             ]
         )
         res = DeepfakeCues().analyze(_doc(frame), cfg)
         assert res.evidence["dual_camera_mode"] is True
         assert res.evidence["dual_roi_side"] == "right"
         assert res.evidence["scale"] < 1.0, "downscale path không kích hoạt"
+        assert res.score is not None, "selected ROI must remain measurable after resize"
+        assert res.heatmap is not None
         snap = _result_snapshot(res)
         snap["evidence"] = _selected_evidence(res, opposite="left")
         snaps.append(snap)
@@ -352,67 +364,70 @@ def test_dual_right_valid_background_still_computes_normally(
     assert res.verdict in {Verdict.INCONCLUSIVE, Verdict.NO_INDICATION}
 
 
-def test_single_image_numeric_baseline_matches_v1_snapshot() -> None:
-    """Control GREEN cả 2: đường ảnh đơn phải giữ nguyên số học V1.
+def test_single_no_face_keeps_diagnostics_without_a_classification() -> None:
+    """A numerical zero on a no-face control is not evidence of authenticity.
 
-    Golden values CHỤP TỪ chạy thật trên integration v1 (deepfake_cues.py
-    sha256 3e63b7e907589110d8c8df6104335e0ace8ea7a6330c4693eb63f5f1316eb88e,
-    `main .venv`, ngày 2026-11-18) — không phải oracle tự chế. Cố định cả
-    evidence/score/verdict và digest mask+heatmap (trừ duration_ms).
-    2026-11-24: thêm key `fft_hf_conc8` (grid_score của trụ FFT, plan 261124-2152)
-    bằng giá trị chụp từ chạy thật — mọi golden khác GIỮ NGUYÊN, chứng minh
-    freq_cue/score không đổi trên control này (conc8 0.00281 < 0.006 → grid_score 0).
+    Preserve finite texture/frequency measurements for the DIP demonstration,
+    while the public score/masks remain unavailable for face classification.
     """
     rng = np.random.default_rng(9)
     img = np.clip(128 + rng.normal(0.0, 16.0, (256, 256, 3)), 0, 255).astype(np.uint8)
-    res = DeepfakeCues().analyze(_doc(img, "single.png"), load_thresholds())
+    res = DeepfakeCues().analyze(
+        _doc(img, "single.png", capture_layout="single"), load_thresholds(),
+    )
 
-    expected_evidence = dict(_SINGLE_V1_EVIDENCE)
-    assert res.evidence == expected_evidence
-    assert res.verdict is _SINGLE_V1_VERDICT
-    assert res.score == _SINGLE_V1_SCORE
-    assert (res.mask is None) is _SINGLE_V1_MASK_NONE
-    if res.mask is not None:
-        assert _sha(res.mask) == _SINGLE_V1_MASK_SHA
-    assert _sha(res.heatmap) == _SINGLE_V1_HEAT_SHA
+    assert res.verdict is Verdict.INCONCLUSIVE
+    assert res.score is None
+    assert res.mask is None
+    assert res.heatmap is None
+    assert res.evidence["face_detected"] is False
+    assert res.evidence["cue_unavailable"] is True
+    assert res.evidence["unavailable_reason"] == "no_face"
+    assert res.evidence["capture_layout"] == "single"
+    assert res.evidence["dual_camera_mode"] is False
+    assert res.evidence["roi_rect"] == [64, 64, 128, 128]
+    assert res.evidence["roi_coordinate_space"] == "original_pixels"
+    assert res.evidence["sigma_in_median"] > 0.0
+    assert res.evidence["sigma_out_median"] > 0.0
+    for key in ("freq_cue", "fft_hf_peak_ratio", "fft_hf_conc8", "lbp_chi2", "seam_cue"):
+        assert np.isfinite(res.evidence[key]), key
 
 
-def _sha(arr: np.ndarray) -> str:
-    return hashlib.sha256(np.ascontiguousarray(arr).tobytes()).hexdigest()
-
-
-# --- Golden V1 (chụp từ probe run thật — xem docstring test trên) -----------
-_SINGLE_V1_VERDICT = Verdict.NO_INDICATION
-_SINGLE_V1_SCORE = 0.0071
-_SINGLE_V1_MASK_NONE = True
-_SINGLE_V1_MASK_SHA = ""
-_SINGLE_V1_HEAT_SHA = "dc382a7e201e9afd7bdad9615c9ace22eab057ec0d2a6766b7274a6e059e1373"
-_SINGLE_V1_EVIDENCE: dict = {
-    "variant": "dip_4pillar_deepfake_cues",
-    "roi_source": "central_fallback",
-    "dual_camera_mode": False,
-    "dual_sigma_left": None,
-    "dual_sigma_right": None,
-    "dual_roi_side": None,
-    "face_detected": False,
-    "corroborated": False,
-    "roi_rect": [64, 64, 128, 128],
-    "sigma_in_median": 10.683,
-    "sigma_out_median": 10.501,
-    "smooth_cue": 0.0,
-    "seam_cue": 0.1079,
-    "lbp_cue": 0.0,
-    "lbp_chi2": 0.0003,
-    "lbp_flat_in": 0.2227,
-    "lbp_flat_out": 0.2227,
-    "freq_cue": 0.0,
-    "fft_hf_peak_ratio": 2.957,
-    "spectral_rolloff": 0.992,
-    "fft_hf_conc8": 0.00281,  # thêm 2026-11-24 (grid_score/fft_hf_conc8), giá trị từ chạy thật
-    "seam_hough_cue": 0.0,
-    "seam_hough_lines": 0,
-    "hog_asym": 0.1783,
-    "kept_blocks": 0,
-    "block": 16,
-    "scale": 1.0,
-}
+@pytest.mark.parametrize("split_x", [223, 350])
+def test_unequal_explicit_camera_split_preserves_sensor_isolation(
+    monkeypatch: pytest.MonkeyPatch, split_x: int,
+) -> None:
+    """Unequal sensor widths use the declared boundary, including odd widths."""
+    h, w = 160, 577
+    right_width = w - split_x
+    _force_side(
+        monkeypatch,
+        [
+            ((24, 24, 64, 64), False, "ctrl_left"),
+            ((32, 16, 144, 112), True, "ctrl_right_face"),
+        ],
+    )
+    right = _noise_half(h, right_width, 18.0, 182)
+    patch = _noise_half(112, 144, 2.0, 183).astype(np.float32)
+    patch += np.linspace(-24.0, 24.0, 144)[None, :, None]
+    right[16:128, 32:176] = np.clip(patch, 0, 255).astype(np.uint8)
+    cfg = load_thresholds()
+    snapshots = []
+    for other_sigma in (0.0, 90.0):
+        left = _noise_half(h, split_x, other_sigma, 184)
+        res = DeepfakeCues().analyze(
+            _doc(np.hstack([left, right]), capture_split_x=split_x), cfg,
+        )
+        assert res.evidence["dual_roi_side"] == "right"
+        assert res.evidence["capture_split_x"] == split_x
+        assert res.evidence["roi_rect"] == [split_x + 32, 16, 144, 112]
+        assert res.score is not None
+        assert res.heatmap is not None
+        assert np.max(res.heatmap[:, split_x:]) > 0.0
+        assert not np.any(res.heatmap[:, :split_x])
+        if res.mask is not None:
+            assert not np.any(res.mask[:, :split_x])
+        snapshot = _result_snapshot(res)
+        snapshot["evidence"] = _selected_evidence(res, opposite="left")
+        snapshots.append(snapshot)
+    _assert_identical(snapshots[0], snapshots[1], f"unequal split at {split_x}")

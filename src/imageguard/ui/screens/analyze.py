@@ -225,17 +225,21 @@ class AnalyzeScreen(QWidget):
     # --- session reference ---
     def _refresh_ref_status(self) -> None:
         has_ref = self._ref_store.get_reference() is not None
+        single_layout = self._doc is None or self._doc.capture_layout == "single"
         self.lbl_ref.setText(
-            strings.ANALYZE_REFERENCE_READY
-            if has_ref
-            else strings.ANALYZE_REFERENCE_MISSING
+            strings.ANALYZE_REFERENCE_DUAL_UNSUPPORTED
+            if not single_layout
+            else (strings.ANALYZE_REFERENCE_READY if has_ref else strings.ANALYZE_REFERENCE_MISSING)
         )
         idle = self._worker is None
-        self.btn_set_ref.setEnabled(idle and self._path is not None)
+        self.btn_set_ref.setEnabled(idle and self._path is not None and single_layout)
         self.btn_clear_ref.setEnabled(idle and has_ref)
 
     def _set_reference(self) -> None:
         if self._worker is not None or self._path is None:
+            return
+        if self._doc is not None and self._doc.capture_layout != "single":
+            self.lbl_ref.setText(strings.ANALYZE_REFERENCE_DUAL_UNSUPPORTED)
             return
         try:
             self._ref_store.set_reference(self._path)
@@ -279,7 +283,12 @@ class AnalyzeScreen(QWidget):
             # Nguyên tắc: khung hình gốc từ camera tự động kích hoạt nhánh kiểm tra Deepfake trước.
             self.chk_df.setChecked(True)
             self.load_path(dlg.captured_path)
-            if self._path is not None and self._ref_store.get_reference() is None:
+            if (
+                self._path is not None
+                and self._doc is not None
+                and self._doc.capture_layout == "single"
+                and self._ref_store.get_reference() is None
+            ):
                 self.lbl_ref.setText(strings.ANALYZE_CAMERA_NEXT_STEP)
 
     def _open_demo_sample(self) -> None:

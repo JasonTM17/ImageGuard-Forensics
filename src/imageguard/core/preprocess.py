@@ -96,7 +96,12 @@ def aux_working_copy(
         array=small, width=nw, height=nh, channels=doc.channels,
         image_format=doc.image_format, sha256=doc.sha256,
         file_bytes=doc.file_bytes, file_name=doc.file_name, exif=doc.exif,
-        resolution_reduced=True, scale_factor=scale)
+        resolution_reduced=True, scale_factor=scale,
+        capture_layout=doc.capture_layout,
+        capture_split_x=(
+            max(1, min(nw - 1, round(doc.capture_split_x * nw / w)))
+            if doc.capture_split_x is not None and nw > 1 else None
+        ))
     return work, scale
 
 

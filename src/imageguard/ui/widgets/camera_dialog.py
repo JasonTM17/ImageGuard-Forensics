@@ -8,10 +8,12 @@ import tempfile
 import threading
 from collections.abc import Callable
 from functools import partial
+from io import BytesIO
 from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -27,6 +29,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from imageguard.core.io import _capture_layout
 from imageguard.core.paths import data_root
 from imageguard.ingest.camera import (
     capture_device_frame,
@@ -43,7 +46,9 @@ from imageguard.ui.widgets.camera_deepfake_preview import (
 )
 
 
-def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
+def analyze_camera_frame_ipkit(
+    bgr: np.ndarray, is_dual: bool = False, split_x: int | None = None
+) -> str:
     """Chẩn đoán quang học thời gian thực bằng ipkit (Chương 2, 3, 4, 6)."""
     from imageguard.ipkit import edges, features_basic, histogram, threshold
 
@@ -57,8 +62,10 @@ def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
     p_clip = 100.0 * float(np.sum(hist_counts[240:])) / total_px
     sharpness = float(np.var(edges.laplacian(gray)))
 
-    if (is_dual or w >= int(2.1 * h)) and w >= 64:
-        mid = w // 2
+    if is_dual and w >= 64:
+        mid = w // 2 if split_x is None else split_x
+        if type(mid) is not int or not 0 < mid < w:
+            raise ValueError("Vị trí ghép hai camera không hợp lệ.")
         left_g = gray[:, :mid]
         right_g = gray[:, mid:]
         dluma = abs(float(np.mean(left_g)) - float(np.mean(right_g)))
@@ -73,7 +80,7 @@ def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
         h_m = features_basic.lbph(matched_l, grid=(4, 4), uniform=True)
         chi2_matched = float(features_basic.chi_square_distance(h_m, h_r))
         return (
-            f"Đồng bộ 2 Camera ({w}×{h}) · Độ sáng TB: {mean_luma:.1f}/255 · "
+            f"Ảnh ghép 2 Camera ({w}×{h}) · Độ sáng TB: {mean_luma:.1f}/255 · "
             f"Độ nét Trái/Phải: {sharp_l:.0f}/{sharp_r:.0f} · Chênh sáng: {dluma:.1f} · "
             f"Sai biệt kết cấu χ²: {chi2_raw:.2f} → sau hiệu chuẩn: {chi2_matched:.2f}"
         )
@@ -85,11 +92,16 @@ def analyze_camera_frame_ipkit(bgr: np.ndarray, is_dual: bool = False) -> str:
     )
 
 
-def _append_deepfake_text(diagnostics: str, frame: np.ndarray | None) -> str:
+def _append_deepfake_text(
+    diagnostics: str, frame: np.ndarray | None, *,
+    capture_layout: str = "single", capture_split_x: int | None = None,
+) -> str:
     if frame is None:
         return diagnostics
     try:
-        extra = format_deepfake_preview(frame)
+        extra = format_deepfake_preview(
+            frame, capture_layout=capture_layout, capture_split_x=capture_split_x
+        )
     except Exception as exc:  # noqa: BLE001 - chỉ hiện tên loại lỗi, giữ chẩn đoán quang học
         extra = type(exc).__name__
     return f"{diagnostics}\n\n{extra}" if diagnostics else extra
@@ -100,6 +112,8 @@ def _pillar_text_from_file(path: Path) -> str:
     frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     if frame is None:
         raise ValueError("Không đọc được khung đã chụp.")
+    with Image.open(BytesIO(raw)) as im:
+        layout, split_x = _capture_layout(im.info, im.size, im.getexif().get(274, 1))
     manifest = path.with_name(f"{path.stem}.burst.json")
     if manifest.is_file():
         from imageguard.ingest.camera_burst import load_burst_frames
@@ -110,7 +124,7 @@ def _pillar_text_from_file(path: Path) -> str:
                 expected_primary_sha256=hashlib.sha256(raw).hexdigest(),
             )
         )
-    return format_deepfake_preview(frame)
+    return format_deepfake_preview(frame, capture_layout=layout, capture_split_x=split_x)
 
 
 def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[bytes, str]:
@@ -120,7 +134,14 @@ def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[byt
         frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
         if frame is None:
             raise ValueError("Không đọc được ảnh xem trước từ camera.")
-        diagnostics = analyze_camera_frame_ipkit(frame, is_dual=is_dual)
+        with Image.open(BytesIO(raw)) as im:
+            layout, split_x = _capture_layout(im.info, im.size, im.getexif().get(274, 1))
+        if is_dual and layout == "single":
+            # Explicit UI choice supplies the layout for older capture adapters.
+            layout, split_x = "dual_side_by_side", frame.shape[1] // 2
+        diagnostics = analyze_camera_frame_ipkit(
+            frame, is_dual=layout == "dual_side_by_side", split_x=split_x
+        )
         if preview_path.with_name(f"{preview_path.stem}.burst.json").is_file():
             try:
                 deepfake_text = _pillar_text_from_file(preview_path)
@@ -128,7 +149,9 @@ def _preview_result(capture: Callable[[Path], Path], is_dual: bool) -> tuple[byt
                 deepfake_text = type(exc).__name__
             diagnostics = f"{diagnostics}\n\n{deepfake_text}" if diagnostics else deepfake_text
         else:
-            diagnostics = _append_deepfake_text(diagnostics, frame)
+            diagnostics = _append_deepfake_text(
+                diagnostics, frame, capture_layout=layout, capture_split_x=split_x
+            )
     return raw, diagnostics
 
 

@@ -54,30 +54,45 @@ Study cổ điển đã ghi trên cohort thiết kế; arm **NAFNet (E3)** trên
 
 ## Camera và deepfake khám phá
 
-Mốc cùng phiên và burst 4–6 khung chỉ thêm tín hiệu trên khung gốc. Chúng không
-có cohort đo trên camera thật, không nhận diện một người, và không đổi hợp đồng
-`deepfake_cues`: không bao giờ `SUSPICIOUS_INDICATION`. Burst đọc trong một phiên
-mở camera với khoảng cách danh nghĩa 0.75 giây/khung; người thật đứng yên vẫn có
-thể cho điểm tĩnh cao, còn video phát lại có chuyển động vẫn có thể né cue.
-Driver camera có thể buffer frame nên cadence là danh nghĩa, không phải timestamp
-phần cứng. Manifest cũ thiếu sha256 bị bỏ qua vì không thể chứng minh thuộc đúng
-primary PNG; hash ngăn ghép nhầm/artifact chỉnh lẻ, không chống một người dùng
-local cố ý sửa đồng bộ cả file và manifest. Mốc tham chiếu là bản PNG lossless
-hết hạn sau 8 giờ; expiry và hash chỉ giảm nguy cơ dùng nhầm mốc cũ/bị sửa,
-không chứng minh mốc được chụp live hay cùng một người. Cả
-hai cue chỉ áp dụng thay đổi điểm/verdict khi ROI được phát hiện là mặt. Ảnh đã
-tăng cường vẫn không được đưa vào detector.
+`deepfake_cues` dùng xử lí ảnh cổ điển, chưa có trọng số mạng phân loại hay
+benchmark Deepfake thật/giả trong repo. Da mịn tự nhiên, trang điểm, khử
+nhiễu camera, ánh sáng lệch, nền nhiều texture và nén ảnh có thể tạo dấu
+hiệu tương tự chỉnh sửa. Đối xứng HOG/Hu không loại trừ được ảnh hưởng của
+tư thế; bộ tìm mặt Haar/màu da có thể bỏ sót hoặc định vị nhầm, đặc biệt với
+góc nghiêng, che khuất và điều kiện chiếu sáng khác. Màu da không phải bộ
+xác nhận khuôn mặt. Phương pháp chỉ đo một ROI được chọn.
 
-Giới hạn đo được của trụ FFT (cohort synthetic 20 seed, 2026-11-24, không phải
-camera thật): sau khi hiệu chuẩn `peak_score` về `(peak_ratio - 4.0)/14.0` để
-khung webcam tự nhiên (peak ~8) không còn `freq_cue = 1`, các lưới upsampling
-biên hài thực (NN 2×, peak ~6.9–7.4) rơi vào dải mù 4–15 và chỉ được chấm điểm
-thấp riêng lẻ ở trụ này — có thể still bị phát hiện qua các trụ σ/LBP khác.
-`grid_score` (độ tập trung đỉnh HF, `fft_hf_conc8`) bắt được lưới tuần hoàn kiểu
-GAN/Diffusion (chu kỳ 3px, `fft_hf_conc8` ~0.046) an toàn với mặt (~0.003) và
-nhiễu thuần (~0.003), nhưng có thể bật trên texture tuần hoàn tự nhiên (vải
-dệt, nan chớp). Khi chưa định vị được vùng mặt, đỉnh phổ và biên của nền lặp
-cần thêm tín hiệu kết cấu để bật cờ. Quy tắc này vẫn chỉ phục vụ sàng lọc.
+Bản sửa 2026-11-27 không cấp điểm nếu thiếu mặt, mặt quá nhỏ/ít tương phản
+hoặc thiếu nền độc lập. `NO_INDICATION` chỉ có nghĩa không bật cờ trên ROI
+đủ điều kiện. `INCONCLUSIVE` có thể do có dấu hiệu hoặc do thiếu dữ liệu;
+cần đọc riêng `cue_flag`, `cue_unavailable` và `unavailable_reason`.
+
+FFT đã bỏ cách dùng tỷ lệ top-8 bin cố định để ra cờ, vì tỷ lệ đó thay đổi
+mạnh theo diện tích ROI. Phép đo mới dùng năng lượng top 1% bin và tham
+chiếu nhiễu trắng; các đối chứng nhiễu/lưới tổng hợp kiểm tra lỗi số học,
+không chứng minh độ chính xác nhận diện. Vải, nan chớp, màn hình và texture
+thật tuần hoàn vẫn có thể làm tăng điểm. Các ngưỡng phổ và kết hợp tín hiệu
+đều chưa hiệu chuẩn trên bộ ảnh Deepfake có nhãn.
+
+Hai camera cần khai báo bố cục và ranh giới cụ thể; ảnh rộng không tự bị
+chia đôi. Metadata PNG có thể bị mất khi xuất lại hoặc bị người dùng sửa,
+không xác thực nguồn. Khung chụp từ hai thiết bị hiện được đọc tuần tự,
+không bảo đảm đồng bộ phần cứng. Mỗi miền được xử lí độc lập, nhưng chỉ
+ROI được chọn có kết quả; đây không phải bộ so khớp danh tính đa camera.
+
+Burst 4–6 khung đo độ tĩnh của ROI, **không cộng điểm hoặc đổi verdict**:
+người thật có thể đứng yên, còn video phát lại vẫn có thể chuyển động.
+Driver có thể buffer frame; khoảng cách đọc danh nghĩa 0.75 giây không
+phải timestamp phần cứng. Mốc tham chiếu có thể tạo cờ chênh lệch độc lập,
+nhưng không cộng vào điểm không gian; thay đổi góc mặt/ánh sáng/tiêu cự cũng
+có thể làm tăng chênh lệch. Không dùng ảnh dual làm mốc tham chiếu mặt.
+
+Hash và thời hạn mốc 8 giờ giảm nguy cơ dùng nhầm dữ liệu; không chứng minh
+mốc live/cùng người và không chống người sửa đồng bộ ảnh cùng manifest.
+Ảnh tăng cường chỉ dùng quan sát, không thay thế ảnh gốc khi phân tích.
+
+Khi đánh giá, phải báo tỷ lệ mẫu đủ điều kiện riêng cho thật/giả cùng tỷ lệ
+bật cờ và lý do từ chối đo. Xem [giao thức Deepfake](deepfake-evaluation.md).
 
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 

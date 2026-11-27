@@ -47,6 +47,31 @@ def test_apply_temporal_cue_never_returns_suspicious() -> None:
     assert out.score <= 0.2 + TEMPORAL_SCORE_MAX_DELTA + 1e-6
     assert "temporal_static_score" in out.evidence
     assert "\\" not in str(out.evidence["temporal_static_score"])
+    assert out.score == 0.2
+    assert out.verdict is Verdict.NO_INDICATION
+    assert out.evidence["temporal_status"] == "static"
+
+
+def test_static_face_remains_acquisition_evidence_for_inconclusive_result() -> None:
+    base = _synthetic_face_frame(smooth_face=False)
+    result = _result(0.42)
+    result.verdict = Verdict.INCONCLUSIVE
+    out = apply_temporal_cue(result, [base.copy() for _ in range(4)])
+
+    assert out.score == result.score
+    assert out.verdict is result.verdict
+    assert out.evidence["temporal_status"] == "static"
+    assert "gần như đứng yên" in out.evidence["temporal_reason"]
+    assert not any("biến thiên theo thời gian" in lim for lim in out.limitations)
+    assert "temporal_status" not in result.evidence  # no mutation of the input
+
+
+def test_temporal_measurement_failure_preserves_spatial_result() -> None:
+    out = apply_temporal_cue(_result(0.2), [np.array([]), np.array([])])
+
+    assert out.score == 0.2
+    assert out.verdict is Verdict.NO_INDICATION
+    assert out.evidence["temporal_status"] == "error"
 
 
 def test_laplacian_uses_documented_default_ksize1(monkeypatch) -> None:

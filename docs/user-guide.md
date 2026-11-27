@@ -72,15 +72,17 @@ cảnh báo trong limitations, nhưng lượt lưu chưa hoàn tất được th
 Nếu cảnh báo ghi cleanup không hoàn tất hoặc cần `recovery`, giữ mã báo cáo
 được nêu để kiểm tra và phục hồi trước khi tin vào lịch sử hay bản xuất còn sót.
 
-Nhánh Deepfake/AI dùng tỷ lệ ảnh rộng làm gợi ý bố cục ghép dual-camera.
-Nếu chỉ một nửa định vị được vùng mặt, hệ thống ưu tiên nửa đó. Khi thiếu
-nền cùng cảm biến để so sánh, phương pháp hiện *Không đủ bằng chứng* và lý do
-chưa tính điểm. Nếu cả hai nửa đều chưa định vị được mặt, thẻ kết quả ghi rõ
-phạm vi chỉ là vùng trung tâm của nửa được chọn.
+Nhánh Deepfake/AI chỉ bật chế độ hai camera khi ảnh PNG có khai báo bố cục
+thu nhận hợp lệ; ảnh panorama hoặc webcam góc rộng vẫn là ảnh đơn. Ranh giới
+camera được lưu đúng kể cả khi hai ảnh có chiều rộng khác nhau. ROI đủ kích
+thước, tương phản và nền đối chiếu được ưu tiên. Khi thiếu mặt hoặc thiếu
+điều kiện đo, phương pháp hiện *Không đủ bằng chứng*, lý do và không cấp
+điểm. Các số đo vùng trung tâm không có mặt chỉ phục vụ minh họa.
 
 Với ảnh tải lên, bật *Dấu hiệu Deepfake / AI* hoặc chọn *Chế độ Camera / AI*.
-Thông báo chỉ sàng lọc vùng trung tâm cho biết trình định vị chưa tìm được
-vùng mặt. Ảnh quá nhỏ sẽ hiện lý do ở preview camera và thẻ phương pháp.
+Điểm chỉ số trên thang 0–1 không phải xác suất ảnh giả. `NO_INDICATION` cũng
+không chứng minh ảnh thật. Muốn đo chất lượng trên dữ liệu có nhãn, dùng
+[hướng dẫn đánh giá Deepfake](deepfake-evaluation.md).
 
 Trong hộp thoại camera, webcam mặc định chụp 5 khung. Ảnh xem trước và khung
 vừa chụp hiện các trụ cột khám phá trên khung gốc. Điểm đứng yên hiện khi bước
@@ -90,8 +92,10 @@ hoặc một camera USB. Trên tab Phân tích, *Lưu khung này làm mốc cùn
 hiện tại thành PNG lossless dưới `data/session_ref/`, không copy EXIF/GPS. Mốc
 có hiệu lực 8 giờ và chỉ được dùng khi sha256 còn khớp sidecar; sidecar chỉ
 giữ hash nguồn/hash bản chuẩn hoá và lifetime, không lưu basename hay đường dẫn
-nguồn. Mốc hết hạn hoặc bị sửa sẽ không tham gia phân tích. Mốc và burst đều là tín hiệu khám phá:
-công cụ không nhận diện danh tính và không kết luận ảnh giả.
+nguồn. Mốc hết hạn hoặc bị sửa sẽ không tham gia phân tích. Mốc và burst không cộng vào điểm không gian. Burst chỉ mô tả mức chuyển động;
+mặt đứng yên không làm tăng nghi vấn Deepfake. Mốc có thể tạo cờ chênh lệch
+riêng, chỉ dùng ảnh đơn; ảnh ghép hai camera không được lưu làm mốc mặt.
+Công cụ không nhận diện danh tính và không kết luận ảnh giả.
 
 ## Tab Tăng cường (xem, không phân tích)
 

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from imageguard.core.enums import Verdict
+from imageguard.core.enums import MethodName, Verdict
 from imageguard.core.models import AlgorithmResult
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
@@ -59,10 +59,20 @@ class MethodCard(QFrame):
         lay.addWidget(head)
         apply_a11y(self, strings.FMT_A11Y_METHOD_CARD.format(title=title))
         if result.score is not None:
-            score_lbl = QLabel(f"score = {result.score:.4g}  "
-                               f"({result.score_definition})")
+            score_text = (
+                strings.DEEPFAKE_PREVIEW_SCORE.format(score=result.score)
+                if result.method is MethodName.DEEPFAKE_CUES
+                else f"score = {result.score:.4g}"
+            )
+            score_lbl = QLabel(f"{score_text}\n({result.score_definition})")
             score_lbl.setWordWrap(True)
             lay.addWidget(score_lbl)
+        if result.method is MethodName.DEEPFAKE_CUES:
+            for text in _deepfake_context_lines(result.evidence):
+                context_lbl = QLabel(text)
+                context_lbl.setTextFormat(Qt.TextFormat.PlainText)
+                context_lbl.setWordWrap(True)
+                lay.addWidget(context_lbl)
         ev_items = _format_evidence_summary(result.evidence)
         if ev_items:
             ev_lbl = QLabel(f"Chỉ số: {ev_items}")
@@ -74,6 +84,24 @@ class MethodCard(QFrame):
             lim_lbl.setWordWrap(True)
             lim_lbl.setStyleSheet("color:#555;")
             lay.addWidget(lim_lbl)
+
+
+def _deepfake_context_lines(evidence: dict) -> list[str]:
+    """Keep applicability and independent acquisition cues visible beyond first-N fields."""
+    lines = []
+    if evidence.get("cue_unavailable"):
+        lines.append(strings.DEEPFAKE_CUE_UNAVAILABLE)
+    elif "cue_flag" in evidence:
+        lines.append(
+            strings.DEEPFAKE_CUE_FLAG_ON if evidence["cue_flag"] else strings.DEEPFAKE_CUE_FLAG_OFF
+        )
+    ref_text = strings.DEEPFAKE_REFERENCE_STATUS.get(evidence.get("ref_status"))
+    if ref_text:
+        lines.append(ref_text)
+    temporal_reason = evidence.get("temporal_reason")
+    if isinstance(temporal_reason, str) and temporal_reason:
+        lines.append(temporal_reason)
+    return lines
 
 
 def _format_evidence_summary(evidence: dict | None) -> str:

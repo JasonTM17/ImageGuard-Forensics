@@ -60,33 +60,47 @@ có finding thì `INCONCLUSIVE`, không có thì `NO_INDICATION`; không bao gi�
   (cue kết hợp); mask là phần giao hai vùng.
 
 ### Deepfake / AI cues (`deepfake_cues`)
-- Pipeline khám phá 6 trụ cột Xử lý ảnh cổ điển (không dùng DL): định vị ROI
-  khuôn mặt (Haar hoặc phân đoạn da YCrCb/HSV + kiểm chứng SAT), chênh lệch
-  nhiễu phần dư σ + Otsu/CCL, vi kết cấu LBP χ², đỉnh tuần hoàn/rolloff 2D FFT,
-  biên ghép Canny + boundary + Hough, và bất đối xứng HOG/Hu.
-- Hỗ trợ ảnh ghép Dual-Camera Cross-Sensor (`W ≥ 2.1·H`) bằng phân tích độc
-  lập từng nửa cảm biến. Nếu chỉ một nửa định vị được vùng mặt, ưu tiên nửa
-  đó. Nếu thiếu nền cùng cảm biến để so sánh, phương pháp không chấm điểm và
-  kết quả không tính vào đồng thuận tín hiệu phụ. Aux signal — không bao giờ
-  trả `SUSPICIOUS_INDICATION`.
-- Đỉnh phổ `peak_ratio` khoảng 8 trên ROI mặt webcam là cấu trúc mặt thật.
-  `freq_cue` chỉ bão hòa khi đỉnh cao hơn nhiều (lưới synthetic). Một mình
-  đỉnh đó không biến khung webcam thành kết luận deepfake.
-- Bù lại, `freq_cue` còn tính `grid_score` từ độ tập trung năng lượng phổ
-  (`fft_hf_conc8` = top-8 đỉnh HF / tổng vành HF): lưới upsampling tuần hoàn
-  (GAN/Diffusion) dồn năng lượng vào ít đỉnh nên `grid_score` cao ở cả dải
-  `peak_ratio` trung bình 4–15, còn cấu trúc mặt thật rải đều nên ≈ 0. Số đo
-  hiệu chuẩn trên cohort synthetic, không phải camera thật.
-  Vùng phẳng có điểm FFT trung tính. Khi chỉ sàng lọc vùng trung tâm, cờ
-  cần tín hiệu kết cấu hỗ trợ, chẳng hạn suy giảm nhiễu kèm chênh lệch LBP
-  hoặc tín hiệu biên. Đỉnh phổ và đường biên từ nền lặp có thể cùng xuất hiện.
-- Cùng phiên, operator có thể lưu một mốc PNG lossless đã qua `safe_open`, không
-  copy EXIF/GPS và hết hạn sau 8 giờ. Lần phân tích sau so residual, LBP và FFT
-  trong ROI mặt với mốc đó khi sha256 còn khớp sidecar; sidecar chỉ giữ hash
-  nguồn/hash bản chuẩn hoá và lifetime, không lưu basename hay đường dẫn nguồn.
-  Không có mốc hợp lệ thì điểm 6 trụ không đổi.
-- Burst 4–6 khung PNG từ một camera được đọc trong một phiên mở, cách nhau
-  khoảng 0.75 giây để chuyển động tự nhiên có thời gian xuất hiện. Manifest
-  basename cạnh khung chính ghi cadence và sha256 từng khung; phân tích bỏ qua
-  burst nếu hash không khớp primary PNG. ROI mặt gần như đứng yên chỉ nâng
-  `NO_INDICATION` lên `INCONCLUSIVE`. Không có số đo độ chính xác trên camera thật.
+
+Pipeline gồm sáu nhóm phép xử lí ảnh cổ điển: định vị ROI bằng Haar hoặc ứng
+viên màu da YCrCb/HSV + SAT; median residual và Otsu/CCL; LBP; FFT; Canny/Hough;
+và đối xứng HOG/Hu. Đây là **dấu hiệu khám phá chưa hiệu chuẩn**, không có mô
+hình phân loại Deepfake đã huấn luyện và không trả xác suất ảnh giả.
+
+- Ảnh đơn luôn được phân tích như một ảnh đơn, kể cả panorama. Chế độ hai
+  camera cần `capture_layout="dual_side_by_side"` và ranh giới
+  `capture_split_x` từ metadata PNG của luồng thu nhận hoặc caller rõ ràng.
+  Metadata là khai báo bố cục, không phải chữ ký xác thực nguồn camera.
+- Hai miền cảm biến được resize, lọc và đo độc lập. Khi lựa chọn ROI, ưu tiên
+  mặt đủ kích thước, tương phản và nền tham chiếu; sau đó mới so độ giảm
+  residual. Chỉ một ROI được đánh giá, không bao phủ mọi mặt trong ảnh.
+- Không có mặt, ROI nhỏ, tương phản thấp hoặc thiếu nền độc lập →
+  `cue_unavailable=true`, `score=null`, `INCONCLUSIVE`. Không lấy chính ROI
+  làm nền; không mượn nền camera còn lại. Các số đo vùng trung tâm khi chưa
+  thấy mặt chỉ là diagnostic, không sinh mask hay kết luận Deepfake.
+- FFT dùng cửa sổ Hann, đỉnh phổ/rolloff và độ tập trung **năng lượng
+  `|FFT|²` trong 1% bin cao tần lớn nhất**. Chuẩn hóa theo tỷ lệ bin thực tế
+  và tham chiếu nhiễu trắng lý tưởng `1 − log(q)` tránh việc ROI nhỏ tự có
+  điểm cao. `fft_hf_conc8` vẫn được xuất để đọc báo cáo cũ nhưng không dùng
+  quyết định `grid_score`. Cửa sổ Hann làm các bin phụ thuộc; đây không phải
+  kiểm định thống kê. Vải, màn hình và các texture thật tuần hoàn vẫn có thể
+  tạo cùng dấu hiệu.
+- Cờ không gian cần điểm vượt `deepfake.score_thresh` **và ít nhất hai nhóm**
+  texture, phổ, biên cùng hỗ trợ. Smoothing/LBP/diện tích ít nhiễu được gom
+  vào một nhóm vì chúng có thể cùng mô tả một hiệu ứng. Các nhóm vẫn tương
+  quan và chưa được hiệu chuẩn trên dữ liệu thật/giả. `cue_flag=true` chỉ
+  dẫn tới `INCONCLUSIVE`, không bao giờ `SUSPICIOUS_INDICATION`.
+- Mốc cùng phiên vẫn so residual/LBP/FFT của ROI 96×96 và có thể nâng
+  `NO_INDICATION` lên `INCONCLUSIVE` khi khác biệt vượt ngưỡng. Nó xuất
+  `reference_cue_flag`, `ref_status` độc lập và **không cộng điểm** vào chỉ
+  số không gian. Không dùng ảnh ghép hai camera làm mốc so sánh mặt.
+- Burst một camera có `temporal_status` và `temporal_reason` mô tả mức thay
+  đổi giữa các khung. Người thật có thể đứng yên; temporal **không đổi điểm
+  hay verdict Deepfake**. Manifest kiểm tra hash của ảnh chính/từng khung;
+  không bảo đảm timestamp phần cứng hay chứng minh camera đang live.
+- `roi_rect` dùng tọa độ ảnh gốc; `roi_rect_working` dùng tọa độ bản làm việc.
+  Heatmap/mask không kéo giãn phần block cuối chưa được đo và không lan qua
+  ranh giới cảm biến.
+
+Ngưỡng mới nằm trong `configs/thresholds.yaml`, có miền giá trị và ghi rõ
+chưa hiệu chuẩn. Giao thức đánh giá coverage, tỷ lệ bật cờ trên ảnh thật/giả
+và AUC điểm: [deepfake-evaluation.md](deepfake-evaluation.md).

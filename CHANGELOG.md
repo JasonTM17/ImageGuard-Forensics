@@ -5,6 +5,22 @@ Dự án tuân [Semantic Versioning](https://semver.org/spec/v2.0.0.html) khi c�
 
 ## [Unreleased]
 
+### Deepfake reliability — 2026-11-27
+
+- Sửa phép đo phổ phụ thuộc diện tích ROI: dùng năng lượng top 1% bin cao tần
+  chuẩn hóa theo tham chiếu nhiễu; giữ `fft_hf_conc8` làm diagnostic.
+- Không cấp điểm khi thiếu mặt, ROI nhỏ/ít tương phản hoặc thiếu nền độc lập.
+  Thêm `cue_flag`, `cue_unavailable`, lý do và trạng thái chưa hiệu chuẩn;
+  yêu cầu ít nhất hai nhóm texture/phổ/biên để bật cờ không gian.
+- Dùng metadata bố cục PNG rõ ràng thay suy đoán hai camera theo tỷ lệ ảnh;
+  hỗ trợ ranh giới không ở giữa và tọa độ ROI trên ảnh gốc.
+- Temporal chỉ mô tả chuyển động, không đổi điểm/verdict. Reference xuất
+  cờ chênh lệch riêng, không cộng điểm; không dùng ảnh ghép làm mốc mặt.
+- Thêm evaluator manifest thật/giả với coverage, cue rates, AUC, kiểm tra
+  nhóm nguồn/bytes trùng giữa dev/test và lý do từ chối đo. Chưa có số đo
+  độ chính xác Deepfake trên dữ liệu thật. Cập nhật hướng dẫn/báo cáo và
+  kiểm thử hồi quy. Các mục ngày trước dưới đây mô tả hành vi lịch sử.
+
 ### Added
 
 - 2026-11-24 (deepfake same-session cues): `deepfake_cues` giữ nguyên 6 trụ cột DIP nhưng hiệu chuẩn lại trụ FFT — đỉnh phổ ~8 trên ROI mặt webcam là cấu trúc mặt thật, ngưỡng bão hòa dời từ 5.5 lên `(peak_ratio - 4.0) / 14.0` để khung webcam tự nhiên không còn `freq_cue = 1`; đồng thời thêm `grid_score` từ độ tập trung năng lượng phổ (`fft_hf_conc8`) để lưới upsampling tuần hoàn ở dải peak 4–15 (GAN/Diffusion, chu kỳ 3px) vẫn được phát hiện mà mặt thật không báo giả (Wukong claim 5, plan `261124-2152`). Giới hạn trung thực đi kèm (cohort 20 seed): lưới NN upsampling biên hài thực không tách được khỏi mặt ở dải peak 4–15 của riêng trụ FFT, và `grid_score` có thể bật trên texture tuần hoàn tự nhiên — xem `docs/limitations.md`. Bổ sung hai cue khám phá cùng phiên, cả hai chỉ nâng `NO_INDICATION` → `INCONCLUSIVE` (tối đa +0.15 điểm), không đổi contract aux: (a) mốc tham chiếu phiên `ingest/session_reference.py` + `forensics/auxiliary/face_roi_cross_compare.py` so ROI mặt 96×96 bằng residual MAE + LBP χ² + chênh đỉnh FFT; (b) burst 4–6 khung `ingest/camera_burst.py` (PNG lossless + manifest basename, từ chối path thoát thư mục) + `forensics/auxiliary/temporal_face_roi.py` đo phương sai thời gian ROI mặt. GUI: checkbox burst + xem trước deepfake trong `camera_dialog.py`, nút lưu mốc cùng phiên ở tab Analyze. Test mới: `test_face_roi_cross_compare.py`, `test_temporal_face_roi.py`, `test_camera_burst_capture.py`, `test_camera_deepfake_preview.py`, `test_session_reference.py`, `test_reference_service.py`, `test_deepfake_aux_contract.py`, `test_deepfake_webcam_cohort.py`.

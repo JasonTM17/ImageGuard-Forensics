@@ -218,9 +218,26 @@ A11Y_MAIN_TABS = "Điều hướng chức năng chính"
 
 DEEPFAKE_PREVIEW_TITLE = "Dấu hiệu khám phá trên khung gốc"
 DEEPFAKE_PREVIEW_DISCLAIMER = (
-    "Đây là tín hiệu khám phá trên khung hình gốc, không phải kết luận ảnh giả "
+    "Đây là tín hiệu xử lí ảnh trên khung hình gốc, chưa có bộ phân loại Deepfake "
+    "được huấn luyện. Kết quả không phải kết luận ảnh giả "
     "và không nhận diện danh tính."
 )
+DEEPFAKE_PREVIEW_SCORE = (
+    "Điểm dấu hiệu: {score:.3f}/1 (chưa hiệu chuẩn; không phải xác suất thật/giả)."
+)
+DEEPFAKE_PREVIEW_NO_FRAMES = "Không có khung hình để phân tích; hãy chụp lại burst."
+DEEPFAKE_CUE_FLAG_ON = "Cờ dấu hiệu không gian: bật; cần đối chiếu thêm."
+DEEPFAKE_CUE_FLAG_OFF = "Cờ dấu hiệu không gian: chưa bật; không chứng minh ảnh thật."
+DEEPFAKE_CUE_UNAVAILABLE = "Chưa đủ điều kiện đo dấu hiệu vùng mặt."
+DEEPFAKE_REFERENCE_STATUS = {
+    "difference": "Mốc phiên: có chênh lệch kết cấu cần đối chiếu thêm.",
+    "no_difference_flag": "Mốc phiên: chênh lệch kết cấu dưới ngưỡng tham chiếu.",
+    "same_frame": "Mốc phiên trùng khung đang phân tích; chưa có so sánh độc lập.",
+    "face_unavailable": "Mốc phiên: chưa tìm được vùng mặt ở cả hai khung.",
+    "quality_unavailable": "Mốc phiên: vùng mặt quá nhỏ hoặc thiếu tương phản để đối chiếu.",
+    "unavailable": "Mốc phiên chưa áp dụng vì phân tích vùng mặt không khả dụng.",
+    "unsupported_capture_layout": "Mốc phiên chưa hỗ trợ so sánh ảnh ghép hai camera.",
+}
 CAMERA_BTN_ACCEPT_FRAME = "Dùng khung này để phân tích"
 CAMERA_BTN_RETAKE = "Chụp lại"
 ANALYZE_BTN_SET_REFERENCE = "Lưu khung này làm mốc cùng phiên"
@@ -230,14 +247,18 @@ ANALYZE_REFERENCE_READY = (
     "và FFT trong vùng mặt. Không nhận diện danh tính."
 )
 ANALYZE_REFERENCE_MISSING = "Chưa có mốc cùng phiên."
+ANALYZE_REFERENCE_DUAL_UNSUPPORTED = (
+    "Ảnh ghép hai camera chưa hỗ trợ mốc cùng phiên. "
+    "Hãy chụp riêng từ một camera để dùng chức năng đối chiếu mốc."
+)
 ANALYZE_CAMERA_NEXT_STEP = (
     "Khung camera này không phải kết luận deepfake. "
     "Lưu nó làm mốc cùng phiên, rồi phân tích một khung nghi vấn khác."
 )
 CAMERA_BURST_CHECK = "Chụp 5 khung trong vài giây để xem mặt có đứng yên"
 CAMERA_BURST_HINT = (
-    "Nếu mặt gần như không đổi trong vài giây, hệ thống chỉ đánh dấu cần đối "
-    "chiếu thêm. Người thật cũng có thể đứng yên."
+    "Độ tĩnh chỉ mô tả các khung đã chụp, không cộng vào điểm Deepfake. "
+    "Người thật cũng có thể đứng yên; chuyển động cũng không chứng minh ảnh thật."
 )
 CAMERA_DUAL_HINT = (
     "Phát hiện thêm một camera. Có thể chụp song song để so hai cảm biến. "

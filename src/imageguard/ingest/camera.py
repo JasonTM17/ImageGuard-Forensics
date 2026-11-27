@@ -13,16 +13,20 @@ Mô-đun Qt-free giúp lấy trực tiếp frame cảm biến:
 
 from __future__ import annotations
 
+import json
 import secrets
 import sys
 import time
 import urllib.parse
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image, PngImagePlugin
 
+from imageguard.core.io import CAPTURE_LAYOUT_KEY
 from imageguard.core.paths import data_root
 from imageguard.ingest.http_pull import _normalize_host, pull_due
 
@@ -142,17 +146,46 @@ def _read_spaced_frame_burst_from_device(
         cap.release()
 
 
-def _save_lossless_png(frame: np.ndarray, out_dir: Path, prefix: str) -> Path:
+def _save_lossless_png(
+    frame: np.ndarray,
+    out_dir: Path,
+    prefix: str,
+    *,
+    capture_layout: str = "single",
+    capture_split_x: int | None = None,
+) -> Path:
+    if capture_layout not in {"single", "dual_side_by_side"}:
+        raise ValueError("capture_layout không hỗ trợ")
+    if capture_layout == "dual_side_by_side" and (
+        type(capture_split_x) is not int or not 0 < capture_split_x < frame.shape[1]
+    ):
+        raise ValueError("capture_split_x phải là vị trí ghép bên trong ảnh")
     target_dir = Path(out_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     ok_enc, encoded = cv2.imencode(".png", frame)
     if not ok_enc:
         raise RuntimeError("Không mã hóa được khung hình camera sang PNG.")
+    raw = encoded.tobytes()
+    if capture_layout == "dual_side_by_side":
+        # Explicit, dimension-bound layout survives renames and reopening. This
+        # records how the app assembled the image, not proof of sensor identity.
+        info = PngImagePlugin.PngInfo()
+        info.add_text(CAPTURE_LAYOUT_KEY, json.dumps({
+            "version": 1,
+            "layout": capture_layout,
+            "split_x": capture_split_x,
+            "width": int(frame.shape[1]),
+            "height": int(frame.shape[0]),
+        }, separators=(",", ":")))
+        buf = BytesIO()
+        with Image.open(BytesIO(raw)) as image:
+            image.save(buf, format="PNG", pnginfo=info)
+        raw = buf.getvalue()
 
     utc_stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     token8 = secrets.token_hex(4)
     out_path = target_dir / f"{prefix}_{utc_stamp}_{token8}.png"
-    out_path.write_bytes(encoded.tobytes())
+    out_path.write_bytes(raw)
     return out_path
 
 
@@ -191,7 +224,13 @@ def capture_dual_device_frames(
         frame_b = cv2.resize(frame_b, (target_w, target_h), interpolation=interp)
 
     combined = np.hstack([frame_a, frame_b])
-    return _save_lossless_png(combined, target_dir, f"camera_dual_dev{idx_a}_dev{idx_b}")
+    return _save_lossless_png(
+        combined,
+        target_dir,
+        f"camera_dual_dev{idx_a}_dev{idx_b}",
+        capture_layout="dual_side_by_side",
+        capture_split_x=int(frame_a.shape[1]),
+    )
 
 
 def capture_iot_http_frame(

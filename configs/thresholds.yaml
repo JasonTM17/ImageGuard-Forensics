@@ -53,3 +53,17 @@ freq:
 
 splicing:
   overlap_frac: { value: 0.15, unit: frac, source: "default — (noise_outlier ∩ ELA_hot)/ELA_hot ≥ ngưỡng → corroboration" }
+
+# Heuristic exploration only. These defaults have NOT been calibrated on a
+# labeled real/deepfake dataset; changing them does not establish accuracy.
+deepfake:
+  score_thresh: { value: 0.35, unit: index, source: "default — chưa hiệu chuẩn; chỉ số dấu hiệu, không phải xác suất giả", range: [0.0, 1.0] }
+  min_face_side: { value: 64, unit: px, source: "default — kích thước ROI làm việc tối thiểu cho texture/phổ", range: [16, 512] }
+  min_reference_blocks: { value: 4, unit: blocks, source: "default — tối thiểu số block nền độc lập ngoài ROI", range: [1, 4096] }
+  min_roi_contrast: { value: 8.0, unit: gray, source: "default — p95−p5 trong ROI; dưới mức này không đủ tương phản", range: [0.0, 255.0] }
+  smooth_support: { value: 0.45, unit: index, source: "default — chưa hiệu chuẩn; hỗ trợ nhóm texture", range: [0.0, 1.0] }
+  region_support: { value: 0.20, unit: frac, source: "default — chưa hiệu chuẩn; tỷ lệ block hỗ trợ texture", range: [0.0, 1.0] }
+  lbp_support: { value: 0.18, unit: index, source: "default — chưa hiệu chuẩn; hỗ trợ nhóm texture", range: [0.0, 1.0] }
+  freq_support: { value: 0.55, unit: index, source: "default — chưa hiệu chuẩn; hỗ trợ nhóm phổ", range: [0.0, 1.0] }
+  seam_support: { value: 0.65, unit: index, source: "default — chưa hiệu chuẩn; hỗ trợ nhóm biên", range: [0.0, 1.0] }
+  hough_support: { value: 0.70, unit: index, source: "default — chưa hiệu chuẩn; hỗ trợ nhóm biên", range: [0.0, 1.0] }

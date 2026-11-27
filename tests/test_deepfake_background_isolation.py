@@ -22,7 +22,10 @@ _FULL_HALF = (0, 0, _HALF_W, _HALF_H)
 _MID_BX = 20  # bw = 640 // 16 = 40 block; mid_bx = 20
 
 
-def _doc(arr: np.ndarray, name: str = "dual.png") -> ImageDocument:
+def _doc(
+    arr: np.ndarray, name: str = "dual.png", *,
+    capture_layout: str = "dual_side_by_side",
+) -> ImageDocument:
     h, w = arr.shape[:2]
     return ImageDocument(
         array=arr,
@@ -33,6 +36,7 @@ def _doc(arr: np.ndarray, name: str = "dual.png") -> ImageDocument:
         sha256="d" * 64,
         file_bytes=int(arr.size),
         file_name=name,
+        capture_layout=capture_layout,
     )
 
 
@@ -191,13 +195,19 @@ def test_dual_valid_face_with_background_computes_normally(
     assert res.verdict in {Verdict.INCONCLUSIVE, Verdict.NO_INDICATION}
 
 
-def test_single_image_fallback_behavior_unchanged() -> None:
-    """Control: ảnh đơn (không dual) giữ nguyên fallback toàn cục cũ."""
+def test_single_no_face_abstains_without_dual_assumption() -> None:
+    """A missing face is unavailable evidence, not a clean classification."""
     rng = np.random.default_rng(9)
     img = np.clip(128 + rng.normal(0.0, 16.0, (256, 256, 3)), 0, 255).astype(np.uint8)
-    res = DeepfakeCues().analyze(_doc(img, "single.png"), load_thresholds())
+    res = DeepfakeCues().analyze(
+        _doc(img, "single.png", capture_layout="single"), load_thresholds(),
+    )
 
     assert res.evidence["dual_camera_mode"] is False
     assert res.evidence["dual_roi_side"] is None
-    assert res.verdict is Verdict.NO_INDICATION
-    assert res.score is not None and res.score < 0.35
+    assert res.verdict is Verdict.INCONCLUSIVE
+    assert res.score is None
+    assert res.mask is None
+    assert res.evidence["cue_unavailable"] is True
+    assert res.evidence["unavailable_reason"] == "no_face"
+    assert res.evidence["sigma_out_median"] > 0.0

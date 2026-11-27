@@ -104,7 +104,7 @@ def test_camera_frame_ipkit_diagnostics_single_and_dual() -> None:
         ]
     )
     d_txt = analyze_camera_frame_ipkit(dual, is_dual=True)
-    assert "Đồng bộ 2 Camera" in d_txt and "sau hiệu chuẩn:" in d_txt
+    assert "Ảnh ghép 2 Camera" in d_txt and "sau hiệu chuẩn:" in d_txt
 
 
 def test_analyze_presets_and_send_to_enhance(qtbot, services, valid_png: Path) -> None:

@@ -3,7 +3,7 @@
 Ngữ cảnh (plan v2): operator lưu một khung webcam làm reference rồi phân tích
 khung sau. Nếu vùng mặt ở khung sau mất vi kết cấu cảm biến so với reference
 (da bị làm mịn kiểu AI/deepfake), cue tham chiếu tăng. Cue chỉ thay đổi
-điểm/verdict khi cả hai ROI đều được phát hiện là mặt. Đây là tín hiệu khám
+verdict khi cả hai ROI đều được phát hiện là mặt. Đây là tín hiệu khám
 phá bổ sung cho ``DeepfakeCues`` — theo contract AUX_METHODS nó chỉ có thể
 nâng ``NO_INDICATION`` → ``INCONCLUSIVE``, KHÔNG BAO GIỜ ``SUSPICIOUS``.
 
@@ -21,6 +21,7 @@ Ba đo lường trên ROI đã chuẩn hoá 96×96 (dùng lại ``_detect_face_r
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -30,8 +31,10 @@ from imageguard.core.enums import Verdict
 from imageguard.core.models import AlgorithmResult, ImageDocument
 from imageguard.core.preprocess import aux_working_copy
 from imageguard.forensics.auxiliary.deepfake_cues import (
+    _clip_half_roi,
     _detect_face_roi,
     _fft_highfreq_cue,
+    _setting,
 )
 from imageguard.ipkit import features_basic
 
@@ -45,9 +48,9 @@ _RESIDUAL_KERNEL = 3  # medianBlur k=3 — giữ nhiễu tần số cao trên RO
 # mịn Gaussian) — KHÔNG phải tỉ lệ chính xác trên dữ liệu thật.
 REFERENCE_CUE_MIN = 0.50
 
-# Trần điểm cộng thêm từ cue tham chiếu — cue chỉ được dịch chuyển nhẹ score
-# gốc của DeepfakeCues, không át tín hiệu 6 trụ cột sẵn có.
-REFERENCE_SCORE_MAX_DELTA = 0.15
+# Giữ tên public để tương thích caller cũ. Đo tham chiếu riêng, không trộn
+# vào điểm không gian của DeepfakeCues khi chưa hiệu chuẩn trên dữ liệu thật.
+REFERENCE_SCORE_MAX_DELTA = 0.0
 
 # Chuẩn hoá từng đo lường về [0, 1] — span chọn theo cặp synthetic trong test.
 _RESIDUAL_GAP_SPAN = 12.0  # độ lệch mức xám của mean-|residual| giữa hai ROI
@@ -60,6 +63,16 @@ _W_LBP = 0.45
 _W_FFT = 0.25
 
 
+@dataclass(frozen=True, slots=True)
+class _FaceSample:
+    pixels: np.ndarray | None
+    detected: bool
+    source: str
+    min_side: int
+    contrast: float
+    quality_reason: str
+
+
 def _gray_u8(arr: np.ndarray) -> np.ndarray:
     if arr.ndim == 2:
         return arr
@@ -68,23 +81,40 @@ def _gray_u8(arr: np.ndarray) -> np.ndarray:
 
 def _face_roi_96(
     doc: ImageDocument, cfg: ThresholdSet
-) -> tuple[np.ndarray, bool, str]:
+) -> _FaceSample:
     """ROI khuôn mặt của ``doc`` resize về 96×96 gray uint8.
 
     Dùng cùng working copy (aux_max_side) và cùng detector 3 tầng với
-    ``DeepfakeCues`` nên vùng chọn nhất quán với kết quả chính.
+    ``DeepfakeCues``. Kiểm kích thước và p95−p5 trên ROI làm việc trước khi
+    resize: nội suy không được biến mặt nhỏ/thiếu tương phản thành dữ liệu tốt.
     """
     work, _ = aux_working_copy(doc, cfg)
     arr = work.array
     gray = _gray_u8(arr)
-    (x, y, rw, rh), detected, source = _detect_face_roi(arr, gray, _BLOCK)
+    rect, detected, source = _detect_face_roi(arr, gray, _BLOCK)
+    x, y, rw, rh = _clip_half_roi(rect, gray.shape)
     roi = gray[y : y + rh, x : x + rw]
-    if roi.size == 0:  # rect thoát khỏi ảnh — fallback toàn khung
-        roi = gray
-    return (
-        cv2.resize(roi, (ROI_SIDE, ROI_SIDE), interpolation=cv2.INTER_AREA),
-        detected,
-        source,
+    min_side = min(rw, rh)
+    contrast = float(np.percentile(roi, 95) - np.percentile(roi, 5))
+    minimum_side = _setting(cfg, "min_face_side", 64, 16, 512)
+    minimum_contrast = _setting(cfg, "min_roi_contrast", 8.0, 0, 255)
+    reason = ""
+    if not detected:
+        reason = "no_face"
+    elif min_side < minimum_side:
+        reason = "roi_too_small"
+    elif contrast < minimum_contrast:
+        reason = "low_contrast"
+    return _FaceSample(
+        pixels=(
+            cv2.resize(roi, (ROI_SIDE, ROI_SIDE), interpolation=cv2.INTER_AREA)
+            if not reason else None
+        ),
+        detected=bool(detected),
+        source=source,
+        min_side=min_side,
+        contrast=contrast,
+        quality_reason=reason,
     )
 
 
@@ -110,19 +140,44 @@ def _same_array(a: ImageDocument, b: ImageDocument) -> bool:
 
 
 def compare_face_rois(
-    reference: ImageDocument, suspect: ImageDocument
+    reference: ImageDocument, suspect: ImageDocument, cfg: ThresholdSet | None = None
 ) -> dict:
     """So sánh ROI mặt 96×96 giữa ``reference`` và ``suspect``.
 
-    Trả dict chỉ gồm hash + cờ + số đo (không đường dẫn): ``same_frame``,
-    ``ref_combined_cue`` ∈ [0,1] và ba thành phần thô. Hai doc có array
-    byte-identical → ``same_frame=True`` và ``ref_combined_cue == 0``.
+    Trả hash, cờ, lý do chất lượng và số đo (không đường dẫn). Chỉ đo cue khi
+    cả hai ROI đạt kích thước/tương phản trên ảnh làm việc; nếu không, số đo
+    cue là None. Hai ROI hợp lệ giống hệt → ``ref_combined_cue == 0``.
     """
-    cfg = load_thresholds()
-    ref_roi, ref_detected, ref_source = _face_roi_96(reference, cfg)
-    sus_roi, sus_detected, sus_source = _face_roi_96(suspect, cfg)
+    cfg = cfg or load_thresholds()
+    ref = _face_roi_96(reference, cfg)
+    sus = _face_roi_96(suspect, cfg)
 
     same_frame = _same_array(reference, suspect)
+    comparison = {
+        "same_frame": same_frame,
+        "ref_combined_cue": None,
+        "ref_residual_gap": None,
+        "ref_residual_cue": None,
+        "ref_lbp_chi2": None,
+        "ref_lbp_cue": None,
+        "ref_fft_peak_delta": None,
+        "ref_fft_cue": None,
+        "ref_face_detected": ref.detected,
+        "sus_face_detected": sus.detected,
+        "ref_roi_source": ref.source,
+        "sus_roi_source": sus.source,
+        "ref_quality_reason": ref.quality_reason,
+        "sus_quality_reason": sus.quality_reason,
+        "ref_roi_min_side": ref.min_side,
+        "sus_roi_min_side": sus.min_side,
+        "ref_roi_contrast": round(ref.contrast, 4),
+        "sus_roi_contrast": round(sus.contrast, 4),
+        "reference_sha256": reference.sha256,
+        "suspect_sha256": suspect.sha256,
+    }
+    if ref.pixels is None or sus.pixels is None:
+        return comparison
+    ref_roi, sus_roi = ref.pixels, sus.pixels
 
     residual_gap = abs(_residual_level(ref_roi) - _residual_level(sus_roi))
     residual_cue = float(np.clip(residual_gap / _RESIDUAL_GAP_SPAN, 0.0, 1.0))
@@ -151,7 +206,7 @@ def compare_face_rois(
         combined = 0.0
 
     return {
-        "same_frame": same_frame,
+        **comparison,
         "ref_combined_cue": round(combined, 4),
         "ref_residual_gap": round(residual_gap, 4),
         "ref_residual_cue": round(residual_cue, 4),
@@ -159,12 +214,6 @@ def compare_face_rois(
         "ref_lbp_cue": round(lbp_cue, 4),
         "ref_fft_peak_delta": round(fft_delta, 4),
         "ref_fft_cue": round(fft_cue, 4),
-        "ref_face_detected": bool(ref_detected),
-        "sus_face_detected": bool(sus_detected),
-        "ref_roi_source": ref_source,
-        "sus_roi_source": sus_source,
-        "reference_sha256": reference.sha256,
-        "suspect_sha256": suspect.sha256,
     }
 
 
@@ -172,42 +221,105 @@ def apply_reference_cue(
     result: AlgorithmResult,
     reference: ImageDocument,
     suspect: ImageDocument,
+    cfg: ThresholdSet | None = None,
 ) -> AlgorithmResult:
     """Áp cue tham chiếu lên kết quả deepfake có sẵn — trả AlgorithmResult mới.
 
     Luật (contract AUX): chỉ nâng ``NO_INDICATION`` → ``INCONCLUSIVE`` khi
     ``ref_combined_cue >= REFERENCE_CUE_MIN``; không bao giờ
-    ``SUSPICIOUS_INDICATION``. Score tăng tối đa ``REFERENCE_SCORE_MAX_DELTA``
-    và giữ nguyên khi hai khung trùng byte. Evidence chỉ gồm sha256 + số đo
-    cue — không đường dẫn tuyệt đối. mask/heatmap/limitations/score_definition
+    ``SUSPICIOUS_INDICATION``. Score không gian giữ nguyên; cue tham chiếu có
+    cờ và trạng thái riêng. Evidence không chứa đường dẫn tuyệt đối.
+    mask/heatmap/limitations/score_definition
     được sao chép nguyên từ ``result``.
     """
     t0 = time.perf_counter()
-    cmp = compare_face_rois(reference, suspect)
+    if (
+        reference.capture_layout != "single"
+        or suspect.capture_layout != "single"
+        or result.evidence.get("dual_camera_mode")
+    ):
+        # Independent largest-face selection over a composite cannot guarantee
+        # that reference and suspect belong to the same sensor or selected half.
+        return AlgorithmResult(
+            method=result.method,
+            verdict=result.verdict,
+            score=result.score,
+            score_definition=result.score_definition,
+            mask=result.mask,
+            heatmap=result.heatmap,
+            evidence={
+                **result.evidence,
+                "reference_cue_flag": False,
+                "ref_status": "unsupported_capture_layout",
+                "reference_sha256": reference.sha256,
+                "suspect_sha256": suspect.sha256,
+            },
+            limitations=[
+                *result.limitations,
+                (
+                    "cue tham chiếu chưa hỗ trợ ảnh ghép hai camera — cần chọn cùng "
+                    "một cảm biến ở cả hai khung trước khi so sánh"
+                ),
+            ],
+            params_hash=result.params_hash,
+            duration_ms=result.duration_ms + int((time.perf_counter() - t0) * 1000),
+        )
+    cmp = compare_face_rois(reference, suspect, cfg)
 
     score = result.score
     verdict = result.verdict
     limitations = list(result.limitations)
-    cue = float(cmp["ref_combined_cue"])
+    cue = cmp["ref_combined_cue"]
 
     both_faces = bool(cmp["ref_face_detected"] and cmp["sus_face_detected"])
-    if cmp["same_frame"]:
+    available = (
+        not result.evidence.get("cue_unavailable")
+        and not result.evidence.get("cancelled")
+        and result.evidence.get("error") != "cancelled"
+        and result.verdict not in {Verdict.ERROR, Verdict.NOT_APPLICABLE}
+        and result.score is not None
+    )
+    quality_ok = not cmp["ref_quality_reason"] and not cmp["sus_quality_reason"]
+    flagged = (
+        available and both_faces and quality_ok and not cmp["same_frame"]
+        and cue is not None and cue >= REFERENCE_CUE_MIN
+    )
+    if not available:
+        status = "unavailable"
         limitations.append(
-            "ảnh nghi vấn trùng byte với ảnh tham chiếu phiên — cue tham chiếu = 0"
+            "cue tham chiếu không bổ sung kết luận — phân tích vùng mặt gốc không khả dụng"
         )
     elif not both_faces:
+        status = "face_unavailable"
         limitations.append(
             "cue tham chiếu không áp dụng — cần phát hiện mặt ở cả hai khung "
             f"(ref={int(bool(cmp['ref_face_detected']))}, "
             f"suspect={int(bool(cmp['sus_face_detected']))})"
         )
+    elif not quality_ok:
+        status = "quality_unavailable"
+        for prefix, label in (("ref", "ảnh mốc"), ("sus", "ảnh đang xét")):
+            reason = cmp[f"{prefix}_quality_reason"]
+            if reason == "roi_too_small":
+                limitations.append(
+                    f"cue tham chiếu không áp dụng — vùng mặt {label} quá nhỏ "
+                    f"({cmp[f'{prefix}_roi_min_side']}px trên ảnh làm việc trước resize)"
+                )
+            elif reason == "low_contrast":
+                limitations.append(
+                    f"cue tham chiếu không áp dụng — vùng mặt {label} thiếu tương phản "
+                    f"(p95−p5={cmp[f'{prefix}_roi_contrast']:.2f} trước resize)"
+                )
+    elif cmp["same_frame"]:
+        status = "same_frame"
+        limitations.append(
+            "ảnh nghi vấn trùng byte với ảnh tham chiếu phiên — cue tham chiếu = 0"
+        )
     else:
-        if score is not None:
-            score = round(
-                min(1.0, score + REFERENCE_SCORE_MAX_DELTA * cue), 4
-            )
-        if verdict is Verdict.NO_INDICATION and cue >= REFERENCE_CUE_MIN:
-            verdict = Verdict.INCONCLUSIVE
+        if flagged:
+            status = "difference"
+            if verdict is Verdict.NO_INDICATION:
+                verdict = Verdict.INCONCLUSIVE
             limitations.append(
                 f"vùng mặt lệch vi kết cấu so với ảnh tham chiếu phiên "
                 f"(ref_cue={cue:.2f} ≥ {REFERENCE_CUE_MIN:.2f}, "
@@ -215,14 +327,18 @@ def apply_reference_cue(
                 f"lbp_χ²={cmp['ref_lbp_chi2']:.3f}) — cần đối chiếu thêm"
             )
         else:
+            status = "no_difference_flag"
             limitations.append(
-                f"vùng mặt tương đồng ảnh tham chiếu phiên (ref_cue={cue:.2f})"
+                f"chênh lệch vùng mặt dưới ngưỡng tham chiếu (ref_cue={cue:.2f}); "
+                "không chứng minh cùng danh tính hay ảnh thật"
             )
 
-    # Contract: evidence mới chỉ chứa sha256 + số đo cue — không path, không flag.
+    # Evidence độc lập với điểm không gian; không có đường dẫn nguồn.
     evidence = dict(result.evidence)
     evidence.update(
         {
+            "reference_cue_flag": bool(flagged),
+            "ref_status": status,
             "reference_sha256": cmp["reference_sha256"],
             "suspect_sha256": cmp["suspect_sha256"],
             "ref_combined_cue": cmp["ref_combined_cue"],
@@ -231,6 +347,12 @@ def apply_reference_cue(
             "ref_fft_peak_delta": cmp["ref_fft_peak_delta"],
             "ref_face_detected": int(bool(cmp["ref_face_detected"])),
             "sus_face_detected": int(bool(cmp["sus_face_detected"])),
+            **{
+                key: cmp[key] for key in (
+                    "ref_quality_reason", "sus_quality_reason", "ref_roi_min_side",
+                    "sus_roi_min_side", "ref_roi_contrast", "sus_roi_contrast",
+                )
+            },
         }
     )
 

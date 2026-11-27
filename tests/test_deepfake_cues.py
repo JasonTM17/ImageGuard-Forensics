@@ -1,4 +1,4 @@
-"""Contract & behavioral tests cho DeepfakeCues (kiến trúc 4 trụ cột DIP, AUX_METHODS)."""
+"""Contract & behavioral tests cho DeepfakeCues (6 trụ cột DIP, AUX_METHODS)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from imageguard.forensics.auxiliary.deepfake_cues import DeepfakeCues, _detect_f
 from imageguard.forensics.fusion import AUX_METHODS
 
 
-def _doc(arr: np.ndarray, name: str = "sample.png") -> ImageDocument:
+def _doc(arr: np.ndarray, name: str = "sample.png", *, dual: bool = False) -> ImageDocument:
     h, w = arr.shape[:2]
     ch = 1 if arr.ndim == 2 else arr.shape[2]
     return ImageDocument(
@@ -28,6 +28,8 @@ def _doc(arr: np.ndarray, name: str = "sample.png") -> ImageDocument:
         sha256="d" * 64,
         file_bytes=int(arr.size),
         file_name=name,
+        capture_layout="dual_side_by_side" if dual else "single",
+        capture_split_x=w // 2 if dual else None,
     )
 
 
@@ -71,12 +73,15 @@ def test_deepfake_cues_skin_haar_dip_detects_face_roi() -> None:
     res = DeepfakeCues().analyze(_doc(frame, "face_smooth.png"), load_thresholds())
     assert res.verdict is Verdict.INCONCLUSIVE
     assert res.evidence["face_detected"] is True
+    assert res.evidence["cue_flag"] is True
+    assert res.score is not None and 0.35 <= res.score <= 1.0
+    assert res.mask is not None and np.count_nonzero(res.mask) > 0
     assert res.evidence["roi_source"] in {"skin_haar_dip", "haar_cascade"}
     for key in ("smooth_cue", "seam_cue", "lbp_cue", "lbp_chi2", "freq_cue", "spectral_rolloff"):
         assert key in res.evidence
 
 
-def test_deepfake_cues_detects_smooth_synthetic_roi_as_inconclusive() -> None:
+def test_smooth_patch_without_face_is_diagnostic_only() -> None:
     rng = np.random.default_rng(123)
     img = np.clip(128 + rng.normal(0.0, 18.0, (256, 256, 3)), 0, 255).astype(np.uint8)
     # Mô phỏng vùng bị làm mịn/sinh AI ở vùng trung tâm [64:192, 64:192].
@@ -89,12 +94,13 @@ def test_deepfake_cues_detects_smooth_synthetic_roi_as_inconclusive() -> None:
     assert MethodName.DEEPFAKE_CUES in AUX_METHODS
     assert res.verdict is Verdict.INCONCLUSIVE
     assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
-    assert res.score is not None and 0.35 <= res.score <= 1.0
+    assert res.score is None
+    assert res.evidence["cue_flag"] is False
+    assert res.evidence["unavailable_reason"] == "no_face"
     assert res.score_definition
     assert res.limitations
-    assert res.heatmap is not None and res.heatmap.shape == (256, 256)
-    assert res.mask is not None and res.mask.shape == (256, 256)
-    assert int(np.count_nonzero(res.mask)) > 0
+    assert res.heatmap is None
+    assert res.mask is None
     assert res.evidence["lbp_chi2"] > 0.0
     assert res.params_hash == cfg.snapshot_hash()
 
@@ -121,12 +127,11 @@ def test_deepfake_cues_detects_fft_checkerboard_artifact() -> None:
 
     res = DeepfakeCues().analyze(_doc(u8, "checkerboard.png"), load_thresholds())
     assert res.evidence["fft_hf_peak_ratio"] > 4.0
-    # Lưới 3px có peak_ratio trung bình (~7.6) nhưng năng lượng phổ tập trung
-    # (hf_conc8 ~0.046 so với mặt ~0.003) nên grid_score vẫn kéo freq_cue >= 0.45 —
-    # Wukong claim 5 (plan 261124-2152): recalibration của peak_score không được
-    # che khuất lưới tuần hoàn ở dải peak 4..15.
+    # A periodic grid concentrates spectral power even when the percentile
+    # amplitude peak misses some narrow peaks. The legacy raw top-eight
+    # share is diagnostic only; normalized power drives the periodic cue.
     assert res.evidence["fft_hf_conc8"] > 0.02
-    assert 0.45 <= res.evidence["freq_cue"] < 1.0
+    assert 0.45 <= res.evidence["freq_cue"] <= 1.0
     assert res.verdict in {Verdict.INCONCLUSIVE, Verdict.NO_INDICATION}
     assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
 
@@ -206,38 +211,40 @@ def test_deepfake_cues_non_face_smooth_camera_scene_avoids_false_positive() -> N
 
     res = DeepfakeCues().analyze(_doc(frame, "scene.png"), load_thresholds())
     assert res.evidence["face_detected"] is False
-    assert res.verdict is Verdict.NO_INDICATION
+    assert res.verdict is Verdict.INCONCLUSIVE
+    assert res.score is None and res.evidence["cue_flag"] is False
     assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
 
 
-def test_deepfake_cues_uniform_noise_no_indication_and_never_suspicious() -> None:
+def test_deepfake_cues_uniform_noise_abstains_without_face() -> None:
     rng = np.random.default_rng(9)
     img = np.clip(128 + rng.normal(0.0, 16.0, (256, 256, 3)), 0, 255).astype(np.uint8)
 
     res = DeepfakeCues().analyze(_doc(img), load_thresholds())
 
-    assert res.verdict is Verdict.NO_INDICATION
+    assert res.verdict is Verdict.INCONCLUSIVE
     assert res.verdict is not Verdict.SUSPICIOUS_INDICATION
-    assert res.score is not None and res.score < 0.35
+    assert res.score is None
+    assert res.evidence["unavailable_reason"] == "no_face"
     assert res.score_definition
     assert res.mask is None
 
 
-def test_deepfake_cues_flat_image_no_indication() -> None:
+def test_deepfake_cues_flat_image_abstains() -> None:
     flat = np.full((128, 128, 3), 120, dtype=np.uint8)
     res = DeepfakeCues().analyze(_doc(flat, "flat.png"), load_thresholds())
-    assert res.verdict is Verdict.NO_INDICATION
-    assert res.score is not None and res.score < 0.35
+    assert res.verdict is Verdict.INCONCLUSIVE
+    assert res.score is None and res.evidence["cue_unavailable"] is True
     assert res.evidence["freq_cue"] == 0.0
 
     black = np.zeros((128, 128, 3), dtype=np.uint8)
     res_black = DeepfakeCues().analyze(_doc(black, "black.png"), load_thresholds())
-    assert res_black.verdict is Verdict.NO_INDICATION
-    assert res_black.score is not None and res_black.score < 0.35
+    assert res_black.verdict is Verdict.INCONCLUSIVE
+    assert res_black.score is None and res_black.evidence["cue_flag"] is False
     assert res_black.evidence["freq_cue"] == 0.0
 
 
-def test_repeated_background_needs_texture_support_for_deepfake_flag() -> None:
+def test_repeated_background_cannot_replace_a_face_for_deepfake_flag() -> None:
     rng = np.random.default_rng(307)
     pattern = 18 * np.sin(2.0 * np.pi * np.arange(192) / 4)
     image = np.clip(115 + pattern + rng.normal(0, 5, (192, 192)), 0, 255).astype(np.uint8)
@@ -249,9 +256,9 @@ def test_repeated_background_needs_texture_support_for_deepfake_flag() -> None:
     assert res.evidence["face_detected"] is False
     assert res.evidence["freq_cue"] >= 0.55
     assert res.evidence["seam_hough_cue"] >= 0.70
-    assert res.score is not None and res.score >= 0.05
-    assert res.evidence["corroborated"] is False
-    assert res.verdict is Verdict.NO_INDICATION
+    assert res.score is None
+    assert res.evidence["cue_flag"] is False
+    assert res.verdict is Verdict.INCONCLUSIVE
     assert res.mask is None
 
 
@@ -286,7 +293,7 @@ def test_deepfake_cues_dual_camera_cross_sensor_detects_anomalous_half() -> None
     right = np.clip(right.astype(np.int16) + rng.normal(0, 16, right.shape), 0, 255).astype(np.uint8)
 
     dual = np.hstack([left, right])
-    res = DeepfakeCues().analyze(_doc(dual, "dual.png"), load_thresholds())
+    res = DeepfakeCues().analyze(_doc(dual, "dual.png", dual=True), load_thresholds())
     assert res.evidence["dual_camera_mode"] is True
     assert res.evidence["dual_roi_side"] == "left"
     assert res.evidence["dual_sigma_left"] < res.evidence["dual_sigma_right"]
@@ -305,7 +312,7 @@ def test_dual_camera_uses_single_detected_face_over_smooth_background(face_side:
     room = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     frame = np.hstack((face, room) if face_side == "left" else (room, face))
 
-    res = DeepfakeCues().analyze(_doc(frame), load_thresholds())
+    res = DeepfakeCues().analyze(_doc(frame, dual=True), load_thresholds())
 
     assert res.evidence["dual_camera_mode"] is True
     assert res.evidence["dual_roi_side"] == face_side
