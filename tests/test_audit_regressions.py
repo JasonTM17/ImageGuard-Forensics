@@ -125,6 +125,7 @@ def test_delete_analysis_only_removes_own_dir(tmp_path: Path) -> None:
     ("freq", MethodName.FREQUENCY_ANALYSIS),
     ("splicing", MethodName.SPLICING_CUES),
     ("deepfake", MethodName.DEEPFAKE_CUES),
+    ("deepfake_screen", MethodName.DEEPFAKE_SCREEN_COC),
 ])
 def test_error_result_preserves_method(spec: str, expected: MethodName) -> None:
     from imageguard.services.analysis_service import _cancelled_result, _error_result

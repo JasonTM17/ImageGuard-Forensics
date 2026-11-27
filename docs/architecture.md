@@ -61,6 +61,8 @@ src/imageguard/
                block/      dct_blocks.py pipeline.py voting.py …
                auxiliary/  ela.py noise_map.py noise_local.py freq_view.py
                            splicing.py deepfake_cues.py meta_report.py
+               ml/         face_detect.py deepfake_genconvit.py
+                           deepfake_screen_coc.py
                localize/   fusion_masks.py heatmap.py
   enhancement/ derive.py nafnet.py
   ingest/      folder.py commands.py config.py custody.py http_pull.py camera.py

@@ -67,6 +67,11 @@ và đối xứng HOG/Hu. Nhánh mặc định là **dấu hiệu khám phá ch�
 Repo còn có nhánh logistic DIP tùy chọn để nhóm tự huấn luyện trên dữ liệu
 có nhãn; không kèm trọng số đã học và không trả xác suất ảnh giả.
 
+Hai classifier ONNX tùy chọn bổ sung nhánh học sâu: GenConViT-ED cho crop mặt
+tổng quát hơn và CoC Xception cho miền deepfake phát qua màn hình bị camera
+quay lại. CoC Xception dùng YuNet chỉ để lấy landmark rồi align theo pipeline
+DeepfakeBench/CoC; score vẫn là heuristic chưa hiệu chuẩn, không phải xác suất.
+
 - Runtime chuẩn dùng OpenCV `>=4.10,<5`, có Haar cascade XML. Fallback màu da
   yêu cầu hai vùng tối mắt tách biệt và cấu trúc tương ứng; gradient hoặc một
   dải tối ngang không đủ. Cả Haar và skin ưu tiên ứng viên đủ chất lượng theo

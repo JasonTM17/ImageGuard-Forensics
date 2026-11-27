@@ -37,7 +37,37 @@ không khớp pin.
 - Ghi công: Wodajo, D. et al. "Deepfake Video Detection Using Generative
   Convolutional Vision Transformer", *Applied Sciences* 15(12):6622, 2025.
 
-## 2. YuNet — face detection (phục vụ `deepfake_ml`)
+## 2. CoC Xception — screen-recapture deepfake (`deepfake_screen`)
+
+| Mục | Giá trị |
+| --- | --- |
+| File | `models/coc_xception_screen_deepfake.onnx` |
+| Kích thước | 83 165 816 bytes (~79 MB) |
+| SHA-256 | `800dff109c5bbb165b9b0404e1e1207bc521ec75fc51926247cbae2abe271b1e` |
+| Nguồn checkpoint | Zenodo record `23150212`, file `ScreenDeepfakeBench_models.zip`, member `checkpoints/coc.pth` |
+| Checkpoint SHA-256 | `47889d19bcb55b4c3ba59c658f046e7dac4f8a018ef1148e47ea40937a20815e` |
+| Kiến trúc/dữ liệu | Xception train bởi tác giả Caught on Camera cho deepfake phát qua màn hình bị camera quay lại |
+| Runtime | `onnxruntime` CPU; không dùng PyTorch khi phân tích |
+
+Checkpoint `.pth` không chạy trực tiếp trong ImageGuard. Để tái tạo ONNX,
+clone `SENSE-Lab-Security/ScreenDeepfakeBench`, tải `ScreenDeepfakeBench_models.zip`
+từ `https://zenodo.org/records/23150212`, rồi trong môi trường Python 3.10 có torch 2.2.x chạy:
+
+```bash
+python scripts/export_coc_xception_onnx.py \n  --repo-root path/to/ScreenDeepfakeBench \n  --checkpoint path/to/checkpoints/coc.pth \n  --output models/coc_xception_screen_deepfake.onnx
+```
+
+Pipeline runtime dùng YuNet chỉ để định vị mặt/landmark, sau đó similarity-align
+5 điểm theo preprocessing DeepfakeBench/CoC trước khi chấm điểm. Bài báo tác
+giả công bố frame ACC 89,46% và frame AUC 0,9654 trên benchmark của họ; đây là
+số liệu của tác giả, không phải hiệu chuẩn độc lập của ImageGuard.
+
+Licence/trọng số: repo ScreenDeepfakeBench kế thừa DeepfakeBench **CC BY-NC 4.0**
+và các điều khoản nguồn dữ liệu liên quan. Chỉ dùng cho mục đích phi thương mại,
+nghiên cứu hoặc học thuật; ghi công Caught on Camera/ScreenDeepfakeBench khi
+báo cáo kết quả.
+
+## 3. YuNet — face detection (phục vụ `deepfake_ml` và `deepfake_screen`)
 
 | Mục | Giá trị |
 | --- | --- |
@@ -54,6 +84,6 @@ curl -L -o models/face_detection_yunet_2023mar.onnx \
 YuNet chỉ *định vị* khuôn mặt để crop đưa vào classifier — không nhận diện
 danh tính, không lưu embedding.
 
-## 3. NAFNet — deblurring (đã có từ trước)
+## 4. NAFNet — deblurring (đã có từ trước)
 
 Xem `docs/packaging.md` — pin `07263f41…` trong `enhancement/nafnet.py`.

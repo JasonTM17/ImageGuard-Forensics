@@ -81,14 +81,15 @@ def _detector(width: int, height: int) -> Any:
     )
 
 
-def detect_primary_face(
+def detect_primary_face_details(
     bgr: np.ndarray, detect_max_side: int = DETECT_MAX_SIDE
-) -> tuple[tuple[int, int, int, int], float] | None:
-    """Trả ((x, y, w, h) toạ độ ảnh gốc, confidence) của mặt lớn nhất, hoặc None.
+) -> tuple[tuple[int, int, int, int], float, np.ndarray] | None:
+    """Trả bbox, confidence và 5 landmark toạ độ ảnh gốc của mặt lớn nhất.
 
-    Detection chạy trên bản downscale ≤ ``detect_max_side`` khi ảnh lớn; bbox
-    scale ngược về toạ độ gốc và clip trong khung. Detection chỉ nhận diện —
-    không phải định danh danh tính.
+    ``landmarks`` có shape ``(5, 2)`` theo thứ tự mắt-trái, mắt-phải, mũi,
+    miệng-trái, miệng-phải **theo vị trí x trong ảnh** (không phải danh tính).
+    YuNet trả 5 điểm nhưng thứ tự danh nghĩa phụ thuộc tài liệu OpenCV; sắp
+    xếp lại từng cặp theo x giữ output ổn định cho alignment.
     """
     h, w = bgr.shape[:2]
     scale = min(1.0, detect_max_side / max(w, h))
@@ -110,7 +111,23 @@ def detect_primary_face(
     x1, y1 = min(w, x + fw), min(h, y + fh)
     if x1 - x0 < _MIN_FACE_SIDE or y1 - y0 < _MIN_FACE_SIDE:
         return None
-    return (x0, y0, x1 - x0, y1 - y0), float(best[14])
+
+    pts = np.asarray(best[4:14], dtype=np.float64).reshape(5, 2) * inv
+    eyes = sorted((pts[0], pts[1]), key=lambda p: float(p[0]))
+    mouths = sorted((pts[3], pts[4]), key=lambda p: float(p[0]))
+    ordered = np.asarray([eyes[0], eyes[1], pts[2], mouths[0], mouths[1]], dtype=np.float64)
+    return (x0, y0, x1 - x0, y1 - y0), float(best[14]), ordered
+
+
+def detect_primary_face(
+    bgr: np.ndarray, detect_max_side: int = DETECT_MAX_SIDE
+) -> tuple[tuple[int, int, int, int], float] | None:
+    """Trả ((x, y, w, h) toạ độ ảnh gốc, confidence) của mặt lớn nhất, hoặc None."""
+    details = detect_primary_face_details(bgr, detect_max_side)
+    if details is None:
+        return None
+    rect, confidence, _ = details
+    return rect, confidence
 
 
 def crop_face(bgr: np.ndarray, rect: tuple[int, int, int, int], size: int) -> np.ndarray:

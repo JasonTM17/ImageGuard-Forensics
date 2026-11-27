@@ -9,8 +9,8 @@ Khung báo cáo đồ án: [`docs/report/capstone-skeleton.md`](docs/report/caps
 ### Phần Deepfake hiện làm được gì?
 
 Đây là nhánh **sàng lọc dấu hiệu trên vùng mặt bằng xử lí ảnh cổ điển**;
-chưa có mô hình học sâu đã huấn luyện phân loại Deepfake. Điểm 0–1 là chỉ
-số chưa hiệu chuẩn, không phải xác suất ảnh giả. Không tìm thấy mặt, ROI quá
+ngoài pipeline cổ điển đã có các model học sâu tùy chọn GenConViT và CoC
+Xception. Điểm 0–1 vẫn là chỉ số chưa hiệu chuẩn, không phải xác suất ảnh giả. Không tìm thấy mặt, ROI quá
 nhỏ/thiếu tương phản hoặc không có nền đối chiếu thì không cấp điểm.
 
 Bản sửa 2026-11-27 chuẩn hóa phép đo phổ theo kích thước ROI, yêu cầu nhiều

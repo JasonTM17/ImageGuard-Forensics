@@ -117,10 +117,10 @@ def test_analyze_presets_and_send_to_enhance(qtbot, services, valid_png: Path) -
     assert not a.btn_send_enhance.isEnabled()
 
     a.btn_preset_all.click()
-    assert len(a._methods()) == 9
+    assert len(a._methods()) == 10
 
     a.btn_preset_camera.click()
-    assert set(a._methods()) == {"ela", "noise_local", "freq", "deepfake", "deepfake_ml"}
+    assert set(a._methods()) == {"ela", "noise_local", "freq", "deepfake", "deepfake_ml", "deepfake_screen"}
     a._set_running(True)
     assert not a.chk_dfml.isEnabled()
     a._set_running(False)

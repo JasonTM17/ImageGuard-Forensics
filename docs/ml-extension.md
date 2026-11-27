@@ -9,9 +9,13 @@ liệu có nhãn, fit dev, kiểm tra chéo theo nhóm nguồn, rồi đánh gi�
 lập trước khi nạp JSON vào GUI/CLI. Không có trọng số hoặc accuracy thực tế
 đi kèm. Xem [hướng dẫn đầy đủ](deepfake-evaluation.md).
 
-## Nhánh đã triển khai: GenConViT-ED (ONNX)
+## Nhánh đã triển khai: classifier ONNX
 
-Phương pháp tùy chọn `deepfake_ml` chạy trên crop mặt từ YuNet, độc lập với bộ phân loại DIP. Xem [cài đặt và giấy phép](third-party-models.md) và [giới hạn](limitations.md#deepfake-ml-deepfake_ml-genconvit-ed).
+Phương pháp tùy chọn `deepfake_ml` chạy GenConViT-ED trên crop mặt từ YuNet,
+độc lập với bộ phân loại DIP. Phương pháp `deepfake_screen` chạy CoC Xception
+cho miền deepfake phát qua màn hình bị camera quay lại, sau khi căn chỉnh mặt
+theo 5 landmark. Xem [cài đặt và giấy phép](third-party-models.md) cùng
+[giới hạn](limitations.md#deepfake-ml-deepfake_ml-genconvit-ed).
 
 Phần U-Net định vị copy-move dưới đây vẫn là thiết kế chưa triển khai.
 
