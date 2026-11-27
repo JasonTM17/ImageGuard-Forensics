@@ -13,7 +13,7 @@ import pytest
 from imageguard.core.config import load_thresholds
 from imageguard.core.enums import Verdict
 from imageguard.evaluation import runner
-from imageguard.evaluation.datasets import SynthAdapter
+from imageguard.evaluation.datasets import Sample, SynthAdapter
 from imageguard.evaluation.runner import run_eval
 from imageguard.evaluation.synthforge import generate_set
 from imageguard.forensics.keypoint.pipeline import KeypointCopyMove
@@ -29,6 +29,10 @@ def test_eval_deterministic_and_provenance(tmp_path: Path, ts) -> None:
     for name in r1.per_method:
         a, b = r1.per_method[name], r2.per_method[name]
         # cùng seed + cùng config → số đo giống hệt (trừ experiment_id timestamp)
+        assert a["n_scored"] == b["n_scored"] == 2, (a, b)
+        assert a["n_excluded"] == b["n_excluded"] == 0, (a, b)
+        assert a["n_error"] == b["n_error"] == 0, (a, b)
+        assert a["n_not_applicable"] == b["n_not_applicable"] == 0, (a, b)
         assert a["tp"] == b["tp"] and a["f1"] == b["f1"]
         assert a["n"] == b["n"]
     prov = r1.provenance
@@ -118,14 +122,25 @@ def test_load_mask_reads_non_ascii_path(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "mask_kind", ["corrupt", "empty_file", "empty", "forged_absent", "absent"]
+    ("mask_kind", "reason"),
+    [
+        ("corrupt", "missing_or_unreadable_gt"),
+        ("empty_file", "missing_or_unreadable_gt"),
+        ("empty", "empty_forged_gt"),
+        ("forged_absent", "missing_or_unreadable_gt"),
+        ("absent", None),
+        ("wrong_size", "invalid_gt_geometry"),
+        ("unreadable_image", "unreadable_image"),
+    ],
 )
 def test_run_eval_excludes_bad_forged_masks_but_keeps_optional_authentic_gt(
-    tmp_path: Path, mask_kind: str
+    tmp_path: Path, mask_kind: str, reason: str | None, caplog: pytest.LogCaptureFixture
 ) -> None:
     image_path = tmp_path / "forged.png"
     image = np.full((128, 128, 3), 100, dtype=np.uint8)
     image_path.write_bytes(cv2.imencode(".png", image)[1].tobytes())
+    if mask_kind == "unreadable_image":
+        image_path.write_bytes(b"not an image")
     mask_path = tmp_path / "forged_M.png"
     if mask_kind == "corrupt":
         mask_path.write_bytes(b"not an image")
@@ -134,6 +149,9 @@ def test_run_eval_excludes_bad_forged_masks_but_keeps_optional_authentic_gt(
     elif mask_kind == "empty":
         empty = np.zeros((128, 128), dtype=np.uint8)
         mask_path.write_bytes(cv2.imencode(".png", empty)[1].tobytes())
+    elif mask_kind == "wrong_size":
+        wrong_size = np.full((64, 64), 255, dtype=np.uint8)
+        mask_path.write_bytes(cv2.imencode(".png", wrong_size)[1].tobytes())
 
     sample = SimpleNamespace(
         image_path=image_path,
@@ -170,3 +188,44 @@ def test_run_eval_excludes_bad_forged_masks_but_keeps_optional_authentic_gt(
     else:
         assert metrics["n_scored"] == 0
         assert metrics["n_excluded"] == 1
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == runner.__name__
+    ]
+    assert messages == (
+        [] if reason is None else [f"Evaluation exclusions: {reason}=1"]
+    )
+
+
+def test_eval_logs_method_exclusions_without_leaking_details(valid_png, ts, caplog):
+    sample = Sample(valid_png, None, "authentic", "fixture", "fixture")
+    adapter = SimpleNamespace(
+        name="fixture",
+        samples=lambda split: [sample, sample],
+        version=lambda: "fixture-v1",
+    )
+
+    class BrokenMethod:
+        name = "broken_method"
+
+        def analyze(self, doc, cfg):
+            raise RuntimeError(f"diagnostic marker: {valid_png}")
+
+    class WorkingMethod:
+        name = "working_method"
+
+        def analyze(self, doc, cfg):
+            return SimpleNamespace(
+                verdict=Verdict.NO_INDICATION, duration_ms=1, mask=None
+            )
+
+    report = run_eval(adapter, [BrokenMethod(), WorkingMethod()], ts)
+    assert report.per_method["broken_method"]["n_excluded"] == 2
+    assert report.per_method["working_method"]["tn"] == 2
+    records = [record for record in caplog.records if record.name == runner.__name__]
+    assert [record.getMessage() for record in records] == [
+        "Evaluation exclusions: method_exception=2"
+    ]
+    assert all(not record.exc_info for record in records)

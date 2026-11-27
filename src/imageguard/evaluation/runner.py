@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import subprocess
 import time
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
@@ -33,6 +35,8 @@ from imageguard.core.models import ImageDocument
 from imageguard.evaluation.datasets import DatasetAdapter
 from imageguard.evaluation.metrics import aggregate_pixel, image_metrics, pixel_metrics
 from imageguard.forensics.base import Method
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -105,10 +109,12 @@ def run_eval(
         for m in methods
     }
     per_cond: dict[str, dict] = {}
+    exclusions: Counter[str] = Counter()
 
     for sample in adapter.samples(split):
         doc = safe_open(sample.image_path, cfg)
         if not isinstance(doc, ImageDocument):
+            exclusions["unreadable_image"] += 1
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
             continue
@@ -118,16 +124,19 @@ def run_eval(
         except ValueError:
             # mask sai kích thước — docs/dataset-strategy: reject + log,
             # KHÔNG silent resize, KHÔNG để một sample hỏng giết cả eval.
+            exclusions["invalid_gt_geometry"] += 1
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
             continue
         if gt_mask is None and (gt_forged or sample.gt_mask_path is not None):
             # A missing mask is optional for authentic samples, but a forged
             # sample or explicitly supplied unreadable mask has no usable GT.
+            exclusions["missing_or_unreadable_gt"] += 1
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
             continue
         if gt_forged and gt_mask is not None and not (gt_mask > 0).any():
+            exclusions["empty_forged_gt"] += 1
             for m in methods:
                 per_method_acc[m.name]["n_excluded"] += 1
             continue  # data anomaly: forged file mà GT rỗng → exclude+log
@@ -137,6 +146,7 @@ def run_eval(
             try:
                 r = m.analyze(doc, cfg)
             except Exception:  # noqa: BLE001 - method isolation: method crash không giết cả eval
+                exclusions["method_exception"] += 1
                 acc["n_excluded"] += 1
                 continue
             acc["durations_ms"].append(r.duration_ms)
@@ -172,6 +182,12 @@ def run_eval(
             cacc[m.name]["pred"].append(pred_forged)
             cacc[m.name]["gt"].append(gt_forged)
             cacc[m.name]["n"] += 1
+
+    if exclusions:
+        summary = " ".join(
+            f"{reason}={count}" for reason, count in sorted(exclusions.items())
+        )
+        log.warning("Evaluation exclusions: %s", summary)
 
     git_sha, working_tree_clean = _git_snapshot()
     report = EvalReport(

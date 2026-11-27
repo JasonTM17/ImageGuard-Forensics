@@ -16,6 +16,10 @@ the inconclusive count is reported separately so abstentions remain visible.
 `NOT_APPLICABLE` and `ERROR` are excluded from that matrix and have separate
 counts. A method exception or invalid sample is excluded and counted, never
 silently converted to an authentic image.
+The runner logs one warning per evaluation with nonzero exclusion counts by
+reason. Input problems are counted once per sample and method exceptions once
+per call in this warning. The warning does not include file names, paths, or
+raw exception details. The per-method counts in the report are unchanged.
 
 Precision, recall, F1, specificity, and accuracy are reported with TP/FP/TN/FN.
 If a required class is absent, its metric is `N/A` (`None` in JSON), not 0 or 1.
