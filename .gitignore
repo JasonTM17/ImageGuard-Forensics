@@ -38,3 +38,6 @@ htmlcov/
 *.spec
 !ImageGuard.spec
 nul
+# Local verification artifacts
+/docs/evidence/cloud_stability_2026-11-27.json
+/scripts/verify_deepfake_ml_samples.py

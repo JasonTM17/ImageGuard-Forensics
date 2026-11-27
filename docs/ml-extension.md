@@ -9,8 +9,11 @@ liệu có nhãn, fit dev, kiểm tra chéo theo nhóm nguồn, rồi đánh gi�
 lập trước khi nạp JSON vào GUI/CLI. Không có trọng số hoặc accuracy thực tế
 đi kèm. Xem [hướng dẫn đầy đủ](deepfake-evaluation.md).
 
-Phần U-Net/ONNX dưới đây vẫn là **thiết kế chưa triển khai**, không mô tả
-trạng thái nhánh logistic hiện có.
+## Nhánh đã triển khai: GenConViT-ED (ONNX)
+
+Phương pháp tùy chọn `deepfake_ml` chạy trên crop mặt từ YuNet, độc lập với bộ phân loại DIP. Xem [cài đặt và giấy phép](third-party-models.md) và [giới hạn](limitations.md#deepfake-ml-deepfake_ml-genconvit-ed).
+
+Phần U-Net định vị copy-move dưới đây vẫn là thiết kế chưa triển khai.
 
 ## Vì sao để design-only
 
@@ -65,4 +68,4 @@ implement sau mà không phá kiến trúc hiện tại.
 - **Pipeline phát hiện Deepfake cổ điển đã tích hợp (`forensics/auxiliary/deepfake_cues.py`):**
   1. **Định vị ROI khuôn mặt 3 tầng:** Haar Cascade (nếu có) $\rightarrow$ màu da `YCrCb + HSV` + hình thái học + kiểm chứng hai mắt/SAT (`skin_haar_dip`) $\rightarrow$ vùng trung tâm chỉ để minh họa khi không có mặt; không cấp score ở fallback trung tâm.
   2. **4 trụ cột trích đặc trưng Xử lý ảnh thuần NumPy + OpenCV:** (i) nhiễu phần dư cảm biến `σ_in` vs `σ_out` & vòng biên `seam_ring`, (ii) vi kết cấu LBP 8 lân cận vector hóa & khoảng cách $\chi^2$, (iii) đỉnh tuần hoàn + suy hao hướng tâm phổ 2D FFT, (iv) hợp nhất thành điểm khám phá và `heatmap` đa lớp theo contract `AUX_METHODS`.
-  3. **Học từ vector DIP đã có; ONNX vẫn là hướng sau:** nhánh logistic NumPy dùng đặc trưng đo trên ảnh gốc. Một mô hình ONNX nhận crop mặt cần thiết kế/trọng số/giấy phép/kiểm thử riêng; không thay thế luật `fusion.py`. Super-resolution chỉ áp dụng trên nhánh hiển thị `enhancement/`.
+  3. **Hai nhánh học độc lập:** logistic NumPy dùng đặc trưng DIP; GenConViT-ED nhận crop mặt. Phân tích dùng ảnh gốc; super-resolution chỉ dùng để hiển thị.

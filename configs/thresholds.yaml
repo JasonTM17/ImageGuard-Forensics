@@ -51,6 +51,12 @@ noise:
 freq:
   blockiness_t: { value: 0.08, unit: frac, source: "default — chênh gradient biên 8x8 trung bình ≥ ngưỡng → dấu vết nén block" }
 
+
+deepfake_ml:
+  fake_thresh: { value: 0.7, source: "provisional - ngưỡng thử nghiệm; chưa hiệu chuẩn hoặc xác nhận trên bộ độc lập có nhãn", range: [0.5, 1.0] }
+  real_thresh: { value: 0.3, source: "provisional — ngưỡng dưới của vùng xám; đối xứng fake_thresh quanh quy tắc argmax gốc 0.5", range: [0.0, 0.5] }
+  detect_max_side: { value: 1280, unit: px, source: "default — cap cỡ ảnh cho YuNet detection; crop vẫn từ pixel gốc" }
+
 splicing:
   overlap_frac: { value: 0.15, unit: frac, source: "default — (noise_outlier ∩ ELA_hot)/ELA_hot ≥ ngưỡng → corroboration" }
 

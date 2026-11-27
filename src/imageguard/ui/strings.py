@@ -43,6 +43,7 @@ METHOD_LABEL = {
     "frequency_analysis": "Frequency-domain cues",
     "splicing_cues": "Splicing cues (noise×ELA)",
     "deepfake_cues": "Dấu hiệu Deepfake / AI (biên khuôn mặt & phổ)",
+    "deepfake_ml": "Deepfake ML — GenConViT (model học sâu)",
     "deepfake": "Dấu hiệu Deepfake / AI",
 }
 
@@ -69,7 +70,7 @@ A11Y_DEMO_SAMPLE = "Tạo ảnh mẫu tổng hợp để kiểm chứng phát hi
 
 BTN_PRESET_DEFAULT = "Mặc định (3)"
 BTN_PRESET_CAMERA = "Chế độ Camera / AI"
-BTN_PRESET_ALL = "Tất cả (8)"
+BTN_PRESET_ALL = "Tất cả"
 BTN_DEEPFAKE_MODEL = "Nạp mô hình DIP…"
 BTN_DEEPFAKE_MODEL_CLEAR = "Dùng trọng số mặc định"
 DEEPFAKE_MODEL_DEFAULT = "Dấu hiệu vùng mặt: đang dùng trọng số heuristic mặc định."

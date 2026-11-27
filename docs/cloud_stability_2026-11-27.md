@@ -12,10 +12,7 @@ không dùng chúng để công bố accuracy, AUC hay khả năng nhận diện
 - VM dùng chung tài nguyên. Thời gian/RSS dưới đây là số quan sát của phiên,
   không phải benchmark phần cứng cô lập hoặc cam kết hiệu năng.
 
-Số đo, từng ca CLI, kết quả desktop và SHA-256 source/build được lưu trong
-[biên nhận JSON](evidence/cloud_stability_2026-11-27.json), tổng hợp từ ba probe
-model, vòng lặp GUI và PyInstaller của phiên này.
-Binary, fixture và DB tạm không được đưa vào repository.
+Biên nhận JSON chi tiết được giữ cục bộ, không phải dữ liệu kiểm thử dùng chung. Binary, fixture và DB tạm cũng không được đưa vào repository.
 
 ## Lỗi đã tái hiện và sửa
 

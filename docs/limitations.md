@@ -112,6 +112,30 @@ mốc live/cùng người và không chống người sửa đồng bộ ảnh c
 Khi đánh giá, phải báo tỷ lệ mẫu đủ điều kiện riêng cho thật/giả cùng tỷ lệ
 bật cờ và lý do từ chối đo. Xem [giao thức Deepfake](deepfake-evaluation.md).
 
+## Deepfake ML (`deepfake_ml`, GenConViT-ED)
+
+Method ML đầu tiên, khác hẳn `deepfake_cues`: classifier train trên
+DFDC/FF++/Celeb-DF/DeepfakeTIMIT nên CÓ THỂ trả `SUSPICIOUS_INDICATION` khi
+`fake_frac ≥ fake_thresh` (mặc định 0.7). Giới hạn:
+
+- Chỉ áp dụng khi phát hiện được khuôn mặt đủ lớn (YuNet); ảnh không có mặt
+  → `NOT_APPLICABLE`. Nhiều mặt: chỉ chấm mặt lớn nhất.
+- `fake_frac` là tỉ lệ sigmoid của classifier, không phải xác suất đã hiệu
+  chuẩn. Các ngưỡng trong [`configs/thresholds.yaml`](../configs/thresholds.yaml)
+  chỉ dùng thử nghiệm. Video demo từ nguồn phát triển model không có nhãn
+  chuẩn đã xác minh và điểm số có chồng lấn giữa các nhóm theo tên file;
+  lượt chạy này không đo độ chính xác hay xác nhận ngưỡng.
+- Vùng mặt hiển thị chỉ là vùng được chấm, không phải bản đồ pixel bị sửa.
+- Face detection dùng YuNet thay dlib của pipeline gốc — sai lệch tiền xử
+  lý đã biết; mặt nghiêng/che khuất có thể bị bỏ sót → `NOT_APPLICABLE`
+  thay vì cảnh báo.
+- Generator/codec/nén mạng xã hội ngoài phân phối train (2023-2024) có thể
+  trượt — deepfake mới hơn có thể không bị gắn cờ, ảnh thật nén nặng có thể
+  bị điểm cao. `NO_INDICATION` không chứng minh ảnh thật.
+- Weights gốc CC BY-NC 4.0 — chỉ dùng phi thương mại (docs/third-party-models.md).
+- `SUSPICIOUS_INDICATION` từ method này promote overall verdict qua fusion —
+  vẫn là dấu hiệu cần đối chiếu chuyên gia, không phải bằng chứng giả mạo.
+
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
 Giới hạn tài nguyên `safe_open` (100 MB, 80 MP) và SSRF khi bật ingest HTTP — [`docs/security-error-handling.md`](security-error-handling.md), [`docs/ingest.md`](ingest.md). DNS rebinding vẫn là rủi ro còn lại khi dùng HTTP snapshot.
