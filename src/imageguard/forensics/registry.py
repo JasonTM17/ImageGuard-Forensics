@@ -20,6 +20,7 @@ METHOD_SPECS = {
     "splicing": "imageguard.forensics.auxiliary.splicing:SplicingCues",
     "deepfake": "imageguard.forensics.auxiliary.deepfake_cues:DeepfakeCues",
     "deepfake_ml": "imageguard.forensics.ml.deepfake_genconvit:DeepfakeGenConViT",
+    "deepfake_screen": "imageguard.forensics.ml.deepfake_screen_coc:DeepfakeScreenCoC",
 }
 
 

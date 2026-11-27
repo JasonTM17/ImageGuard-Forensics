@@ -293,6 +293,7 @@ _SPEC_TO_METHOD: dict[str, MethodName] = {
     "splicing": MethodName.SPLICING_CUES,
     "deepfake": MethodName.DEEPFAKE_CUES,
     "deepfake_ml": MethodName.DEEPFAKE_ML,
+    "deepfake_screen": MethodName.DEEPFAKE_SCREEN_COC,
     "exif": MethodName.EXIF_AUDIT,
 }
 

@@ -10,6 +10,7 @@ _LOCKED_SPECS = [
     "block",
     "deepfake",
     "deepfake_ml",
+    "deepfake_screen",
     "ela",
     "freq",
     "keypoint",

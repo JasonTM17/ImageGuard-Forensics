@@ -136,6 +136,23 @@ DFDC/FF++/Celeb-DF/DeepfakeTIMIT nên CÓ THỂ trả `SUSPICIOUS_INDICATION` kh
 - `SUSPICIOUS_INDICATION` từ method này promote overall verdict qua fusion —
   vẫn là dấu hiệu cần đối chiếu chuyên gia, không phải bằng chứng giả mạo.
 
+## Deepfake screen-recapture (`deepfake_screen`, CoC Xception)
+
+`deepfake_screen` dùng CoC Xception cho miền video deepfake phát trên màn hình
+rồi bị camera quay lại. Method căn chỉnh mặt theo 5 landmark YuNet trước khi
+chấm ONNX. Giới hạn:
+
+- Đây là detector theo miền screen-recapture, không phải detector deepfake tổng
+  quát cho mọi ảnh tải lên hoặc mọi generator.
+- Số liệu benchmark paper thuộc về tác giả CoC; ImageGuard chưa hiệu chuẩn độc
+  lập trên tập held-out đủ lớn. Ngưỡng hiện tại là thận trọng/thử nghiệm.
+- Chỉ chấm mặt lớn nhất; không có mặt hoặc không align được landmark →
+  `NOT_APPLICABLE`. Vùng hiển thị là bbox được chấm, không phải bản đồ pixel bị sửa.
+- `NO_INDICATION` không chứng minh ảnh thật; `SUSPICIOUS_INDICATION` chỉ là dấu
+  hiệu cần đối chiếu chuyên gia.
+- Trọng số/code nguồn chịu điều khoản CC BY-NC 4.0 và điều khoản dữ liệu nguồn;
+  chỉ dùng phi thương mại.
+
 ## Bảo mật đầu vào (không phải độ chính xác forensics)
 
 Giới hạn tài nguyên `safe_open` (100 MB, 80 MP) và SSRF khi bật ingest HTTP — [`docs/security-error-handling.md`](security-error-handling.md), [`docs/ingest.md`](ingest.md). DNS rebinding vẫn là rủi ro còn lại khi dùng HTTP snapshot.

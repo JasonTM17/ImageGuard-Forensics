@@ -101,7 +101,7 @@ def test_cli_analyze_no_persist_all_methods_json_schema_and_repeatability(tmp_pa
     assert ok
     jpg.write_bytes(buf.tobytes())
 
-    all_specs = "keypoint,block,ela,noise,noise_local,freq,splicing,deepfake,deepfake_ml"
+    all_specs = "keypoint,block,ela,noise,noise_local,freq,splicing,deepfake,deepfake_ml,deepfake_screen"
     res1 = _run_cli(["analyze", str(jpg), "--methods", all_specs, "--no-persist"], cwd=tmp_path)
     assert res1.returncode == 0
     assert "Traceback" not in res1.stderr
