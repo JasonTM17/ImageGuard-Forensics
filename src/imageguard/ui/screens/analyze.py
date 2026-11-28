@@ -35,6 +35,12 @@ from imageguard.services.analysis_service import AnalysisRequest, AnalysisServic
 from imageguard.ui import strings
 from imageguard.ui.a11y import apply_a11y
 from imageguard.ui.error_redaction import redact_paths_in_message
+from imageguard.ui.method_presets import (
+    ALL_ANALYZE_METHODS,
+    CAMERA_AI_METHODS,
+    DEEPFAKE_SCREENING_METHODS,
+    DEFAULT_ANALYZE_METHODS,
+)
 from imageguard.ui.widgets.camera_dialog import CameraCaptureDialog
 from imageguard.ui.widgets.image_canvas import (
     ImageCanvas,
@@ -118,15 +124,13 @@ class AnalyzeScreen(QWidget):
         self.btn_preset_camera = QPushButton(strings.BTN_PRESET_CAMERA)
         self.btn_preset_all = QPushButton(strings.BTN_PRESET_ALL)
         self.btn_preset_default.clicked.connect(
-            lambda: self._apply_method_preset(["keypoint", "block", "ela"])
+            lambda: self._apply_method_preset(list(DEFAULT_ANALYZE_METHODS))
         )
         self.btn_preset_camera.clicked.connect(
-            lambda: self._apply_method_preset(["ela", "noise_local", "freq", "deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble"])
+            lambda: self._apply_method_preset(list(CAMERA_AI_METHODS))
         )
         self.btn_preset_all.clicked.connect(
-            lambda: self._apply_method_preset(
-                ["keypoint", "block", "ela", "noise", "noise_local", "freq", "splicing", "deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble"]
-            )
+            lambda: self._apply_method_preset(list(ALL_ANALYZE_METHODS))
         )
         preset_row.addWidget(self.btn_preset_default)
         preset_row.addWidget(self.btn_preset_camera)
@@ -137,6 +141,7 @@ class AnalyzeScreen(QWidget):
         self.chk_kp = QCheckBox(strings.METHOD_LABEL["copy_move_keypoint"])
         self.chk_kp.setChecked(True)
         self.chk_bl = QCheckBox(strings.METHOD_LABEL["copy_move_block"])
+        self.chk_bl.setChecked(True)
         self.chk_ela = QCheckBox(strings.METHOD_LABEL["ela"])
         self.chk_ela.setChecked(True)
         self.chk_noise = QCheckBox(strings.METHOD_LABEL["noise_inconsistency"])
@@ -343,8 +348,8 @@ class AnalyzeScreen(QWidget):
             return
         dlg = CameraCaptureDialog(self)
         if dlg.exec() == QDialog.DialogCode.Accepted and dlg.captured_path is not None:
-            # Nguyên tắc: khung hình gốc từ camera tự động kích hoạt nhánh kiểm tra Deepfake trước.
-            self.chk_df.setChecked(True)
+            # Camera frames run the Camera/AI screening set (includes ML detectors).
+            self._apply_method_preset(list(CAMERA_AI_METHODS))
             self.load_path(dlg.captured_path)
             if (
                 self._path is not None
@@ -381,6 +386,28 @@ class AnalyzeScreen(QWidget):
         }
         for spec, chk in mapping.items():
             chk.setChecked(spec in selected)
+
+    def _enable_screening_if_face(self, array) -> None:
+        """Turn on ML screening when YuNet finds a face. Does not uncheck other methods."""
+        from imageguard.forensics.ml.face_detect import (
+            detect_primary_face,
+            yunet_integrity_error,
+        )
+
+        if yunet_integrity_error() is not None:
+            return
+        try:
+            if detect_primary_face(array) is None:
+                return
+        except Exception:  # noqa: BLE001 - YuNet/OpenCV inference boundary
+            return
+        mapping = {
+            "deepfake_ml": self.chk_dfml,
+            "deepfake_screen": self.chk_dfscreen,
+            "deepfake_ensemble": self.chk_dfens,
+        }
+        for spec in DEEPFAKE_SCREENING_METHODS:
+            mapping[spec].setChecked(True)
 
     def _emit_send_to_enhance(self) -> None:
         if self._path is not None and self._worker is None:
@@ -444,6 +471,8 @@ class AnalyzeScreen(QWidget):
             self.chk_spl,
             self.chk_df,
             self.chk_dfml,
+            self.chk_dfscreen,
+            self.chk_dfens,
         ):
             c.setEnabled(not running)
 
@@ -478,6 +507,7 @@ class AnalyzeScreen(QWidget):
         self.lbl_meta.setText(
             f"{out.width}×{out.height} · {out.image_format} · "
             f"{out.file_bytes // 1024} KB · EXIF: {ex_txt}")
+        self._enable_screening_if_face(out.array)
         self.btn_run.setEnabled(True)
         self.btn_send_enhance.setEnabled(True)
         self._refresh_ref_status()

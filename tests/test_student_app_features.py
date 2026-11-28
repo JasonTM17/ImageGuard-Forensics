@@ -51,6 +51,7 @@ def test_sample_generator_dialog_flow(qtbot, tmp_path: Path) -> None:
     dlg.create_now()
     assert dlg.generated_path is not None and dlg.generated_path.is_file()
     assert "deepfake" in dlg.recommended_methods
+    assert {"deepfake_ml", "deepfake_screen", "deepfake_ensemble"} <= set(dlg.recommended_methods)
 
 
 def test_camera_enhance_operators_and_no_lab_clutter(qtbot, services) -> None:
@@ -116,26 +117,68 @@ def test_analyze_presets_and_send_to_enhance(qtbot, services, valid_png: Path) -
     a = w.analyze
     assert not a.btn_send_enhance.isEnabled()
 
+    assert set(a._methods()) == {"keypoint", "block", "ela"}
     a.btn_preset_all.click()
-    assert len(a._methods()) == 10
+    from imageguard.ui.method_presets import ALL_ANALYZE_METHODS
+
+    assert set(a._methods()) == set(ALL_ANALYZE_METHODS)
 
     a.btn_preset_camera.click()
-    assert set(a._methods()) == {"ela", "noise_local", "freq", "deepfake", "deepfake_ml", "deepfake_screen"}
+    assert set(a._methods()) == {
+        "keypoint", "block", "ela", "noise_local", "freq", "splicing",
+        "deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble",
+    }
     a._set_running(True)
     assert not a.chk_dfml.isEnabled()
+    assert not a.chk_dfscreen.isEnabled()
+    assert not a.chk_dfens.isEnabled()
     a._set_running(False)
     assert a.chk_dfml.isEnabled()
+    assert a.chk_dfscreen.isEnabled()
+    assert a.chk_dfens.isEnabled()
 
     a.btn_preset_default.click()
     assert set(a._methods()) == {"keypoint", "block", "ela"}
 
     a.load_path(valid_png)
+    assert set(a._methods()) == {"keypoint", "block", "ela"}
     assert a.btn_send_enhance.isEnabled()
     a.btn_send_enhance.click()
 
     assert w.tabs.currentWidget() is w.enhance
     assert w.enhance._path == valid_png
     assert w.enhance.combo_op.currentData() == "super_res"
+
+
+def _face_open_blocker() -> str | None:
+    face = Path("data/deepfake-coc-pilot/case-03.png")
+    if not face.is_file():
+        return "labeled CoC face image not installed"
+    from imageguard.forensics.ml.face_detect import yunet_integrity_error
+
+    if yunet_integrity_error() is not None:
+        return "YuNet ONNX missing or integrity mismatch"
+    return None
+
+
+@pytest.mark.skipif(
+    _face_open_blocker() is not None,
+    reason=_face_open_blocker() or "face-open assets unavailable",
+)
+def test_opening_face_image_enables_deepfake_screening(qtbot, services) -> None:
+    from imageguard.ui.main_window import MainWindow
+    from imageguard.ui.method_presets import DEEPFAKE_SCREENING_METHODS
+
+    analysis, history = services
+    w = MainWindow(analysis, history)
+    qtbot.addWidget(w)
+    a = w.analyze
+    a.btn_preset_default.click()
+    assert set(a._methods()) == {"keypoint", "block", "ela"}
+    a.load_path(Path("data/deepfake-coc-pilot/case-03.png"))
+    methods = set(a._methods())
+    assert {"keypoint", "block", "ela"} <= methods
+    assert set(DEEPFAKE_SCREENING_METHODS) <= methods
 
 
 def test_enhance_displays_quality_metrics(qtbot, services, valid_png: Path) -> None:

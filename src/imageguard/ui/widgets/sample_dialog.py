@@ -18,21 +18,26 @@ from PySide6.QtWidgets import (
 
 from imageguard.core.paths import data_root
 from imageguard.ui import strings
+from imageguard.ui.method_presets import (
+    DEMO_COPYMOVE_METHODS,
+    DEMO_DEEPFAKE_METHODS,
+    DEMO_SPLICING_METHODS,
+)
 
 DEFAULT_DEMO_DIR = data_root() / "demo_samples"
 
 _DEMO_SPECS: dict[str, tuple[str, list[str]]] = {
     "copymove": (
         "Ảnh kết cấu đa tần số 256×256 có vùng 68×68 được sao chép và dán dịch vị trí.",
-        ["keypoint", "block", "ela"],
+        list(DEMO_COPYMOVE_METHODS),
     ),
     "splicing": (
         "Ảnh ghép vùng 256×256 tạo chênh lệch nhiễu cảm biến rõ rệt giữa vùng ghép và nền.",
-        ["ela", "noise", "noise_local", "splicing"],
+        list(DEMO_SPLICING_METHODS),
     ),
     "deepfake": (
         "Khung hình 320×320 mô phỏng khuôn mặt da (YCrCb/HSV) bị làm mịn mất lỗ chân lông kèm dấu vết tuần hoàn FFT.",
-        ["ela", "noise_local", "freq", "deepfake"],
+        list(DEMO_DEEPFAKE_METHODS),
     ),
     "clean": (
         "Ảnh đối chứng sạch 256×256 có nhiễu cảm biến đồng nhất tự nhiên — không có can thiệp.",

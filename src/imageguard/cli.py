@@ -54,7 +54,8 @@ def main() -> None:
         metavar="LIST",
         help=(
             "danh sách method, phân cách bằng dấu phẩy "
-            f"(mặc định: {_METHODS_DEFAULT_STR})"
+            f"(mặc định: {_METHODS_DEFAULT_STR}; "
+            f"hợp lệ: {', '.join(sorted(METHOD_SPECS))})"
         ),
     )
     analyze_p.add_argument(
@@ -168,6 +169,23 @@ def _run_analyze_command(args: argparse.Namespace) -> None:
     methods = [m.strip() for m in args.methods.split(",") if m.strip()]
     if not methods:
         methods = list(DEFAULT_METHODS)
+    for m in methods:
+        if m not in METHOD_SPECS:
+            valid = ", ".join(sorted(METHOD_SPECS))
+            print(
+                f"error: unknown analyze method {m!r}; valid: {valid}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from None
+    duplicates = [name for name in dict.fromkeys(methods) if methods.count(name) > 1]
+    if duplicates:
+        names = ", ".join(repr(name) for name in duplicates)
+        print(
+            f"error: duplicate analyze method(s): {names}; "
+            "each method may be named at most once",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
     model_path = getattr(args, "deepfake_model", None)
     model_sha256 = None
     if model_path is not None:

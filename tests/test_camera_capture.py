@@ -170,7 +170,12 @@ def test_ui_camera_capture_loads_analyze_and_enhance(qtbot, tmp_path: Path, monk
     win.analyze._capture_camera()
     assert win.analyze._path == cap_path
     assert win.analyze.chk_df.isChecked() is True
-    assert "deepfake" in win.analyze._methods()
+    assert win.analyze.chk_dfml.isChecked() is True
+    assert win.analyze.chk_dfscreen.isChecked() is True
+    assert win.analyze.chk_dfens.isChecked() is True
+    methods = set(win.analyze._methods())
+    assert {"deepfake", "deepfake_ml", "deepfake_screen", "deepfake_ensemble"} <= methods
+    assert {"keypoint", "block"} <= methods
 
     win.enhance._capture_camera()
     assert win.enhance._path == cap_path

@@ -187,6 +187,24 @@ def test_analyze_below_min_members_is_inconclusive(monkeypatch) -> None:
     assert any("detector khả dụng" in lim for lim in res.limitations)
 
 
+def test_analyze_promotes_when_ml_member_suspicious_but_mean_is_gray(monkeypatch) -> None:
+    """Cues/GenConViT gray-zone scores must not hide a CoC/ML SUSPICIOUS member."""
+    _patch_members(
+        monkeypatch,
+        cues=_FakeMember(_result(0.39, Verdict.NO_INDICATION)),
+        ml=_FakeMember(_result(0.34, Verdict.INCONCLUSIVE, method=MethodName.DEEPFAKE_ML)),
+        screen=_FakeMember(_result(0.99, Verdict.SUSPICIOUS_INDICATION,
+                                   method=MethodName.DEEPFAKE_SCREEN_COC)),
+    )
+    res = DeepfakeEnsemble().analyze(_doc(_synthetic_face_frame()), load_thresholds())
+    assert res.verdict is Verdict.SUSPICIOUS_INDICATION
+    assert res.evidence["promoted_from_member"] == "deepfake_screen"
+    assert res.score is not None and res.score < load_thresholds().value("deepfake_ensemble", "fake_thresh")
+    overall, signals, _ = combine([res])
+    assert overall is Verdict.SUSPICIOUS_INDICATION
+    assert "deepfake_ensemble" in signals
+
+
 def test_analyze_no_members_not_applicable(monkeypatch) -> None:
     _patch_members(
         monkeypatch,

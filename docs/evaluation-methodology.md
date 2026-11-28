@@ -5,8 +5,10 @@
 ImageGuard reports indications and localization cues. `SUSPICIOUS_INDICATION`
 is not a claim of forgery, and `NO_INDICATION` does not authenticate an image.
 `INCONCLUSIVE` is a valid outcome and is reported separately from the binary
-image metrics. ELA, EXIF, noise, frequency, and splicing cues cannot produce a
-standalone `SUSPICIOUS_INDICATION` verdict.
+image metrics. ELA, EXIF, noise, frequency, splicing, and heuristic deepfake cues cannot
+produce a standalone `SUSPICIOUS_INDICATION` verdict. Copy-move keypoint/block
+and the optional ML detectors (`deepfake_ml`, `deepfake_screen`,
+`deepfake_ensemble`) may.
 
 ## Image-level metrics
 

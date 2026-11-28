@@ -156,7 +156,7 @@ Giá trị string trên JSON **không** dùng `forged` / `fake`. Ý nghĩa vận
 
 | Giá trị | Ý nghĩa |
 |---------|--------|
-| `suspicious_indication` | Có dấu hiệu nghi vấn theo luật method (detector conclusive như keypoint/block); fusion có thể đẩy `overall_verdict` lên giá trị này. |
+| `suspicious_indication` | Có dấu hiệu nghi vấn theo luật method (detector conclusive như keypoint/block hoặc deepfake_ml/deepfake_screen/deepfake_ensemble); fusion có thể đẩy `overall_verdict` lên giá trị này. |
 | `no_indication` | Method không thấy dấu hiệu đủ mạnh theo ngưỡng. |
 | `inconclusive` | Tín hiệu yếu, mâu thuẫn, hoặc chỉ mang tính khám phá (nhiều auxiliary method). |
 | `not_applicable` | Method không chạy được cho ảnh/định dạng này (loại khỏi fusion). |

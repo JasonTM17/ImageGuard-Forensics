@@ -58,7 +58,7 @@ Model phải khớp bộ trích đặc trưng và cấu hình đã dùng khi fit
      `docs/third-party-models.md`): classifier học sâu chấm crop khuôn mặt, có thể
      trả *Có dấu hiệu đáng ngờ* khi điểm vượt ngưỡng. Ảnh không có mặt → không áp dụng.
      Chỉ dùng phi thương mại (licence weights CC BY-NC 4.0).
- Khi chụp khung hình mới từ Camera trong tab Phân tích, hệ thống tự bật ô kiểm *Dấu hiệu Deepfake / AI* để kiểm tra trực tiếp trên ảnh cảm biến gốc.
+ Mặc định tab Phân tích chạy Copy-Move keypoint + Block DCT + ELA. Mở ảnh có khuôn mặt (YuNet) tự bật GenConViT, CoC Xception và ensemble. Khi chụp từ Camera hoặc bấm *Chế độ Camera / AI*, hệ thống thêm nhiễu cục bộ, phổ, splicing cues, và các detector deepfake đó — Copy-Move và deepfake ML đều có thể trả *Có dấu hiệu nghi vấn*.
 4. **Phân tích** — thanh progress theo stage; nút "Hủy" dừng mềm giữa
    stages (cooperative cancel).
 5. **Đọc kết quả** —

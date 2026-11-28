@@ -102,6 +102,22 @@ def combine_members(
     }
 
 
+def ml_member_suspicious(members_detail: dict[str, Any]) -> str | None:
+    """First available ML member that emitted SUSPICIOUS_INDICATION, else None.
+
+    Heuristic cues never conclude; a calibrated-enough ML member that already
+    crossed its own fake threshold must not be diluted below the ensemble bar
+    by those exploratory scores.
+    """
+    for key in ("deepfake_ml", "deepfake_screen"):
+        entry = members_detail.get(key)
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("available") and entry.get("verdict") == Verdict.SUSPICIOUS_INDICATION.value:
+            return key
+    return None
+
+
 class DeepfakeEnsemble:
     """Method registry entry — spec ``deepfake_ensemble``.
 
@@ -196,6 +212,14 @@ class DeepfakeEnsemble:
         )
         verdict = combined["verdict"]
         score = combined["combined"]
+        promoted_from = None
+        if (
+            verdict is not Verdict.SUSPICIOUS_INDICATION
+            and combined["members_available"] >= min_members
+        ):
+            promoted_from = ml_member_suspicious(members_detail)
+            if promoted_from is not None:
+                verdict = Verdict.SUSPICIOUS_INDICATION
 
         evidence.update(
             members=members_detail,
@@ -209,6 +233,7 @@ class DeepfakeEnsemble:
                 if combined["agreement_fake_frac"] is not None else None
             ),
             mask_from=mask_from,
+            promoted_from_member=promoted_from,
         )
         if self.model is not None:
             evidence["model_sha256"] = self.model.get("model_sha256")
@@ -222,12 +247,19 @@ class DeepfakeEnsemble:
                 "không đủ cơ sở kết luận",
             )
         elif verdict is Verdict.SUSPICIOUS_INDICATION:
-            lim.insert(
-                0,
-                f"ensemble ghi nhận dấu hiệu deepfake tổng hợp mạnh "
-                f"(combined={score:.2f} ≥ {fake_thresh:.2f}, agreement={combined['agreement_fake_frac']:.2f}) "
-                "— cần đối chiếu chuyên gia",
-            )
+            if promoted_from is not None:
+                lim.insert(
+                    0,
+                    f"ensemble theo {promoted_from} (verdict suspicious_indication; "
+                    f"combined={score:.2f}) — cần đối chiếu chuyên gia",
+                )
+            else:
+                lim.insert(
+                    0,
+                    f"ensemble ghi nhận dấu hiệu deepfake tổng hợp mạnh "
+                    f"(combined={score:.2f} ≥ {fake_thresh:.2f}, agreement={combined['agreement_fake_frac']:.2f}) "
+                    "— cần đối chiếu chuyên gia",
+                )
         elif verdict is Verdict.INCONCLUSIVE:
             lim.insert(
                 0,

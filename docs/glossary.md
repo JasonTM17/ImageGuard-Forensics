@@ -202,7 +202,7 @@ level) của công cụ, không phải phán quyết ảnh thật hay ảnh gi�
 
 | Giá trị | Ý nghĩa như một mức chỉ báo |
 |---|---|
-| `suspicious_indication` | Có dấu hiệu nghi vấn vượt ngưỡng của method (detector conclusive như keypoint/block); fusion có thể đẩy `overall_verdict` lên mức này. Đây là mức chỉ báo mạnh nhất, không phải kết luận giả mạo. |
+| `suspicious_indication` | Có dấu hiệu nghi vấn vượt ngưỡng của method (detector conclusive như keypoint/block hoặc deepfake_ml/deepfake_screen/deepfake_ensemble); fusion có thể đẩy `overall_verdict` lên mức này. Đây là mức chỉ báo mạnh nhất, không phải kết luận giả mạo. |
 | `no_indication` | Method không thấy dấu hiệu đủ mạnh theo ngưỡng; cũng không chứng minh ảnh nguyên bản. |
 | `inconclusive` | Tín hiệu yếu, mâu thuẫn, thiếu dữ liệu, hoặc chỉ mang tính khám phá (thường gặp ở auxiliary method). |
 | `not_applicable` | Method không chạy được cho ảnh/định dạng này (ví dụ ELA trên ảnh không phải JPEG) và bị loại khỏi fusion. |

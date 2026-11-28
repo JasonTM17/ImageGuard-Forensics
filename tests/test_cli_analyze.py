@@ -11,9 +11,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
 from imageguard.core.enums import Verdict
 from imageguard.core.errors import ErrorCode
+from imageguard.forensics.registry import METHOD_SPECS
 
 _REPO_SRC = Path(__file__).resolve().parents[1] / "src"
 
@@ -132,6 +134,8 @@ def test_analyze_help_forbidden_words() -> None:
     # The option --deepfake-model names a method, not an authenticity verdict.
     assert re.search(r"\bfake\b", out) is None
     assert "authentic" not in out
+    assert "deepfake_ensemble" in out
+    assert "keypoint" in out
 
 
 def test_cli_version_unchanged() -> None:
@@ -147,3 +151,107 @@ def test_cli_version_unchanged() -> None:
     )
     assert res.returncode == 0
     assert "ImageGuard Forensics v" in res.stdout
+
+def _tiny_jpeg(tmp_path: Path) -> Path:
+    img = np.random.default_rng(42).integers(0, 255, (128, 128, 3), dtype=np.uint8)
+    jpg_path = tmp_path / "tiny.jpg"
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    assert ok
+    jpg_path.write_bytes(buf.tobytes())
+    return jpg_path
+
+
+def test_analyze_unknown_method_exits_2_one_line_stderr_lists_valid_methods(tmp_path: Path) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", "bogus", "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 2
+    assert res.stdout == ""
+    assert "Traceback" not in res.stderr
+    assert "error: unknown analyze method 'bogus'" in res.stderr
+    assert res.stderr.count("\n") <= 2
+    for name in METHOD_SPECS:
+        assert name in res.stderr
+    assert not (tmp_path / "data").exists()
+
+
+def test_analyze_mixed_valid_and_unknown_method_exits_2_without_report(tmp_path: Path) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", "keypoint,nope", "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 2
+    assert res.stdout == ""
+    assert "unknown analyze method 'nope'" in res.stderr
+
+
+def test_analyze_case_variant_is_unknown_not_duplicate(tmp_path: Path) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", "KEYPOINT", "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 2
+    assert "unknown analyze method 'KEYPOINT'" in res.stderr
+    assert "duplicate" not in res.stderr
+
+
+@pytest.mark.parametrize(
+    "methods_arg, expected",
+    [
+        ("ela,ela", "ela"),
+        (" ela , ela ", "ela"),
+        ("keypoint,block,keypoint", "keypoint"),
+        ("block,keypoint,block", "block"),
+    ],
+)
+def test_analyze_duplicate_method_exits_2_one_line_stderr(
+    tmp_path: Path, methods_arg: str, expected: str,
+) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", methods_arg, "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 2
+    assert res.stdout == ""
+    assert "Traceback" not in res.stderr
+    assert "duplicate analyze method" in res.stderr
+    assert repr(expected) in res.stderr
+
+
+def test_analyze_distinct_valid_methods_still_exit_0(tmp_path: Path) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", "ela,noise", "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 0
+    data = json.loads(res.stdout)
+    assert data["overall_verdict"] in (v.value for v in Verdict)
+
+
+def test_analyze_empty_methods_still_uses_defaults(tmp_path: Path) -> None:
+    jpg = _tiny_jpeg(tmp_path)
+    env = {**os.environ, "PYTHONPATH": str(_REPO_SRC)}
+    res = _run_analyze(
+        ["analyze", str(jpg), "--methods", ",", "--no-persist"],
+        cwd=tmp_path,
+        env=env,
+    )
+    assert res.returncode == 0
+    data = json.loads(res.stdout)
+    assert "overall_verdict" in data

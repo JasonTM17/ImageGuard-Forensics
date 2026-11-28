@@ -8,8 +8,9 @@ Bảng luật (docs/evaluation-methodology.md là bản chính thức):
   5. Mọi trường hợp còn lại → INCONCLUSIVE; nếu ≥2 AUX signals cùng
      INCONCLUSIVE → ghi nhãn "corroboration" trong signals để reviewer chú ý.
 
-Nguyên tắc: chỉ detector conclusive (keypoint/block) mới đẩy được lên
-SUSPICIOUS; AUX signals (ELA/EXIF/noise/noise_local/freq/splicing) theo contract không
+Nguyên tắc: detector conclusive (copy-move keypoint/block, deepfake_ml,
+deepfake_screen, deepfake_ensemble) mới đẩy được lên SUSPICIOUS. AUX signals
+(ELA/EXIF/noise/noise_local/freq/splicing/deepfake_cues) theo contract không
 bao giờ trả SUSPICIOUS nên không thể tự kết tội ảnh — thiết kế có chủ đích.
 Fusion KHÔNG sinh xác suất — verdict là enum + danh sách signal đóng góp.
 """
@@ -33,8 +34,9 @@ def combine(
     """Kết hợp verdict nhiều method — không gộp điểm số.
 
     Bỏ NOT_APPLICABLE; ERROR → warning, không fusion. **Chỉ cần một**
-    SUSPICIOUS_INDICATION trong ``usable`` → overall SUSPICIOUS (keypoint/block
-    có thể “kết tội”). Nếu mọi method usable đều NO_INDICATION → NO_INDICATION.
+    SUSPICIOUS_INDICATION trong ``usable`` → overall SUSPICIOUS (copy-move
+    hoặc ML deepfake có thể đẩy overall). Nếu mọi method usable đều
+    NO_INDICATION → NO_INDICATION.
     Còn lại INCONCLUSIVE; ≥2 aux INCONCLUSIVE → ghi ``aux_corroboration``.
 
     Trả ``(verdict, signals, warnings)`` — ``signals`` liệt kê method đóng góp.
