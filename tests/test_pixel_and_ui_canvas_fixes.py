@@ -444,7 +444,7 @@ def test_frozen_paths_db_mismatch_cleanup_and_cli_persist_root(
 
     monkeypatch.setattr("imageguard.core.paths.data_root", lambda: custom_root)
     monkeypatch.setattr(
-        sys, "argv", ["imageguard", "analyze", str(img_path), "--methods", "exif"]
+        sys, "argv", ["imageguard", "analyze", str(img_path), "--methods", "ela"]
     )
     with pytest.raises(SystemExit) as exc:
         cli.main()
